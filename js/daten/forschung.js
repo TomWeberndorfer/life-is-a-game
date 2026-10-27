@@ -22,6 +22,15 @@ export const FEEDBACK = {
   wahl: [['ja', 'Ja'], ['vielleicht', 'Vielleicht'], ['nein', 'Nein']]
 };
 
+// Einwilligung zur Datenübertragung (Version 28). Texte: daten/texte.js (Schlüssel daten.*).
+// version erhöhen, wenn sich der Hinweis wesentlich ändert (z. B. neuer Speicherort) → alle werden neu gefragt.
+// kontakt: leer = „die Person, die dich eingeladen hat“; sonst z. B. eine E-Mail-Adresse.
+export const EINWILLIGUNG = {
+  version: 1,
+  kontakt: '',
+  loeschenNachMonaten: 6
+};
+
 export const PREMIUM = {
   preis: '4,99 € pro Monat',
   titel: 'Life is a Game Premium',

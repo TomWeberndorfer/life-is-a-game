@@ -70,6 +70,24 @@ export const TEXTE = {
   'story.weiter': 'nach dem Tages-Check geht es weiter',
   'story.fertig': 'Woche erzählt',
 
+  // Einwilligung zur Datenübertragung (Version 28)
+  'daten.eyebrow': 'TESTPHASE · DATENSCHUTZ',
+  'daten.frage': 'Darf die App anonyme Nutzungsdaten übertragen, damit wir sie verbessern können?',
+  'daten.kurz': 'Übertragen werden nur Zählungen (welche Bildschirme, wie oft, wie lange), deine Bewertungen und dein Feedback, unter einer zufälligen Tester-Nummer. Ziele und Questtexte bleiben auf deinem Gerät.',
+  'daten.mehr': 'Mehr erfahren',
+  'daten.lang': 'Zweck: Auswertung dieses Prototyps während der Testphase. Speicherort: die Datenbank dieser Seite auf claude.ai oder, wenn du die App ohne Claude-Konto nutzt, ein Google-Formular mit verknüpfter Google-Tabelle (Google kann Daten auch außerhalb der EU verarbeiten). Gelöscht wird spätestens {monate} Monate nach Ende der Testphase. Du kannst die Zustimmung jederzeit in den Einstellungen zurücknehmen, ab dann wird nichts mehr übertragen. Für die Löschung schon übertragener Daten schick deine Tester-Nummer ({id}) an {kontakt}.',
+  'daten.kontaktStandard': 'die Person, die dich eingeladen hat',
+  'daten.ja': 'Einverstanden',
+  'daten.nein': 'Nein, nur auf diesem Gerät',
+  'daten.gewaehltJa': 'Übertragung erlaubt. Änderbar in den Einstellungen.',
+  'daten.gewaehltNein': 'Keine Übertragung. Änderbar in den Einstellungen.',
+  'daten.statusJa': 'Übertragung erlaubt seit {datum}. Namen oder Texte aus deiner Quest werden nicht übertragen.',
+  'daten.statusNein': 'Keine Übertragung. Deine Nutzung wird nur in diesem Browser gezählt.',
+  'daten.statusOffen': 'Noch nicht entschieden. Bis dahin wird nichts übertragen.',
+  'daten.zuruecknehmen': 'Zustimmung zurücknehmen',
+  'daten.erlauben': 'Übertragung erlauben',
+  'daten.neu': 'Der Datenschutz-Hinweis hat sich geändert. Bitte entscheide neu.',
+
   // Daten senden ohne Konto (Version 24)
   'export.text': 'Ohne Konto kommen deine Daten nicht automatisch an. Tippe auf „Daten senden“ und schick den Code an die Person, die dich eingeladen hat.',
   'export.knopf': 'Daten senden',

@@ -16,12 +16,13 @@ import * as M from './logik/kennzahlen.js';
 import * as X from './logik/austausch.js';
 import * as V from './logik/versand.js';
 import { VERSAND } from './daten/versand.js';
-import { BEWERTUNGEN, SKALA, FEEDBACK, PREMIUM } from './daten/forschung.js';
+import { BEWERTUNGEN, SKALA, FEEDBACK, PREMIUM, EINWILLIGUNG } from './daten/forschung.js';
+import * as EW from './logik/einwilligung.js';
 import * as I from './logik/inhalte.js';
 import * as H from './logik/helden.js';
 import { BOTSCHAFTEN, STORIES, MIKRO, MIKRO_JE_TAG, MIKRO_RUECKFALL } from './daten/inhalte.js';
 
-export const VERSION = { nr: 27, datum: '26.10.2026 · 13:40' };
+export const VERSION = { nr: 28, datum: '27.10.2026 · 08:15' };
 
 const istTest = location.hash === '#test';
 const istAdmin = location.hash === '#admin';
@@ -30,6 +31,20 @@ const testerId = speicher.testerId();
 let tagVersatz = 0; // nur Testprofil
 const jetzt = () => { const d = new Date(); d.setDate(d.getDate() + tagVersatz); return d; };
 initAnalytics({ testerId, profil: istTest ? 'test' : 'haupt', heute: jetzt });
+
+// Einwilligung (Version 28): Ohne „ja“ wird nichts übertragen, auch nicht an die Seiten-Datenbank.
+// `senderKandidat` = der Sender, den die Umgebung erlaubt (Seiten-Datenbank oder Google-Formular); verbunden wird er nur bei „ja“.
+let einw = EW.lies(speicher.einstellung('einwilligung'), EINWILLIGUNG.version);
+let senderKandidat = null;
+function verbindeSender() { verbinde(EW.darfSenden(einw) ? senderKandidat : null); }
+function entscheideDaten(stand) {
+  try {
+    einw = EW.entscheide(stand, K.tagKey(new Date()), EINWILLIGUNG.version);
+  } catch (e) { console.warn('Einwilligung:', e.message); return; }
+  if (!speicher.setzeEinstellung('einwilligung', einw)) console.warn('Einwilligung: nur bis zum Schließen gespeichert');
+  if (stand === 'ja') { merke('einwilligung', `v${einw.version}`); trackEvent('consent_given', {}); }
+  verbindeSender();
+}
 
 const app = document.getElementById('app');
 const bewegungAus = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -252,8 +267,9 @@ const SCREENS = {
             ? `<button class="opt belegt" disabled>${icon(b.icon)}<span>${esc(b.name)}<small>Held schon dabei</small></span></button>`
             : `<button class="opt ${ui.bereich === b.id ? 'sel' : ''}" aria-pressed="${ui.bereich === b.id}" data-a="bereich" data-id="${b.id}">${icon(b.icon)}<span>${esc(b.name)}</span></button>`).join('')}
         </div>
+        ${ui.neu ? '' : einwKarte(true)}
       </div>
-      <div class="fuss"><button class="cta" data-a="weiter" ${ui.bereich ? '' : 'disabled'}>Weiter</button></div>
+      <div class="fuss"><button class="cta" data-a="weiter" ${ui.bereich && (ui.neu || !EW.istOffen(einw)) ? '' : 'disabled'}>Weiter</button></div>
     </section>`;
   },
 
@@ -430,6 +446,7 @@ const SCREENS = {
       <div class="start-kopf"><span class="datum">${esc(datum)}</span><button class="icbtn" data-a="einstellungen" aria-label="Einstellungen">${icon('zahnrad')}</button></div>
       <div class="inhalt start-inhalt">
         ${hinweisBox()}
+        ${EW.istOffen(einw) ? einwKarte(false) : ''}
         ${ui.fbDanke ? '<div class="hinweis gut-rand" role="status"><span>Danke für dein Feedback!</span><button class="link" data-a="danke-weg">OK</button></div>' : ''}
         ${crewLeiste()}
         ${angebotKarte()}
@@ -616,9 +633,11 @@ const SCREENS = {
         </div>
         <div class="karte spalte">
           <span class="eyebrow">TESTPHASE</span>
-          <p class="klein">${analyticsStatus() === 'zentral' ? 'Deine Nutzung wird anonym unter einer zufälligen Tester-Nummer erfasst und ausgewertet. Namen oder Texte aus deiner Quest werden nicht übertragen.' : 'Deine Nutzung wird nur in diesem Browser gezählt und nicht übertragen.'}</p>
+          <p class="klein">${esc(einwStatus())}</p>
+          ${EW.istOffen(einw) ? einwKarte(false, true) : `<button class="btn voll" data-a="daten" data-id="${einw.stand === 'ja' ? 'nein' : 'ja'}">${esc(T(einw.stand === 'ja' ? 'daten.zuruecknehmen' : 'daten.erlauben'))}</button>`}
+          ${EW.istOffen(einw) ? '' : einwDetails()}
           <div class="zwei"><button class="btn" data-a="feedback-oeffnen">${hatFeedback() ? 'Feedback ändern' : 'Feedback geben'}</button><button class="btn" data-a="premium">Premium ansehen</button></div>
-          ${analyticsStatus() !== 'zentral' ? exportHtml() : ''}
+          ${EW.darfSenden(einw) && analyticsStatus() !== 'zentral' ? exportHtml() : ''}
           ${ui.istBesitzer ? '<button class="btn voll" data-a="admin">Auswertung öffnen</button>' : ''}
         </div>
         <div class="karte spalte">
@@ -633,6 +652,30 @@ const SCREENS = {
 };
 
 // ---------- Daten senden / importieren (Version 24) ----------
+// Einwilligungs-Karte (Version 28). imOnboarding: zeigt nach der Wahl eine Bestätigungszeile statt zu verschwinden.
+// eingebettet: ohne eigene Karte/Überschrift (z. B. in den Einstellungen).
+function einwDetails() {
+  const kontakt = EINWILLIGUNG.kontakt || T('daten.kontaktStandard');
+  return `<details class="einw-mehr"><summary>${esc(T('daten.mehr'))}</summary><p class="klein">${esc(T('daten.lang', { monate: EINWILLIGUNG.loeschenNachMonaten, id: testerId.slice(0, 8), kontakt }))}</p></details>`;
+}
+function einwKarte(imOnboarding, eingebettet = false) {
+  if (!EW.istOffen(einw)) {
+    return imOnboarding ? `<p class="klein einw-ok" role="status">${icon('check')} ${esc(T(einw.stand === 'ja' ? 'daten.gewaehltJa' : 'daten.gewaehltNein'))}</p>` : '';
+  }
+  const inhalt = `${eingebettet ? '' : `<span class="eyebrow">${esc(T('daten.eyebrow'))}</span>`}
+    ${einw.veraltet ? `<p class="klein">${esc(T('daten.neu'))}</p>` : ''}
+    <p class="frage">${esc(T('daten.frage'))}</p>
+    <p class="klein">${esc(T('daten.kurz'))}</p>
+    ${einwDetails()}
+    <div class="zwei"><button class="btn" data-a="daten" data-id="nein">${esc(T('daten.nein'))}</button><button class="btn ja" data-a="daten" data-id="ja">${esc(T('daten.ja'))}</button></div>`;
+  return eingebettet ? inhalt : `<div class="karte spalte einw">${inhalt}</div>`;
+}
+function einwStatus() {
+  if (einw.stand === 'ja') return T('daten.statusJa', { datum: K.ausTagKey(einw.tag).toLocaleDateString('de-AT') });
+  if (einw.stand === 'nein') return T('daten.statusNein');
+  return T('daten.statusOffen');
+}
+
 function exportHtml() {
   const x = ui.export;
   if (!x) return `<p class="klein">${esc(T('export.text'))}</p><button class="btn voll" data-a="export">${esc(T('export.knopf'))}</button>`;
@@ -1176,7 +1219,7 @@ const REIHE = ['ob1', 'ob2', 'ob3', 'ob4', 'ob5', 'ob6', 'ob7', 'ob8'];
 function weiter() {
   const i = REIHE.indexOf(ui.screen);
   if (i < 0) return;
-  if (ui.screen === 'ob1' && !ui.bereich) return;
+  if (ui.screen === 'ob1' && (!ui.bereich || (!ui.neu && EW.istOffen(einw)))) return;
   if (ui.screen === 'ob2') {
     if (!ui.problem || (ui.problem === '*' && !ui.freitext.trim())) return;
   }
@@ -1356,6 +1399,7 @@ app.addEventListener('click', e => {
     }
     case 'ziel': ui.ziel = id; render(); break;
     case 'weiter': weiter(); break;
+    case 'daten': if (id === 'ja' || id === 'nein') { entscheideDaten(id); render(); } break;
     case 'zurueck': zurueck(); break;
     case 'beginnen': beginnen(); break;
     case 'check': check(id === 'ja' || id === 'nein' ? id : null); break;
@@ -1481,15 +1525,17 @@ render();
 beiAenderung(() => { if (ui.screen === 'einstellungen') render(); });
 (async () => {
   const c = window.claude;
-  if (!c || typeof c.use !== 'function') { verbinde(VERSAND.art ? formSender(VERSAND) : null); if (istAdmin) ladeAdmin(); return; }
+  if (!c || typeof c.use !== 'function') { senderKandidat = VERSAND.art ? formSender(VERSAND) : null; verbindeSender(); if (istAdmin) ladeAdmin(); return; }
   try {
     const [db, user] = await Promise.all([c.use('db'), c.use('user')]);
     ui.db = db;
     ui.istBesitzer = user ? await user.isOwner() : false;
     if (ui.istBesitzer) merke('ist_besitzer', true);
-    verbinde(db ? dbSender(db) : null);
+    senderKandidat = db ? dbSender(db) : null;
+    verbindeSender();
   } catch (e) {
-    verbinde(null);
+    senderKandidat = null;
+    verbindeSender();
   }
   if (ui.screen === 'admin') ladeAdmin(); else render();
 })();

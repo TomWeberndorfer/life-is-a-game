@@ -50,6 +50,9 @@ export function erstelleSpeicher(profil = 'haupt') {
     speichern(stand) {
       return schreib(key, JSON.stringify(stand));
     },
+    // Einstellungen je Browser, unabhängig vom Profil und vom Zurücksetzen (z. B. Einwilligung, Version 28).
+    einstellung(name) { return lies(PREFIX + 'opt.' + name); },
+    setzeEinstellung(name, wert) { return schreib(PREFIX + 'opt.' + name, JSON.stringify(wert)); },
     loeschen() {
       if (verfuegbar) sicher(() => localStorage.removeItem(key), null);
       delete fluechtig[key];
