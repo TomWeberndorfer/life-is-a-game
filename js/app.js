@@ -1,0 +1,1495 @@
+// Oberfläche: liest Daten und Logik, rendert Bildschirme, speichert nach jeder Änderung.
+import * as K from './logik/kern.js';
+import { TABELLE, pruefeTabelle } from './daten/vorlagen.js';
+import { STILE, STIL_REIHENFOLGE, stilId, EIGENE_BILDER } from './daten/stile.js';
+import { DOMAIN_RUECKFALL, LEBENSBEREICHE } from './daten/lebensbereiche.js';
+import { SILHOUETTEN } from './daten/stadt.js';
+import { stadtAnsicht, stadtSichtbar, STATUS } from './logik/stadt.js';
+import { hoechsteStufe, istFrei } from './logik/freischaltung.js';
+import * as W from './logik/weg.js';
+import { TEXTE } from './daten/texte.js';
+import { text as textAus, pruefeTexte } from './logik/texte.js';
+import { entwicklung } from './logik/entwicklung.js';
+import { erstelleSpeicher } from './speicher.js';
+import { initAnalytics, trackEvent, bewerte, letzteBewertungTag, merke, merkmal, feedback as sendeFeedback, hatFeedback, aktiveTage, analyticsStatus, beiAenderung, verbinde, dbSender, datenCode, formSender } from './analytics.js';
+import * as M from './logik/kennzahlen.js';
+import * as X from './logik/austausch.js';
+import * as V from './logik/versand.js';
+import { VERSAND } from './daten/versand.js';
+import { BEWERTUNGEN, SKALA, FEEDBACK, PREMIUM } from './daten/forschung.js';
+import * as I from './logik/inhalte.js';
+import * as H from './logik/helden.js';
+import { BOTSCHAFTEN, STORIES, MIKRO, MIKRO_JE_TAG, MIKRO_RUECKFALL } from './daten/inhalte.js';
+
+export const VERSION = { nr: 27, datum: '26.10.2026 · 13:40' };
+
+const istTest = location.hash === '#test';
+const istAdmin = location.hash === '#admin';
+const speicher = erstelleSpeicher(istTest ? 'test' : 'haupt');
+const testerId = speicher.testerId();
+let tagVersatz = 0; // nur Testprofil
+const jetzt = () => { const d = new Date(); d.setDate(d.getDate() + tagVersatz); return d; };
+initAnalytics({ testerId, profil: istTest ? 'test' : 'haupt', heute: jetzt });
+
+const app = document.getElementById('app');
+const bewegungAus = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- Zustand ----------
+
+let hinweis = null;
+// spiel = gespeicherter Stand mit allen Helden; stand = Ansicht des Helden im Rampenlicht (Format von kern.js)
+// Held und Lebensbereich getrennt: Zuordnung kommt aus der Datentabelle (Vorlage → heroId, domainId).
+const zuordnung = H.zuordner(TABELLE, DOMAIN_RUECKFALL);
+const migWarnung = t => console.warn('Spielstand:', t);
+let spiel;
+let stand;
+{
+  const { stand: roh, fehler } = speicher.laden();
+  spiel = H.migriereSpiel(roh, testerId, STIL_REIHENFOLGE, zuordnung, migWarnung);
+  spiel.stil.aktiv = stilId(spiel.stil.aktiv);
+  stand = H.ansicht(spiel, spiel.fokus);
+  if (fehler) hinweis = fehler;
+}
+// Geänderte Heldenansicht zurückschreiben (Standard: Held im Rampenlicht)
+function setzeStand(neu, hid = spiel.fokus) {
+  spiel = H.uebernehmen(spiel, hid, neu, zuordnung);
+  stand = H.ansicht(spiel, spiel.fokus);
+}
+function setzeSpiel(neu) {
+  spiel = neu;
+  stand = H.ansicht(spiel, spiel.fokus);
+}
+const heldenAnsichten = () => spiel.helden.map(h => {
+  const a = H.ansicht(spiel, h.heroId);
+  return { id: h.heroId, domainId: h.domainId, a, v: mitAktuellemGegner(TABELLE.vorlagen.find(z => z.id === h.quest.vorlageId) || K.vorlageFuer(TABELLE, '*', '*'), a) };
+});
+const tabFehler = [...pruefeTabelle(), ...pruefeTexte(TEXTE, STILE)];
+if (tabFehler.length) console.warn('Vorlagen-Tabelle:', tabFehler);
+
+const ui = {
+  screen: istAdmin ? 'admin' : stand.onboarding.fertig ? 'start' : 'ob1',
+  blatt: null,        // Detailblatt: 'crew' | 'boss' | 'faehigkeit' | 'premium'
+  schlange: [],       // weitere Einblendungen (Sieg, Level-up, Bewertungen)
+  danach: null,       // Bildschirm nach der letzten Einblendung
+  fb: {},
+  admin: { laden: false, fehler: null, daten: null, test: false, besitzer: false, importInfo: null },
+  export: null, // { code, info } für „Daten senden“
+  istBesitzer: false,
+  premiumGesehen: false,
+  obStart: Date.now(),
+  neu: false,         // Onboarding für einen weiteren Helden
+  bereich: stand.onboarding.bereich,
+  problem: stand.onboarding.problem,
+  ziel: stand.onboarding.ziel,
+  freitext: stand.onboarding.freitext || '',
+  feier: null,        // { art: 'sieg' | 'levelup', ... }
+  stilAuswahl: null,
+  resetFrage: false,
+  analyseSchritt: 0,
+  wackeln: false,
+  xpFlug: null
+};
+
+function speichere() {
+  const ok = speicher.speichern(spiel);
+  if (!ok && !hinweis) hinweis = 'Dieser Browser speichert gerade nicht. Dein Fortschritt geht beim Schließen verloren.';
+}
+
+// ---------- Helfer ----------
+// Kurzes Datum „Mo, 2. Nov.“ aus einem Tagesschlüssel; versatz in Tagen (z. B. −1 = Vortag).
+function kurzDatum(k, versatz = 0) {
+  const d = K.ausTagKey(k);
+  if (!d) return '';
+  d.setDate(d.getDate() + versatz);
+  return d.toLocaleDateString('de-AT', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const stil = () => STILE[stand.stil.aktiv] || STILE.fantasy;
+const wort = k => stil().wort[k] || STILE.fantasy.wort[k];
+// Bildschirmtexte aus dem Register (Stil → Standard); Bezirksname je Stil, sonst Name des Lebensbereichs
+const T = (k, w) => textAus(TEXTE, stil().texte, k, w);
+const bezirkName = (id, rueckfall) => (stil().bezirke || {})[id] || (STILE.fantasy.bezirke || {})[id] || rueckfall || id;
+const nameVon = id => stil().namen[id] || (TABELLE.helden[id] && TABELLE.helden[id].name) || id;
+
+// Vorlage eines Helden mit dem Gegner, gegen den gerade gekämpft wird (Bosskette).
+function mitAktuellemGegner(v, st) {
+  if (!v || !st.quest) return v;
+  const id = K.auswertung(st, jetzt()).gegner;
+  return id && TABELLE.gegner[id] ? { ...v, gegner: id } : v;
+}
+function aktuelleVorlage() {
+  if (stand.quest && !ui.neu) return mitAktuellemGegner(TABELLE.vorlagen.find(z => z.id === stand.quest.vorlageId) || K.vorlageFuer(TABELLE, '*', '*'), stand);
+  return K.vorlageFuer(TABELLE, ui.bereich, ui.problem || '*');
+}
+
+function platzhalter(text, art) {
+  const cs = getComputedStyle(document.documentElement);
+  const bg = cs.getPropertyValue(art === 'boss' ? '--gegner' : '--panel').trim() || '#888';
+  const fg = cs.getPropertyValue(art === 'boss' ? '--auf-gegner' : '--ink').trim() || '#000';
+  const kurz = String(text || '?').replace(/^(Der|Die|Das)\s+/, '').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="${bg}"/><circle cx="60" cy="60" r="44" fill="none" stroke="${fg}" stroke-opacity=".35" stroke-width="2" stroke-dasharray="4 6"/><text x="60" y="72" text-anchor="middle" font-family="Georgia,serif" font-size="36" font-weight="700" fill="${fg}">${esc(kurz)}</text></svg>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+function bild(platz, text, art = 'held') {
+  // Reihenfolge: eigenes Bild → Datei des Stils → Platzhalter des Stils (kein Leihen aus anderen Stilen)
+  const eigen = (EIGENE_BILDER[stand.stil.aktiv] || {})[platz];
+  const pfad = eigen ? eigen[0] : stil().bilder[platz];
+  const pos = (eigen && eigen[1]) || stil().pos[platz] || '50% 30%';
+  const ph = platzhalter(text, art);
+  return { src: pfad || ph, ph, pos };
+}
+
+function img(platz, text, art, cls = '', alt = '') {
+  const b = bild(platz, text, art);
+  return `<img class="${cls}" src="${esc(b.src)}" data-ph="${esc(b.ph)}" alt="${esc(alt)}" style="object-position:${esc(b.pos)}" loading="lazy">`;
+}
+
+const ICON = {
+  herz: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  menschen: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 5.5 5"/>',
+  ziel: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+  muenzen: '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/>',
+  sonne: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',
+  teller: '<ellipse cx="12" cy="15" rx="9" ry="3.5"/><ellipse cx="12" cy="14.4" rx="5" ry="1.6"/><circle cx="10" cy="11" r="1.6"/><circle cx="13.6" cy="10.4" r="1.4"/>',
+  schuh: '<path d="M3 16h18v3H3zM4 16l1-7h5l2 4 7 1.5V16"/>',
+  mond: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  glas: '<path d="M7 4h10l-1 16H8zM7 9h10"/>',
+  kalender: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  liste: '<path d="M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/>',
+  zahnrad: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  zurueck: '<path d="M15 5l-7 7 7 7"/>',
+  check: '<path d="M5 12l5 5L20 7"/>',
+  stern: '<path d="M12 3l2.4 5 5.6.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.6-.8z"/>',
+  kompass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+  buch: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/>',
+  pfeil: '<path d="M4 18l6-6 4 4 6-8"/>',
+  haus: '<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/>',
+  burg: '<path d="M4 20V9h3V6h3v3h4V6h3v3h3v11z"/><path d="M10 20v-5h4v5"/>',
+  karte: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  schloss: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
+};
+const icon = (n, cls = 'ic') => `<svg class="${cls}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[n] || ICON.stern}</svg>`;
+
+function fortschritt(nr) {
+  return `<div class="prog" role="progressbar" aria-valuemin="1" aria-valuemax="8" aria-valuenow="${nr}" aria-label="Schritt ${nr} von 8">${Array.from({ length: 8 }, (_, i) => `<i class="${i < nr ? 'on' : ''}"></i>`).join('')}</div><span class="schritt">${nr} / 8</span>`;
+}
+
+function kopf(nr, zurueck = true, hell = false) {
+  return `<div class="ob-kopf ${hell ? 'hell' : ''}">${zurueck ? `<button class="icbtn" data-a="zurueck" aria-label="Zurück">${icon('zurueck')}</button>` : '<span class="icplatz"></span>'}${fortschritt(nr)}</div>`;
+}
+
+function hinweisBox() {
+  return hinweis ? `<div class="hinweis" role="status"><span>${esc(hinweis)}</span><button class="link" data-a="hinweis-weg">OK</button></div>` : '';
+}
+
+// ---------- Bildschirme ----------
+// ---------- Untere Leiste ----------
+// Tabs als Konfiguration: weitere Tabs (z. B. Logbuch, Wheel) = neue Zeile. Leiste erscheint erst ab 2 sichtbaren Tabs.
+// Version 26: `sichtbar` (in der Leiste gezeigt) und `aktiv` (antippbar) getrennt. Gesperrte Tabs zeigen ein Schloss
+// und beim Antippen `sperrText`, statt zu fehlen → Nutzer sieht von Anfang an, was kommt (Progressive Disclosure bleibt).
+// Version 27: Freischaltung als Regel-Daten (`frei`, siehe logik/freischaltung.js). Höchstens 5 Tabs (Handybreite).
+// `bald: true` = Bereich ist noch nicht gebaut; frei geschaltet zeigt er den Platzhalter-Bildschirm „bald“.
+const TABS = [
+  { screen: 'start', label: () => T('tab.start'), icon: 'haus' },
+  { screen: 'stadt', label: () => wort('stadt'), icon: 'burg', frei: { art: 'sieg' }, sperrText: () => T('tab.stadtGesperrt', { stadt: wort('stadt') }) },
+  { screen: 'logbuch', label: () => T('tab.logbuch'), icon: 'buch', frei: { art: 'stufe', ab: 3 }, bald: true },
+  { screen: 'karte', label: () => T('tab.karte'), icon: 'karte', frei: { art: 'stufe', ab: 4 }, bald: true },
+  { screen: 'gruppe', label: () => T('tab.gruppe'), icon: 'menschen', frei: { art: 'stufe', ab: 4 }, bald: true }
+];
+const MAX_TABS = 5;
+const tabSichtbar = t => !t.sichtbar || t.sichtbar();
+const freiKontext = () => ({ stufe: hoechsteStufe(spiel, jetzt(), m => console.warn(m)), siege: H.gesamtSiege(spiel) });
+const tabAktiv = t => istFrei(t.frei, freiKontext(), m => console.warn(m));
+const sperrTextVon = t => t.sperrText ? t.sperrText()
+  : t.frei && t.frei.art === 'stufe' ? T('tab.stufeGesperrt', { bereich: t.label(), stufe: wort('stufe'), nr: t.frei.ab })
+  : T('tab.gesperrt');
+if (TABS.length > MAX_TABS) console.warn(`Untere Leiste: ${TABS.length} Tabs, Platz für ${MAX_TABS}.`);
+function tabLeiste() {
+  if (!stand.onboarding.fertig || !TABS.some(t => t.screen === ui.screen)) return '';
+  const sichtbar = TABS.filter(tabSichtbar).slice(0, MAX_TABS);
+  if (sichtbar.length < 2) return '';
+  return `<nav class="tabs" aria-label="Bereiche">${sichtbar.map(t => {
+    const an = ui.screen === t.screen, frei = tabAktiv(t);
+    return `<button class="tab ${an ? 'an' : ''} ${frei ? '' : 'gesperrt'}" data-a="tab" data-id="${t.screen}" ${an ? 'aria-current="page"' : ''} ${frei ? '' : 'aria-disabled="true"'}><span class="tab-ic">${icon(t.icon)}${frei ? '' : icon('schloss', 'ic tab-schloss')}</span><span class="tab-nm">${esc(t.label())}</span></button>`;
+  }).join('')}</nav>`;
+}
+
+// Platzhalter für freigeschaltete, aber noch nicht gebaute Bereiche (Version 27)
+function baldScreen(t) {
+  return `<section class="screen bald">
+      <div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span><button class="icbtn" data-a="einstellungen" aria-label="Einstellungen">${icon('zahnrad')}</button></div>
+      <div class="inhalt mitte">
+        <span class="medaille">${icon(t.icon, 'ic gross')}</span>
+        <h1>${esc(T('bald.titel', { bereich: t.label() }))}</h1>
+        <p class="lead">${esc(T('bald.text'))}</p>
+      </div>
+    </section>`;
+}
+
+// Bezirksbild: eigenes Bild → Datei des Stils → gezeichnete Silhouette (kein Leihen aus anderen Stilen)
+function bezirkBild(domainId, name) {
+  const platz = 'bezirk-' + domainId;
+  const hatBild = (EIGENE_BILDER[stand.stil.aktiv] || {})[platz] || stil().bilder[platz];
+  if (hatBild) return img(platz, name, 'szene', 'bezirk-img');
+  return `<svg class="bezirk-svg" viewBox="0 0 64 48" aria-hidden="true">${SILHOUETTEN[domainId] || SILHOUETTEN._standard}</svg>`;
+}
+
+const SCREENS = {
+  ob1() {
+    const bereiche = TABELLE.gruppen.filter(b => b.onboarding);
+    return `<section class="screen">
+      <div class="ob-bild klein">${img('szene', 'Life is a Game', 'szene', 'cover')}<div class="verlauf"></div></div>
+      <div class="ob-kopf ueber">${ui.neu ? `<button class="icbtn hell-btn" data-a="zurueck" aria-label="Abbrechen">${icon('zurueck')}</button>` : '<span class="icplatz"></span>'}${fortschritt(1)}</div>
+      <div class="inhalt">
+        ${ui.neu ? `<h1>Ein neues Abenteuer</h1>
+        <p class="lead">Ein weiterer Held kommt dazu. Wähle den Lebensbereich, in dem er dich begleiten soll.</p>`
+        : `<h1>Willkommen bei Life is a Game</h1>
+        <p class="lead">Jeder Mensch hat Ziele. Jeder Mensch hat Hindernisse. Wir machen aus deinen Herausforderungen ein Abenteuer, Schritt für Schritt.</p>`}
+        <p class="frage" id="f1">Welchen Bereich möchtest du als Erstes verbessern?</p>
+        <div class="optionen" role="group" aria-labelledby="f1">
+          ${bereiche.map(b => bereichBelegt(b.id)
+            ? `<button class="opt belegt" disabled>${icon(b.icon)}<span>${esc(b.name)}<small>Held schon dabei</small></span></button>`
+            : `<button class="opt ${ui.bereich === b.id ? 'sel' : ''}" aria-pressed="${ui.bereich === b.id}" data-a="bereich" data-id="${b.id}">${icon(b.icon)}<span>${esc(b.name)}</span></button>`).join('')}
+        </div>
+      </div>
+      <div class="fuss"><button class="cta" data-a="weiter" ${ui.bereich ? '' : 'disabled'}>Weiter</button></div>
+    </section>`;
+  },
+
+  stadt() {
+    if (!stadtSichtbar(spiel)) { ui.screen = 'start'; return SCREENS.start(); }
+    let bezirke;
+    try { bezirke = stadtAnsicht(spiel, LEBENSBEREICHE); }
+    catch (e) { console.warn('Stadt:', e.message); bezirke = []; }
+    const entsteht = bezirke.filter(b => b.status === STATUS.entsteht);
+    return `<section class="screen stadt">
+      <div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span><button class="icbtn" data-a="einstellungen" aria-label="Einstellungen">${icon('zahnrad')}</button></div>
+      <div class="inhalt start-inhalt">
+        <div><span class="eyebrow">${esc(T('stadt.eyebrow', { STADT: wort('stadt').toUpperCase() }))}</span>
+        <h1>${esc(T('stadt.titel', { stadtname: wort('stadtname') }))}</h1>
+        <p class="klein">${esc(T('stadt.intro', { bezirk: wort('bezirk') }))}</p></div>
+        <div class="skyline" aria-hidden="true">${bezirke.map(b => `<span class="sky ${b.status}">${bezirkBild(b.domainId, b.name)}</span>`).join('')}</div>
+        <ul class="bezirke" aria-label="${esc(wort('bezirk'))}e">
+          ${bezirke.map(b => `<li class="bezirk ${b.status}">
+            <span class="bezirk-bild">${bezirkBild(b.domainId, b.name)}</span>
+            <b>${esc(bezirkName(b.domainId, b.name))}</b>
+            <span>${esc(b.status === STATUS.entsteht ? T('bezirk.entsteht', { helden: b.helden.map(nameVon).join(', ') }) : T('bezirk.unentdeckt'))}</span>
+          </li>`).join('')}
+        </ul>
+        <p class="klein mitte-text">${entsteht.length ? esc(T('stadt.fuss', { bezirk: wort('bezirk') })) : ''}</p>
+      </div>
+    </section>`;
+  },
+
+  ob2() {
+    const b = TABELLE.gruppen.find(x => x.id === ui.bereich);
+    const probleme = TABELLE.probleme[ui.bereich] || [];
+    const anders = ui.problem === '*';
+    return `<section class="screen">
+      ${kopf(2)}
+      <div class="inhalt">
+        <span class="chip">${esc(b ? b.name : '')}</span>
+        <h1>Was fällt dir aktuell am schwersten?</h1>
+        <p class="lead">Wähle das, was dich gerade am meisten beschäftigt.</p>
+        <div class="optionen" role="group" aria-label="Herausforderung">
+          ${probleme.map(p => problemBelegt(ui.bereich, p.id)
+            ? `<button class="opt belegt" disabled><span>${esc(p.text)}<small>${esc(nameVon(K.vorlageFuer(TABELLE, ui.bereich, p.id).held))} ist schon dabei</small></span></button>`
+            : `<button class="opt ${ui.problem === p.id ? 'sel' : ''}" aria-pressed="${ui.problem === p.id}" data-a="problem" data-id="${p.id}"><span>${esc(p.text)}</span></button>`).join('')}
+          ${problemBelegt(ui.bereich, '*') ? '' : `<button class="opt leise ${anders ? 'sel' : ''}" aria-pressed="${anders}" data-a="problem" data-id="*"><span>Etwas anderes …</span></button>`}
+        </div>
+        ${anders ? `<label class="feld"><span>Was ist es?</span><input id="freitext" maxlength="120" value="${esc(ui.freitext)}" placeholder="Zum Beispiel: Ich komme morgens schlecht aus dem Bett" autocomplete="off"></label>` : ''}
+      </div>
+      <div class="fuss"><button class="cta" data-a="weiter" ${ui.problem && (!anders || ui.freitext.trim()) ? '' : 'disabled'}>Weiter</button></div>
+    </section>`;
+  },
+
+  ob3() {
+    const p = (TABELLE.probleme[ui.bereich] || []).find(x => x.id === ui.problem);
+    const ziele = p ? p.ziele : [];
+    const eigen = ui.problem === '*';
+    return `<section class="screen">
+      ${kopf(3)}
+      <div class="inhalt">
+        <h1 class="mittel">Welche Veränderung hätte gerade den größten positiven Einfluss auf dein Leben?</h1>
+        ${eigen ? `<label class="feld"><span>Dein Ziel in wenigen Worten</span><input id="zieltext" maxlength="120" value="${esc(ui.ziel || '')}" placeholder="Zum Beispiel: Morgens pünktlich aufstehen" autocomplete="off"></label>`
+          : `<div class="optionen" role="group" aria-label="Ziel">${ziele.map(z => `<button class="opt ${ui.ziel === z ? 'sel' : ''}" aria-pressed="${ui.ziel === z}" data-a="ziel" data-id="${esc(z)}">${ui.ziel === z ? icon('check') : ''}<span>${esc(z)}</span></button>`).join('')}</div>`}
+        <div class="notiz">${icon('buch')}<p>Für den Start konzentrieren wir uns auf eine Hauptquest. Weitere Ziele kannst du später hinzufügen.</p></div>
+      </div>
+      <div class="fuss"><button class="cta" data-a="weiter" ${ui.ziel && ui.ziel.trim() ? '' : 'disabled'}>Das ist mein Ziel</button></div>
+    </section>`;
+  },
+
+  ob4() {
+    const zeilen = ['Bereich wird untersucht …', 'Verbündeter wird gesucht …', 'Hindernisse werden erkannt …', 'Abenteuer wird vorbereitet …'];
+    const fertig = ui.analyseSchritt >= zeilen.length;
+    return `<section class="screen analyse">
+      <div class="ob-kopf"><span class="icplatz"></span>${fortschritt(4)}</div>
+      <div class="inhalt mitte">
+        <div class="ring ${fertig ? 'still' : ''}" aria-hidden="true"><svg viewBox="0 0 190 190"><circle cx="95" cy="95" r="88" class="r1"/><circle cx="95" cy="95" r="74" class="r2"/></svg><span>${icon('kompass', 'ic gross')}</span></div>
+        <h1>Dein Abenteuer entsteht</h1>
+        <ul class="analyse-liste" role="status" aria-live="polite">
+          ${zeilen.map((z, i) => `<li class="${i < ui.analyseSchritt ? 'ok' : i === ui.analyseSchritt ? 'jetzt' : ''}"><span class="dot">${i < ui.analyseSchritt ? icon('check') : ''}</span>${z}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="fuss">${fertig ? '<button class="cta" data-a="weiter">Weiter</button>' : '<button class="link" data-a="weiter">Überspringen</button>'}</div>
+    </section>`;
+  },
+
+  ob5() {
+    const v = aktuelleVorlage();
+    const vb = TABELLE.helden[v.held];
+    return `<section class="screen">
+      <div class="ob-bild gross">${img(v.held, vb.name, 'held', 'cover', `${nameVon(v.held)}, ${vb.rolle}`)}<div class="verlauf dunkel-oben"></div></div>
+      ${kopf(5, true, true).replace('ob-kopf', 'ob-kopf ueber')}
+      <div class="inhalt hoch">
+        <span class="chip gut">DEIN ${esc(wort('verbuendeter').toUpperCase())}</span>
+        <div><h1 class="name">${esc(nameVon(v.held))}</h1><p class="rolle">${esc(vb.rolle)}</p></div>
+        <p class="lead">${esc(nameVon(v.held))} hilft Menschen dabei:</p>
+        <ul class="haken">${vb.hilft.map(h => `<li>${icon('check')}${esc(h)}</li>`).join('')}</ul>
+        <p class="stark">${esc(nameVon(v.held))} begleitet dich auf deiner ${ui.neu ? 'neuen' : 'ersten'} Quest.</p>
+      </div>
+      <div class="fuss"><button class="cta" data-a="weiter">Weiter</button></div>
+    </section>`;
+  },
+
+  ob6() {
+    const v = aktuelleVorlage();
+    const g = TABELLE.gegner[v.gegner];
+    return `<section class="screen dunkel">
+      ${kopf(6, true, true)}
+      <div class="inhalt">
+        <span class="chip schlecht">DEIN AKTUELLES HINDERNIS</span>
+        <div class="boss-bild">${img('boss-' + v.gegner, g.name, 'boss', 'cover', g.name)}</div>
+        <h1 class="name">${esc(g.name)}</h1>
+        <div class="kraft"><span>KRAFT</span><div class="balken boss"><i style="width:100%"></i></div></div>
+        <p class="lead">${esc(g.text)}</p>
+        <div class="zwei">
+          <div class="box schlecht"><b>WIRD STÄRKER</b>${esc(g.staerker)}</div>
+          <div class="box gut"><b>VERLIERT KRAFT</b>${esc(g.schwaecher)}</div>
+        </div>
+      </div>
+      <div class="fuss"><button class="cta rot" data-a="weiter">Wie besiege ich ${/^Die /.test(g.name) ? 'sie' : /^Das /.test(g.name) ? 'es' : 'ihn'}?</button></div>
+    </section>`;
+  },
+
+  ob7() {
+    const v = aktuelleVorlage();
+    const f = TABELLE.faehigkeiten[v.faehigkeit];
+    const g = TABELLE.gegner[v.gegner];
+    return `<section class="screen">
+      ${kopf(7)}
+      <div class="inhalt">
+        <p class="eyebrow mitte-text">${esc(wort('faehigkeit').toUpperCase())} FREIGESCHALTET</p>
+        <div class="karte faehigkeit erscheint">
+          <span class="medaille">${icon(f.icon, 'ic gross')}</span>
+          <h1 class="name">${esc(f.name)}</h1>
+          <p class="wenn">${esc(f.wenn)}</p>
+          <ul class="haken">${f.schritte.map(s => `<li>${icon('check')}${esc(s)}</li>`).join('')}</ul>
+        </div>
+        <div class="gegen">${img('boss-' + v.gegner, g.name, 'boss', 'rund')}<span>Besonders wirksam gegen ${esc(g.name.replace(/^(Der|Die|Das) /, m => ({ 'Der ': 'den ', 'Die ': 'die ', 'Das ': 'das ' }[m])))}.</span></div>
+      </div>
+      <div class="fuss"><button class="cta" data-a="weiter">Weiter</button></div>
+    </section>`;
+  },
+
+  ob8() {
+    const v = aktuelleVorlage();
+    const f = TABELLE.faehigkeiten[v.faehigkeit];
+    const g = TABELLE.gegner[v.gegner];
+    const n = v.quest.anzahl;
+    return `<section class="screen">
+      <div class="ob-bild mittel">${img('banner-' + v.held, 'Quest', 'szene', 'cover')}<div class="verlauf dunkel-oben"></div></div>
+      ${kopf(8, true, true).replace('ob-kopf', 'ob-kopf ueber')}
+      <div class="inhalt hoch">
+        <div class="karte quest">
+          <span class="eyebrow">${esc(wort('woche').toUpperCase())}</span>
+          <h1 class="mittel">Wende „${esc(f.name)}“ diese Woche ${n === 1 ? 'einmal' : `mindestens ${n}-mal`} an.</h1>
+          <div class="siegel-reihe" aria-label="0 von ${n} erledigt">${Array.from({ length: n }, (_, i) => `<span class="siegel">${i + 1}</span>`).join('')}</div>
+          <p class="klein mitte-text">0 von ${n} · bis Sonntag</p>
+        </div>
+        <p class="eyebrow">BELOHNUNG</p>
+        <ul class="belohnung">
+          <li><span class="rund-ic gut">${icon('pfeil')}</span>Fortschritt für dein Ziel</li>
+          <li>${img('boss-' + v.gegner, g.name, 'boss', 'rund')}Schaden gegen ${esc(g.name.replace(/^(Der|Die|Das) /, m => ({ 'Der ': 'den ', 'Die ': 'die ', 'Das ': 'das ' }[m])))}</li>
+          <li>${img(v.held, nameVon(v.held), 'held', 'rund')}Erfahrung für ${esc(nameVon(v.held))}</li>
+        </ul>
+      </div>
+      <div class="fuss"><button class="cta" data-a="beginnen">Abenteuer beginnen</button></div>
+    </section>`;
+  },
+
+  start() {
+    const v = aktuelleVorlage();
+    const f = TABELLE.faehigkeiten[v.faehigkeit];
+    const g = TABELLE.gegner[v.gegner];
+    const a = K.auswertung(stand, jetzt());
+    const datum = jetzt().toLocaleDateString('de-AT', { weekday: 'long', day: 'numeric', month: 'short' });
+    const antw = a.heuteAntwort;
+    return `<section class="screen start">
+      <div class="start-kopf"><span class="datum">${esc(datum)}</span><button class="icbtn" data-a="einstellungen" aria-label="Einstellungen">${icon('zahnrad')}</button></div>
+      <div class="inhalt start-inhalt">
+        ${hinweisBox()}
+        ${ui.fbDanke ? '<div class="hinweis gut-rand" role="status"><span>Danke für dein Feedback!</span><button class="link" data-a="danke-weg">OK</button></div>' : ''}
+        ${crewLeiste()}
+        ${angebotKarte()}
+        ${crewKarte()}
+        <div class="karte haupt">
+          <span class="eyebrow akzent">${spiel.helden.length > 1 ? `IM RAMPENLICHT · ${esc(nameVon(v.held).toUpperCase())}` : `MEINE ${esc(wort('quest').toUpperCase())}`}</span>
+          <span class="questtitel">${esc(stand.quest.ziel)}</span>
+          ${wegHtml(a, v, g)}
+          ${lebenZeile(v)}
+        </div>
+        <div class="paar">
+          <button class="karte figur tippbar" data-a="blatt" data-id="crew" aria-label="${esc(nameVon(v.held))} ansehen">
+            ${img(v.held, nameVon(v.held), 'held', 'figur-bild', nameVon(v.held))}
+            <div class="figur-text"><span class="eyebrow gut-text">${esc(wort('verbuendeter').toUpperCase())}</span><span class="nm">${esc(nameVon(v.held))}</span><span class="klein">${esc(wort('stufe'))} ${a.level} · ${a.imLevel} / ${a.proLevel} XP</span>
+            <div class="balken xp" aria-hidden="true"><i style="width:${Math.round(100 * a.imLevel / a.proLevel)}%"></i></div></div>
+            ${ui.xpFlug ? `<span class="xpflug" aria-hidden="true">${ui.xpFlug > 0 ? '+' : ''}${ui.xpFlug} XP</span>` : ''}
+          </button>
+          <button data-a="blatt" data-id="boss" aria-label="${esc(g.name)} ansehen" class="karte figur tippbar ${ui.wackeln ? 'wackelt' : ''} ${a.bossKraft === 0 ? 'besiegt' : ''}">
+            ${img('boss-' + v.gegner, g.name, 'boss', 'figur-bild', g.name)}
+            <div class="figur-text"><span class="eyebrow akzent">${esc(wort('gegner').toUpperCase())}</span><span class="nm">${esc(g.kurz)}</span>
+            <div class="segmente" role="img" aria-label="Kraft ${a.anzahl - a.treffer} von ${a.anzahl}">${Array.from({ length: a.anzahl }, (_, i) => `<i class="${i < a.anzahl - a.treffer ? 'voll' : ''}"></i>`).join('')}</div>
+            <span class="klein">${a.gegnerAnzahl > 1 ? esc(T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr })) : a.siege ? `${a.siege}× ${esc(wort('sieg'))}` : 'noch unbesiegt'}${a.rundeTag < 0 ? ` · ${esc(T('gegner.abMorgen'))}` : ''}</span></div>
+          </button>
+        </div>
+        <button class="karte zeile-karte tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(f.name)} ansehen">
+          <span class="medaille klein-m">${icon(f.icon)}</span>
+          <div class="spalte"><span class="eyebrow">AKTUELLE ${esc(wort('faehigkeit').toUpperCase())}</span><span class="nm">${esc(f.name)}</span><span class="klein">${esc(f.kurz)}</span></div>
+        </button>
+        <div class="karte aufgabe">
+          <span class="eyebrow akzent">NÄCHSTE AUFGABE</span>
+          <span class="nm gross-nm">${esc(f.name)} ${a.anzahl === 1 ? 'einmal' : a.anzahl + '×'} anwenden</span>
+          <div class="siegel-zeile" role="img" aria-label="${a.wocheZaehler} von ${a.anzahl} diese Woche">
+            ${Array.from({ length: a.anzahl }, (_, i) => `<span class="siegel ${i < a.treffer ? 'voll' : ''}">${i < a.treffer ? icon('check') : ''}</span>`).join('')}
+            <span class="klein rechts">${a.wocheZaehler} von ${a.anzahl}${a.wocheZaehler > a.anzahl ? ' · Extra!' : ''}</span>
+          </div>
+          <span class="eyebrow">TAGES-CHECK</span>
+          ${antw ? `<div class="erledigt" role="status">${icon('check')}<span>${antw === 'ja' ? `Heute ${esc(f.verb)}. Stark!` : 'Heute nicht gebraucht. Auch gut.'}</span><button class="link" data-a="check" data-id="">Ändern</button></div>`
+            : `<div class="zwei"><button class="btn voll" data-a="check" data-id="ja">Heute ${esc(f.verb)}</button><button class="btn" data-a="check" data-id="nein">Heute nicht gebraucht</button></div>`}
+        </div>
+        ${weitereHelden()}
+        ${storyKarte()}
+        ${mikroKarte()}
+        ${extraKarten()}
+      </div>
+      <div class="start-fuss">${stand.stil.frei ? `<button class="link" data-a="stilwahl">${icon('stern')} Neue Welten freigeschaltet · Stil wählen</button>` : 'Weitere Bereiche öffnen sich nach dem ersten Sieg.'}<span class="version">Version ${VERSION.nr} · ${VERSION.datum}</span></div>
+    </section>`;
+  },
+
+  stilwahl() {
+    const sel = ui.stilAuswahl || stand.stil.aktiv;
+    const g = TABELLE.gegner[aktuelleVorlage().gegner];
+    return `<section class="screen stilwahl dunkel">
+      <div class="inhalt mitte">
+        <span class="chip gut">${esc(g.kurz.toUpperCase())} BESIEGT</span>
+        <span class="stern-gross erscheint" aria-hidden="true">${icon('stern', 'ic gross')}</span>
+        <h1 class="mittel">Neuer Darstellungsstil freigeschaltet</h1>
+        <p class="lead">Wähle deine Welt</p>
+        <div class="welten" role="group" aria-label="Stil">
+          ${STIL_REIHENFOLGE.map(id => `<button class="welt ${sel === id ? 'sel' : ''}" aria-pressed="${sel === id}" data-a="stil" data-id="${id}"><img src="${esc(STILE[id].karte)}" data-ph="${esc(platzhalter(STILE[id].name, 'szene'))}" alt=""><span>${esc(STILE[id].name)}${stand.stil.aktiv === id ? ' · aktiv' : ''}</span></button>`).join('')}
+        </div>
+      </div>
+      <div class="fuss">
+        <p class="klein mitte-text">Der Stil verändert nur die Darstellung. Ziel, Fähigkeit und Fortschritt bleiben gleich.</p>
+        <button class="cta" data-a="stil-uebernehmen">Welt übernehmen</button>
+        <button class="link" data-a="stil-spaeter">Später</button>
+      </div>
+    </section>`;
+  },
+
+  feedback() {
+    const wahlBtn = (q, w, label) => `<button class="opt kurz ${ui.fb[q] === w ? 'sel' : ''}" aria-pressed="${ui.fb[q] === w}" data-a="fb-wahl" data-id="${q}:${w}">${esc(label)}</button>`;
+    return `<section class="screen">
+      <div class="start-kopf"><button class="link" data-a="start">${icon('zurueck')} Zurück</button></div>
+      <div class="inhalt">
+        <h1>Deine Meinung</h1>
+        <p class="lead">Fünf kurze Fragen. Es gibt keine falschen Antworten.</p>
+        ${FEEDBACK.fragen.map(q => q.art === 'text'
+          ? `<label class="feld"><span>${esc(q.text)}</span><textarea id="fb-${q.id}" maxlength="600" rows="3">${esc(ui.fb[q.id] || '')}</textarea></label>`
+          : `<div class="feld"><span id="fbq-${q.id}">${esc(q.text)}</span><div class="wahl" role="group" aria-labelledby="fbq-${q.id}">${FEEDBACK.wahl.map(([w, l]) => wahlBtn(q.id, w, l)).join('')}</div></div>`).join('')}
+        ${ui.fbFehler ? '<p class="fehler" role="alert">Bitte beantworte die beiden Ja/Nein-Fragen.</p>' : ''}
+      </div>
+      <div class="fuss"><button class="cta" data-a="feedback-senden">Absenden</button></div>
+    </section>`;
+  },
+
+  admin() {
+    const A = ui.admin;
+    const kopf = `<div class="start-kopf"><button class="link" data-a="start">${icon('zurueck')} Zur App</button><button class="btn klein-btn" data-a="admin-neu">Aktualisieren</button></div>`;
+    if (A.laden && !A.daten) return `<section class="screen admin">${kopf}<div class="inhalt"><h1>Auswertung</h1><p class="lead" role="status">Daten werden geladen …</p>${importHtml()}</div></section>`;
+    if (A.fehler) return `<section class="screen admin">${kopf}<div class="inhalt"><h1>Auswertung</h1><p class="fehler" role="alert">${esc(A.fehler)}</p>${importHtml()}</div></section>`;
+    if (!A.daten) return `<section class="screen admin">${kopf}<div class="inhalt"><h1>Auswertung</h1><p class="lead">Noch nicht geladen.</p>${importHtml()}</div></section>`;
+    const heute = K.tagKey(new Date());
+    const t = M.filtere(A.daten, { testprofile: A.test, besitzer: A.besitzer });
+    const g = M.grundzahlen(t, heute);
+    const h = M.heroEngagement(t);
+    const tr = M.trichter(t);
+    const rk = M.featureRanking(t);
+    const er = M.erkenntnisse(t, heute);
+    const fb = M.feedbackAuswertung(t);
+    const kp = M.kapitel(t);
+    const lb = M.lebensbereiche(t);
+    const lbName = id => (LEBENSBEREICHE.find(d => d.id === id) || { name: id }).name;
+    const { pct, minSek } = M.format;
+    const kachel = (l, v, s) => `<div class="kachel"><span class="eyebrow">${l}</span><span class="zahl">${v}</span><span class="klein">${s}</span></div>`;
+    const balken = (l, w, txt) => `<div class="bz"><span>${esc(l)}</span><div class="balken"><i style="width:${Math.max(0, Math.min(100, Math.round(w)))}%"></i></div><b>${txt}</b></div>`;
+    const ret = x => (x.wert === null ? `–` : pct(x.wert));
+    const maxT = Math.max(1, ...tr.schritte.map(s => s.anzahl));
+    const komma = x => (x === null || x === undefined ? '–' : x.toFixed(1).replace('.', ','));
+    return `<section class="screen admin">${kopf}
+      <div class="inhalt">
+        <h1>Auswertung Testphase</h1>
+        <p class="klein">App-Version ${VERSION.nr} · ${VERSION.datum}</p>
+        <p class="klein">${A.daten.length} Profile geladen · Stand ${new Date().toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' })}</p>
+        <div class="filter">
+          <button class="opt kurz ${A.test ? 'sel' : ''}" aria-pressed="${A.test}" data-a="admin-test">Testprofile einbeziehen</button>
+          <button class="opt kurz ${A.besitzer ? 'sel' : ''}" aria-pressed="${A.besitzer}" data-a="admin-besitzer">Eigene Daten einbeziehen</button>
+        </div>
+        ${importHtml()}
+        <div class="kacheln">
+          ${kachel('TESTER', g.tester, 'ohne Test/eigene')}
+          ${kachel('SESSIONS', g.sessions, 'gesamt')}
+          ${kachel('Ø SITZUNG', minSek(g.dauerMs), 'Min, nur sichtbare Zeit')}
+          ${kachel('PREMIUM', pct(g.premium.rate), `${g.premium.geklickt} von ${g.premium.gesehen} gesehen`)}
+          ${kachel('D1', ret(g.d1), `${g.d1.zurueck} von ${g.d1.basis}`)}
+          ${kachel('D3', ret(g.d3), `${g.d3.zurueck} von ${g.d3.basis}`)}
+          ${kachel('D7', ret(g.d7), `${g.d7.zurueck} von ${g.d7.basis}`)}
+        </div>
+        <div class="karte spalte"><span class="eyebrow">HERO ENGAGEMENT SCORE</span><span class="zahl gross-z">${h.score === null ? '–' : h.score}<small> von 100</small></span>
+          ${balken('Heldengefühl 40 %', h.held === null ? 0 : 100 * (h.held - 1) / 4, komma(h.held))}
+          ${balken('Wiederbesuche 25 %', h.wiederbesuche || 0, h.wiederbesuche === null ? '–' : h.wiederbesuche)}
+          ${balken('Verweildauer 20 %', h.verweildauer || 0, h.verweildauer === null ? '–' : h.verweildauer)}
+          ${balken('Story-Neugier 15 %', h.story === null ? 0 : 100 * (h.story - 1) / 4, komma(h.story))}
+        </div>
+        <div class="karte spalte"><span class="eyebrow">AUTOMATISCHE ERKENNTNISSE</span><ul class="erkenntnisse">${er.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+        <div class="karte spalte"><span class="eyebrow">FEATURE-RANKING</span><span class="klein">30 % Verweildauer · 30 % Wiederbesuche · 20 % Interaktionen · 20 % Bewertungen</span>
+          ${rk.map((r, i) => balken(`${i + 1} ${r.name}`, r.score, r.score)).join('')}</div>
+        <div class="karte spalte"><span class="eyebrow">BOSSKETTE</span>
+          ${balken('Gegner besiegt', kp.basis ? 100 * kp.sieger / kp.basis : 0, `${kp.sieger} von ${kp.basis}`)}
+          ${kp.stufen.map(s => balken(`Kapitel ${s.kapitel} erreicht`, kp.basis ? 100 * s.tester / kp.basis : 0, `${s.tester}`)).join('') || '<span class="klein">Noch niemand hat Kapitel 2 erreicht.</span>'}
+          <span class="klein">Gezählt ab Version 17.</span></div>
+        <div class="karte spalte"><span class="eyebrow">LEBENSBEREICHE BEIM START</span>
+          ${lb.map(x => balken(lbName(x.domain), 100 * x.anzahl / Math.max(1, ...lb.map(y => y.anzahl)), x.anzahl)).join('') || '<span class="klein">Noch keine Daten (gezählt ab Version 17).</span>'}</div>
+        <div class="karte spalte"><span class="eyebrow">ONBOARDING-TRICHTER</span>
+          ${tr.schritte.map(s => balken(s.label, 100 * s.anzahl / maxT, s.anzahl)).join('')}
+          <span class="klein">Ø Dauer bis „Abenteuer beginnen“: ${minSek(tr.dauerMs)} Min (Ziel höchstens 3:00)</span></div>
+        <div class="karte spalte"><span class="eyebrow">FEEDBACK (${fb.anzahl})</span>
+          <span class="klein">Morgen wieder öffnen: ${pct(fb.morgenJa)} ja · Bezahlen: ${pct(fb.bezahlenJa)} ja</span>
+          ${fb.texte.map(f => `<div class="fb-eintrag">${['spannend', 'langweilig', 'verbessern'].filter(k => f[k]).map(k => `<p><b>${{ spannend: 'Spannend', langweilig: 'Langweilig', verbessern: 'Verbessern' }[k]}:</b> ${esc(f[k])}</p>`).join('') || '<p class="klein">Nur Ja/Nein beantwortet.</p>'}</div>`).join('')}</div>
+        <div class="karte spalte"><span class="eyebrow">TESTER</span>
+          <div class="tabelle-box"><table><thead><tr><th>Tester</th><th>Erster Tag</th><th>Aktive Tage</th><th>HES</th></tr></thead><tbody>
+          ${t.map(x => `<tr><td>${esc(String(x.id).slice(0, 8))}</td><td>${esc(x.erster || '–')}</td><td>${Object.keys(x.tage).length}</td><td>${(h.je.find(j => j.id === x.id) || {}).score ?? '–'}</td></tr>`).join('') || '<tr><td colspan="4">Noch keine Tester.</td></tr>'}
+          </tbody></table></div></div>
+      </div>
+    </section>`;
+  },
+
+  story() {
+    const st = story();
+    return `<section class="screen">
+      <div class="start-kopf"><button class="link" data-a="start">${icon('zurueck')} Zurück</button></div>
+      <div class="inhalt">
+        <span class="eyebrow akzent">GESCHICHTE · WOCHE ${st.wocheNr}</span>
+        <h1>${esc(st.titel)}</h1>
+        <p class="klein">Jeder Tages-Check öffnet einen neuen Teil. Diese Woche: ${st.frei} von ${st.teile.length}.</p>
+        <div class="teile">${storyAnsicht()}</div>
+      </div>
+    </section>`;
+  },
+
+  einstellungen() {
+    return `<section class="screen">
+      <div class="start-kopf"><button class="link" data-a="start">${icon('zurueck')} Zurück</button></div>
+      <div class="inhalt">
+        <h1>Einstellungen</h1>
+        <p class="klein">Version ${VERSION.nr} · ${VERSION.datum}</p>
+        <div class="karte spalte">
+          <span class="eyebrow">STIL</span>
+          ${stand.stil.frei ? `<button class="btn" data-a="stilwahl">Welt wählen (jetzt: ${esc(stil().name)})</button>` : '<p class="klein">Weitere Welten öffnen sich nach dem ersten Sieg. Bis dahin: Fantasy.</p>'}
+        </div>
+        <div class="karte spalte">
+          <span class="eyebrow">SPEICHERN</span>
+          <p class="klein">${speicher.verfuegbar ? 'Dein Spielstand liegt in diesem Browser. Auf einem anderen Gerät beginnst du neu.' : 'Dieser Browser speichert gerade nicht. Dein Fortschritt gilt nur bis zum Schließen.'}</p>
+          ${istTest ? '<p class="klein">Du bist im Testprofil. Es speichert getrennt vom Hauptprofil.</p>' : ''}
+        </div>
+        <div class="karte spalte">
+          <span class="eyebrow">TESTPHASE</span>
+          <p class="klein">${analyticsStatus() === 'zentral' ? 'Deine Nutzung wird anonym unter einer zufälligen Tester-Nummer erfasst und ausgewertet. Namen oder Texte aus deiner Quest werden nicht übertragen.' : 'Deine Nutzung wird nur in diesem Browser gezählt und nicht übertragen.'}</p>
+          <div class="zwei"><button class="btn" data-a="feedback-oeffnen">${hatFeedback() ? 'Feedback ändern' : 'Feedback geben'}</button><button class="btn" data-a="premium">Premium ansehen</button></div>
+          ${analyticsStatus() !== 'zentral' ? exportHtml() : ''}
+          ${ui.istBesitzer ? '<button class="btn voll" data-a="admin">Auswertung öffnen</button>' : ''}
+        </div>
+        <div class="karte spalte">
+          <span class="eyebrow">NEU BEGINNEN</span>
+          <p class="klein">Löscht Quest, Fortschritt und Stil und startet das Onboarding neu.</p>
+          <button class="btn ${ui.resetFrage ? 'warn' : ''}" data-a="reset">${ui.resetFrage ? 'Wirklich alles löschen? Nochmal tippen' : 'Zurücksetzen'}</button>
+        </div>
+        <p class="klein">Version ${VERSION.nr} · ${VERSION.datum} · Tester ${esc(testerId.slice(0, 8))}</p>
+      </div>
+    </section>`;
+  }
+};
+
+// ---------- Daten senden / importieren (Version 24) ----------
+function exportHtml() {
+  const x = ui.export;
+  if (!x) return `<p class="klein">${esc(T('export.text'))}</p><button class="btn voll" data-a="export">${esc(T('export.knopf'))}</button>`;
+  if (!x.code) return `<p class="fehler" role="alert">${esc(x.info || '')}</p><button class="btn voll" data-a="export">${esc(T('export.knopf'))}</button>`;
+  const teilen = typeof navigator !== 'undefined' && navigator.share;
+  return `<p class="klein">${esc(T('export.hinweis'))}</p>
+    <label class="feld"><textarea id="export-code" readonly rows="3">${esc(x.code)}</textarea></label>
+    <div class="zwei"><button class="btn" data-a="export-kopieren">${esc(T('export.kopieren'))}</button>${teilen ? `<button class="btn" data-a="export-teilen">${esc(T('export.teilen'))}</button>` : ''}</div>
+    ${x.info ? `<p class="klein" role="status">${esc(x.info)}</p>` : ''}`;
+}
+
+function importHtml() {
+  const i = ui.admin.importInfo;
+  return `<div class="karte spalte">
+    <span class="eyebrow">${esc(T('import.titel'))}</span>
+    <p class="klein">${esc(T('import.text'))}</p>
+    <label class="feld"><textarea id="import-code" rows="3" placeholder="LIAG1.…"></textarea></label>
+    <button class="btn" data-a="admin-import">${esc(T('import.knopf'))}</button>
+    <label class="feld"><span>${esc(T('import.csv'))}</span><input type="file" id="import-csv" accept=".csv,text/csv"></label>
+    ${i ? `<p class="${i.fehler ? 'fehler' : 'klein'}" role="${i.fehler ? 'alert' : 'status'}">${esc(i.text)}</p>` : ''}
+  </div>`;
+}
+
+function erstelleExport() {
+  try { ui.export = { code: datenCode(), info: null }; }
+  catch (e) { ui.export = { code: null, info: T('export.fehler', { grund: (e && e.message) || '?' }) }; }
+  render();
+}
+
+async function kopiereExport() {
+  const feld = app.querySelector('#export-code');
+  let ok = false;
+  try { await navigator.clipboard.writeText(ui.export.code); ok = true; }
+  catch (e) { try { feld.select(); ok = document.execCommand('copy'); } catch (e2) { ok = false; } }
+  ui.export.info = T(ok ? 'export.kopiert' : 'export.manuell');
+  render();
+  if (!ok) { const f = app.querySelector('#export-code'); if (f) { f.focus(); f.select(); } }
+}
+
+async function teileExport() {
+  try { await navigator.share({ text: ui.export.code }); }
+  catch (e) { if (!e || e.name !== 'AbortError') kopiereExport(); }
+}
+
+// Schreibt ein Dokument: erst zusammenführen, falls es fehlt neu anlegen (wie dbSender).
+async function dbSchreiben(ref, doc) {
+  try { await ref.update(doc); }
+  catch (e) { if (!e || e.code !== 'invalid_argument') throw e; await ref.set(doc); }
+}
+
+// Übernimmt gelesene Tester in die Auswertung und speichert sie, wenn möglich, als Besitzer in der Datenbank.
+async function uebernimm(gelesen, kopfText) {
+  const A = ui.admin;
+  let liste = A.daten || [];
+  for (const g of gelesen) liste = X.einfuegen(liste, X.alsTester(g)).liste;
+  A.daten = liste; A.fehler = null;
+  let text = kopfText;
+  if (ui.db && ui.istBesitzer) {
+    try {
+      for (const g of gelesen) {
+        await dbSchreiben(ui.db.doc(`ana/${g.id}`), { ...g.profil, quelle: 'import', importiert: new Date().toISOString() });
+        for (const [t, d] of Object.entries(g.tage)) await dbSchreiben(ui.db.doc(`ana/${g.id}/tage/${t}`), d);
+      }
+      text += ' ' + T('import.gespeichert');
+    } catch (e) { text += ' ' + T('import.dbFehler', { grund: (e && e.message) || '?' }); }
+  } else text += ' ' + T('import.lokal');
+  A.importInfo = { fehler: false, text };
+  render();
+}
+
+async function importiere() {
+  const feld = app.querySelector('#import-code');
+  let g;
+  try { g = X.leseCode(feld ? feld.value : ''); }
+  catch (e) { ui.admin.importInfo = { fehler: true, text: e instanceof X.CodeFehler ? e.message : 'Der Code konnte nicht gelesen werden.' }; render(); return; }
+  const ersetzt = (ui.admin.daten || []).some(t => t.id === g.id);
+  await uebernimm([g], T(ersetzt ? 'import.ersetzt' : 'import.neu', { id: g.id.slice(0, 8), tage: Object.keys(g.tage).length }));
+}
+
+// CSV-Download der Google-Tabelle einlesen (Version 25).
+async function importiereCsv(datei) {
+  if (!datei) return;
+  try {
+    if (datei.size > 20 * 1024 * 1024) throw new Error(T('import.csvGross'));
+    const r = V.ausTabelle(V.leseCsv(await datei.text()));
+    await uebernimm(r.tester, T('import.csvOk', { tester: r.tester.length, zeilen: r.zeilen, fehler: r.fehler }));
+  } catch (e) {
+    ui.admin.importInfo = { fehler: true, text: T('import.csvFehler', { grund: (e && e.message) || '?' }) };
+    render();
+  }
+}
+
+function frageText(art) {
+  const v = aktuelleVorlage();
+  return (BEWERTUNGEN[art] ? BEWERTUNGEN[art].frage : '').replace('{name}', nameVon(v.held));
+}
+
+function frageBild(art) {
+  const v = aktuelleVorlage();
+  const g = TABELLE.gegner[v.gegner];
+  const b = BEWERTUNGEN[art] ? BEWERTUNGEN[art].bild : 'szene';
+  if (b === 'gegner') return img('boss-' + v.gegner, g.name, 'boss', 'cover');
+  if (b === 'verbuendeter') return img(v.held, nameVon(v.held), 'held', 'cover');
+  if (b === 'banner') return img('banner-' + v.held, 'Held', 'szene', 'cover');
+  return img('szene', 'Geschichte', 'szene', 'cover');
+}
+
+function feierHtml() {
+  const f = ui.feier;
+  if (!f) return '';
+  const v = aktuelleVorlage();
+  const g = TABELLE.gegner[v.gegner];
+  if (f.art === 'frage') {
+    const c = BEWERTUNGEN[f.bewertung];
+    return `<div class="feier unten" role="dialog" aria-modal="true" aria-labelledby="feier-t">
+      <div class="frage-bild">${frageBild(f.bewertung)}</div>
+      <div class="frage-blatt erscheint">
+        <span class="griff" aria-hidden="true"></span>
+        <span class="eyebrow">${esc(c.titel)}</span>
+        <h2 id="feier-t">${esc(frageText(f.bewertung))}</h2>
+        <div class="skala" role="group" aria-label="Bewertung 1 bis 5">${[1, 2, 3, 4, 5].map(n => `<button class="sc" data-a="bewerte" data-id="${n}" aria-label="${n} von 5">${n}</button>`).join('')}</div>
+        <div class="skala-text"><span>${esc(SKALA.links)}</span><span>${esc(SKALA.rechts)}</span></div>
+        <button class="link" data-a="bewerte" data-id="0">Überspringen</button>
+      </div>
+    </div>`;
+  }
+  if (f.art === 'story') {
+    const st = story();
+    return `<div class="feier" role="dialog" aria-modal="true" aria-labelledby="feier-t">
+      <div class="feier-karte story-blatt erscheint">
+        <span class="eyebrow akzent">${esc(st.titel.toUpperCase())} · NEUER TEIL</span>
+        <h2 id="feier-t" class="sr-titel">Teil ${f.nr}</h2>
+        ${storyAnsicht(f.nr)}
+        <button class="cta" data-a="feier-weiter">${f.nr < st.teile.length ? 'Bis morgen' : 'Weiter'}</button>
+      </div>
+    </div>`;
+  }
+  if (f.art === 'sieg') {
+    const gid = TABELLE.gegner[f.gegner] ? f.gegner : v.gegner;
+    const gs = TABELLE.gegner[gid];
+    const fw = I.gegnerFormen(gs);
+    const weiter = f.neuerGegner ? T('sieg.weiterNeu') : T('sieg.weiterGleich', { er: fw.er });
+    return `<div class="feier" role="dialog" aria-modal="true" aria-labelledby="feier-t">
+      <div class="feier-karte erscheint">
+        <div class="feier-bild">${img('boss-' + gid, gs.name, 'boss', 'cover grau')}</div>
+        <span class="chip gut">SIEG · +${K.XP.sieg} XP</span>
+        <h2 id="feier-t">${esc(gs.name)} ist ${esc(wort('sieg'))}!</h2>
+        <p>Du hast „${esc(TABELLE.faehigkeiten[v.faehigkeit].name)}“ ${v.quest.anzahl === 1 ? 'eingesetzt' : `${v.quest.anzahl}-mal eingesetzt`}. ${esc(weiter)}</p>
+        <button class="cta" data-a="feier-weiter">Weiter</button>
+      </div>
+    </div>`;
+  }
+  if (f.art === 'lauf') {
+    const alt = TABELLE.gegner[f.von] ? f.von : v.gegner;
+    const neuId = TABELLE.gegner[f.nach] ? f.nach : v.gegner;
+    return `<div class="feier" role="dialog" aria-modal="true" aria-labelledby="feier-t">
+      <div class="feier-karte erscheint">
+        <h2 id="feier-t">${esc(T('lauf.titel', { held: nameVon(v.held) }))}</h2>
+        <div class="lauf-bahn" aria-hidden="true">
+          <span class="lauf-station links">${img('boss-' + alt, '', 'boss', 'cover grau')}<i class="station-haken">${icon('check')}</i></span>
+          <span class="lauf-station rechts">${img('boss-' + neuId, '?', 'boss', 'cover schatten')}</span>
+          <span class="lauf-held">${img(v.held, nameVon(v.held), 'held', 'cover')}</span>
+        </div>
+        <p>${esc(T('lauf.text', { gegner: I.gegnerFormen(TABELLE.gegner[alt]).nom }))}</p>
+        <button class="cta" data-a="feier-weiter">Weiter</button>
+      </div>
+    </div>`;
+  }
+  if (f.art === 'gegner') {
+    const gid = TABELLE.gegner[f.gegner] ? f.gegner : v.gegner;
+    const gn = TABELLE.gegner[gid];
+    return `<div class="feier" role="dialog" aria-modal="true" aria-labelledby="feier-t">
+      <div class="feier-karte erscheint">
+        <div class="feier-bild">${img('boss-' + gid, gn.name, 'boss', 'cover')}</div>
+        <span class="chip schlecht">${esc(T('neuerGegner.chip', { KAPITEL: wort('kapitel').toUpperCase(), nr: f.kapitel, GEGNER: wort('gegner').toUpperCase() }))}</span>
+        <h2 id="feier-t">${esc(gn.name)}</h2>
+        <p>${esc(gn.text)}</p>
+        <div class="zwei"><div class="box schlecht"><b>WIRD STÄRKER</b>${esc(gn.staerker)}</div><div class="box gut"><b>VERLIERT KRAFT</b>${esc(gn.schwaecher)}</div></div>
+        <p class="klein">${esc(T('neuerGegner.ziel', { faehigkeit: wort('faehigkeit'), name: TABELLE.faehigkeiten[v.faehigkeit].name, anzahl: v.quest.anzahl }))}</p>
+        <button class="cta" data-a="feier-weiter">${esc(T('neuerGegner.knopf'))}</button>
+      </div>
+    </div>`;
+  }
+  if (f.art === 'levelup') {
+    return `<div class="feier" role="dialog" aria-modal="true" aria-labelledby="feier-t">
+      <div class="feier-karte erscheint">
+        <span class="stern-gross" aria-hidden="true">${icon('stern', 'ic gross')}</span>
+        <h2 id="feier-t">${esc(nameVon(f.held || v.held))} erreicht ${esc(wort('stufe'))} ${f.level}</h2>
+        <p>Neuer Titel: ${esc(f.titel)}</p>
+        <button class="cta" data-a="feier-weiter">Weiter</button>
+      </div>
+    </div>`;
+  }
+  return '';
+}
+
+// Fortschritt im Leben (Version 21): echtes Verhalten seit Questbeginn, nicht nur XP.
+function entw() {
+  try { return entwicklung(stand, jetzt()); } catch (e) { console.warn('Entwicklung:', e.message); return null; }
+}
+function lebenZeile(v) {
+  const e = entw();
+  if (!e || !e.anwendungen) return '';
+  const f = TABELLE.faehigkeiten[v.faehigkeit];
+  return `<p class="leben">${icon('check')}<span><b>${esc(T('leben.anwendungen', { n: e.anwendungen, verb: f.verb }))}</b> ${esc(T('leben.seit', { datum: kurzDatum(e.start) }))}${e.siege ? ` · ${esc(T('leben.siege', { n: e.siege, sieg: wort('sieg') }))}` : ''}</span></p>`;
+}
+function entwicklungHtml(v) {
+  const e = entw();
+  if (!e) return '';
+  const f = TABELLE.faehigkeiten[v.faehigkeit];
+  const kachel = (zahl, text) => `<div class="kachel"><span class="zahl">${zahl}</span><span class="klein">${esc(text)}</span></div>`;
+  const maxZ = Math.max(1, ...e.verlauf.map(r => Math.max(r.anwendungen, r.ziel)));
+  return `<span class="eyebrow">${esc(T('entw.titel'))}</span>
+    <div class="kacheln">
+      ${kachel(e.anwendungen, T('entw.anwendungen', { verb: f.verb }))}
+      ${kachel(e.siege, T('entw.siege', { sieg: wort('sieg') }))}
+      ${kachel(e.kapitel, T('entw.kapitel', { kapitel: wort('kapitel') }))}
+      ${kachel(e.tageSeitStart, T(e.tageSeitStart === 1 ? 'entw.tag' : 'entw.tage'))}
+    </div>
+    <div class="verlauf-runden" role="img" aria-label="${esc(e.verlauf.map(r => `Woche ${r.nr}: ${r.anwendungen} von ${r.ziel}${r.sieg ? ', Sieg' : ''}`).join('; '))}">
+      ${e.verlauf.map(r => `<span class="runde ${r.sieg ? 'sieg' : ''}"><i style="height:${Math.round(100 * Math.min(r.anwendungen, maxZ) / maxZ)}%"></i><b>${r.anwendungen}</b><small>${esc(T('entw.runde', { nr: r.nr }))}</small></span>`).join('')}
+    </div>
+    <p class="klein">${esc(T('entw.legende', { anzahl: e.verlauf[0] ? e.verlauf[0].ziel : '', gegner: wort('gegner'), sieg: wort('sieg') }))}${e.naechsterTitel ? ` ${esc(T('entw.naechsterTitel', { titel: e.naechsterTitel.titel, stufe: wort('stufe'), nr: e.naechsterTitel.abStufe }))}` : ''}</p>`;
+}
+
+// Weg der Bosskette auf der Quest-Karte (Version 19): Stationen = Gegner, Held rückt mit jedem Treffer vor.
+const prozent = (wert, max) => `${Math.round(1000 * wert / max) / 10}%`;
+function wegHtml(a, v, g) {
+  let w;
+  try { w = W.wegFenster(W.wegAnsicht(a, K.kette(stand))); }
+  catch (e) { console.warn('Weg:', e.message); return `<span class="mini gut-text">Woche ${a.wocheNr}</span>`; }
+  const n = w.stationen.length;
+  const pkt = w.stationen.map((_, i) => W.wegPunkt(i, n));
+  const held = W.wegPunkt(w.position, n);
+  const linie = l => l.map((q, i) => `${i ? 'L' : 'M'}${q.x} ${q.y}`).join(' ');
+  const geschafft = [...pkt.slice(0, Math.floor(w.position) + 1), held];
+  const rest = Math.max(0, a.anzahl - a.treffer);
+  const stationHtml = (st, i) => {
+    const q = pkt[i];
+    const lage = `left:${prozent(q.x, 300)};top:${prozent(q.y, 92)}`;
+    if (st.status === W.STATION.start) return `<span class="station start" style="${lage}"></span>`;
+    if (st.status === W.STATION.nebel) return `<span class="station nebel" style="${lage}"></span>`;
+    const gg = TABELLE.gegner[st.gegner] || g;
+    const bildCls = st.status === W.STATION.verborgen ? 'cover schatten' : st.status === W.STATION.besiegt ? 'cover grau' : 'cover';
+    return `<span class="station ${st.status}" style="${lage}">${img('boss-' + st.gegner, gg.name, 'boss', bildCls)}${st.status === W.STATION.besiegt ? `<i class="station-haken">${icon('check')}</i>` : ''}</span>`;
+  };
+  const text = a.rundeTag < 0 ? T('weg.morgen', { kapitel: wort('kapitel'), gegner: g.kurz })
+    : [T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }), rest ? T('weg.rest', { rest, gegner: g.kurz }) : '', T('weg.kapitel', { kapitel: wort('kapitel'), nr: w.kapitel })].filter(Boolean).join(' · ');
+  return `<div class="weg" role="img" aria-label="${esc(T('weg.aria', { held: nameVon(v.held), text }))}">
+      <svg viewBox="0 0 300 92" preserveAspectRatio="none" aria-hidden="true"><path class="weg-rest" d="${linie(pkt)}"/><path class="weg-geschafft" d="${linie(geschafft)}"/></svg>
+      ${w.stationen.map(stationHtml).join('')}
+      <span class="weg-held" style="left:${prozent(held.x, 300)};top:${prozent(held.y, 92)}">${img(v.held, nameVon(v.held), 'held', 'cover')}</span>
+    </div>
+    <span class="mini gut-text">${esc(text)}</span>`;
+}
+
+// Andeutung: nächster Gegner der Kette als Silhouette (Name bleibt verborgen)
+function naechsterGegnerHtml(a, g) {
+  const kette = K.kette(stand);
+  const id = a.gegnerNr < a.gegnerAnzahl ? kette[a.gegnerNr] : null;
+  if (!id || !TABELLE.gegner[id]) return '';
+  andeutungGesehen('boss');
+  return `<div class="naechster">
+    <span class="naechster-bild" aria-hidden="true">${img('boss-' + id, '?', 'boss', 'cover schatten')}</span>
+    <span class="spalte"><span class="eyebrow">${esc(T('teaser.kapitel', { KAPITEL: wort('kapitel').toUpperCase(), nr: a.gegnerNr + 1 }))}</span><span class="nm">${esc(T('teaser.name'))}</span>
+    <span class="klein">${esc(T('teaser.wartet', { gegner: I.gegnerFormen(g).nom, sieg: wort('sieg') }))}</span></span></div>`;
+}
+
+function blattHtml() {
+  if (!ui.blatt || !stand.quest) return '';
+  const v = aktuelleVorlage();
+  const g = TABELLE.gegner[v.gegner];
+  const f = TABELLE.faehigkeiten[v.faehigkeit];
+  const vb = TABELLE.helden[v.held];
+  const a = K.auswertung(stand, jetzt());
+  let kopfbild = '';
+  let inhalt = '';
+  if (ui.blatt === 'crew') {
+    kopfbild = img(v.held, vb.name, 'held', 'cover', nameVon(v.held));
+    inhalt = `<span class="eyebrow gut-text">DEIN ${esc(wort('verbuendeter').toUpperCase())}</span>
+      <h2 id="blatt-t">${esc(nameVon(v.held))}</h2><p class="rolle">${esc(vb.rolle)}</p>
+      <div class="zeile"><div class="balken xp gross-b"><i style="width:${Math.round(100 * a.imLevel / a.proLevel)}%"></i></div><span class="mini">${esc(wort('stufe'))} ${a.level} · ${esc(a.titel)}</span></div>
+      <p class="klein">${a.xp} XP gesamt · ${a.proLevel - a.imLevel} XP bis zur nächsten ${esc(wort('stufe'))}</p>
+      ${entwicklungHtml(v)}
+      <p class="lead">${esc(nameVon(v.held))} hilft dir dabei:</p>
+      <ul class="haken">${vb.hilft.map(h => `<li>${icon('check')}${esc(h)}</li>`).join('')}</ul>`;
+  } else if (ui.blatt === 'boss') {
+    kopfbild = img('boss-' + v.gegner, g.name, 'boss', 'cover', g.name);
+    inhalt = `<span class="eyebrow akzent">DEIN ${esc(wort('gegner').toUpperCase())}</span>
+      <h2 id="blatt-t">${esc(g.name)}</h2>
+      <div class="segmente gross-s" role="img" aria-label="Kraft ${a.anzahl - a.treffer} von ${a.anzahl}">${Array.from({ length: a.anzahl }, (_, i) => `<i class="${i < a.anzahl - a.treffer ? 'voll' : ''}"></i>`).join('')}</div>
+      <p class="klein">Kraft ${a.anzahl - a.treffer} von ${a.anzahl} diese Woche · ${a.siege ? `${a.siege}× ${esc(wort('sieg'))}` : 'noch unbesiegt'}</p>
+      <p class="klein">${esc(T(a.rundeTag < 0 ? 'gegner.rundeMorgen' : 'gegner.rundeLaeuft', { bis: kurzDatum(a.rundeBis) }))}${a.gegnerAnzahl > 1 ? ` ${esc(T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr }))}.` : ''}</p>
+      <p class="lead">${esc(g.text)}</p>
+      <div class="zwei"><div class="box schlecht"><b>WIRD STÄRKER</b>${esc(g.staerker)}</div><div class="box gut"><b>VERLIERT KRAFT</b>${esc(g.schwaecher)}</div></div>
+      ${naechsterGegnerHtml(a, g)}`;
+  } else if (ui.blatt === 'faehigkeit') {
+    inhalt = `<span class="medaille">${icon(f.icon, 'ic gross')}</span>
+      <span class="eyebrow">DEINE ${esc(wort('faehigkeit').toUpperCase())}</span>
+      <h2 id="blatt-t">${esc(f.name)}</h2>
+      <p class="wenn">${esc(f.wenn)}</p>
+      <ul class="haken">${f.schritte.map(s => `<li>${icon('check')}${esc(s)}</li>`).join('')}</ul>
+      <p class="klein">Besonders wirksam gegen ${esc(g.name.replace(/^(Der|Die|Das) /, m => ({ 'Der ': 'den ', 'Die ': 'die ', 'Das ': 'das ' }[m])))}.</p>`;
+  } else if (ui.blatt === 'premium') {
+    inhalt = `<span class="stern-gross" aria-hidden="true">${icon('stern', 'ic gross')}</span>
+      <h2 id="blatt-t">Danke für dein Interesse!</h2>
+      <p class="lead">${esc(PREMIUM.titel)} ist noch nicht verfügbar. Wir prüfen gerade, ob es sich lohnt, es zu bauen. Dein Klick hilft uns dabei.</p>
+      <p class="klein">Es wurde nichts gekauft und nichts berechnet.</p>`;
+  }
+  return `<div class="feier unten" role="dialog" aria-modal="true" aria-labelledby="blatt-t">
+    <button class="hintergrund" data-a="blatt-zu" aria-label="Schließen" tabindex="-1"></button>
+    <div class="blatt erscheint">
+      ${kopfbild ? `<div class="blatt-bild">${kopfbild}</div>` : ''}
+      <div class="blatt-inhalt">${inhalt}<button class="cta" data-a="blatt-zu">Schließen</button></div>
+    </div>
+  </div>`;
+}
+
+function mikroBereich(v) {
+  if (v.gruppe && v.gruppe !== '*') return v.gruppe;
+  return stand.onboarding.bereich || MIKRO_RUECKFALL;
+}
+// Mikroquests je Held: 1 Held → 3, 2 Helden → je 2, 3 Helden → je 1
+const mikroJeHeld = () => (spiel.helden.length <= 1 ? MIKRO_JE_TAG : spiel.helden.length === 2 ? 2 : 1);
+const mikroListe = () => heldenAnsichten().flatMap(({ id, a, v }) =>
+  I.mikroHeute(a, jetzt(), mikroBereich(v), MIKRO, mikroJeHeld(), MIKRO_RUECKFALL).map(m => ({ ...m, held: id })));
+const story = () => I.storyWoche(stand, jetzt(), aktuelleVorlage(), TABELLE, STORIES, nameVon);
+
+// Crew-Leiste: alle Helden, je mit eigener Stufe und Tagesstatus. Ohne XP der Crew.
+function crewLeiste() {
+  if (spiel.helden.length < 2) return '';
+  return `<div class="crew-leiste"><span class="eyebrow">${esc(wort('crew').toUpperCase())} · ${spiel.helden.length} HELDEN</span>
+    <div class="crew-reihe">${heldenAnsichten().map(({ id, a }) => {
+      const x = K.auswertung(a, jetzt());
+      const status = x.heuteAntwort ? '✓ heute' : '● offen';
+      return `<button class="crew-held ${id === spiel.fokus ? 'an' : ''}" data-a="fokus" data-id="${esc(id)}" aria-pressed="${id === spiel.fokus}" aria-label="${esc(nameVon(id))} ins Rampenlicht">${img(id, nameVon(id), 'held', 'crew-bild')}<b>${esc(nameVon(id))}</b><span class="${x.heuteAntwort ? 'gut-text' : 'akzent-text'}">${esc(wort('stufe'))} ${x.level} · ${status}</span></button>`;
+    }).join('')}</div></div>`;
+}
+
+// Weitere Helden kompakt, mit Schnell-Check (holt den Helden ins Rampenlicht).
+function weitereHelden() {
+  const andere = heldenAnsichten().filter(h => h.id !== spiel.fokus);
+  if (!andere.length) return '';
+  return `<span class="eyebrow">WEITERE HELDEN</span>${andere.map(({ id, a, v }) => {
+    const x = K.auswertung(a, jetzt());
+    const g = TABELLE.gegner[v.gegner];
+    const f = TABELLE.faehigkeiten[v.faehigkeit];
+    const zeile = `${g.kurz} · ${f.name} ${x.wocheZaehler} von ${x.anzahl}`;
+    return `<div class="karte held-kurz">
+      <button class="held-kurz-info" data-a="fokus" data-id="${esc(id)}" aria-label="${esc(nameVon(id))} ins Rampenlicht">${img(id, nameVon(id), 'held', 'held-kurz-bild')}
+        <span class="spalte"><span class="nm">${esc(nameVon(id))} · ${esc(a.quest.ziel)}</span><span class="klein">${esc(zeile)}</span></span></button>
+      ${x.heuteAntwort ? `<span class="rund-ic gut" role="img" aria-label="Heute erledigt">${icon('check')}</span>`
+        : `<button class="schnell" data-a="schnell" data-id="${esc(id)}" aria-label="${esc(nameVon(id))}: heute ${esc(f.verb)}">${icon('check')}</button>`}
+    </div>`;
+  }).join('')}`;
+}
+
+function angebotKarte() {
+  if (!H.zielAngebot(spiel)) return '';
+  return `<div class="karte spalte angebot"><span class="eyebrow akzent">NEUES ABENTEUER</span>
+    <span class="nm gross-nm">Willst du ein neues Abenteuer beginnen?</span>
+    <p class="klein">Ein weiterer Held für einen anderen Lebensbereich. Du kannst bis zu ${H.MAX_HELDEN} Helden gleichzeitig begleiten.</p>
+    <div class="zwei"><button class="btn voll" data-a="neues-abenteuer">Ja, neues Ziel</button><button class="btn" data-a="angebot-spaeter">Später</button></div></div>`;
+}
+
+// Bereiche/Probleme, deren Held schon in der Crew ist, sind im Onboarding für weitere Helden gesperrt.
+const heldBelegt = vorlage => !!vorlage && ui.neu && !!H.heldVon(spiel, vorlage.held);
+const problemBelegt = (bereich, problem) => heldBelegt(K.vorlageFuer(TABELLE, bereich, problem));
+const bereichBelegt = b => [...(TABELLE.probleme[b] || []).map(p => p.id), '*'].every(p => problemBelegt(b, p));
+
+function crewKarte() {
+  const v = aktuelleVorlage();
+  const b = I.botschaft(stand, jetzt(), v, TABELLE, BOTSCHAFTEN, nameVon);
+  // Am ersten Tag nicht zeigen: das Onboarding hat Verbündeten und Gegner gerade erst vorgestellt.
+  if (!b.text || b.anlass === 'erster_tag') return '';
+  const tag = K.tagKey(jetzt());
+  const klein = !ui.botschaftOffen && (H.istGelesen(spiel, spiel.fokus, tag) || K.auswertung(stand, jetzt()).heuteAntwort);
+  if (klein) return `<button class="botschaft-klein" data-a="botschaft-auf">${img(v.held, nameVon(v.held), 'held', 'rund-klein')}<span>${esc(T('botschaft.klein', { held: nameVon(v.held) }))}</span></button>`;
+  if (merkmal('crew_msg_tag') !== tag) { merke('crew_msg_tag', tag); trackEvent('crew_message_seen', { anlass: b.anlass }); }
+  return `<div class="botschaft">${img(v.held, nameVon(v.held), 'held', 'rund gut-rand-b')}<p class="blase"><b>${esc(nameVon(v.held))}</b>${esc(b.text)}<button class="link botschaft-ok" data-a="botschaft-zu">${esc(T('botschaft.ok'))}</button></p></div>`;
+}
+
+// Andeutung: Welcher Story-Teil wird morgen frei? (nur wenn heute schon eingecheckt; berücksichtigt Runden- und Gegnerwechsel)
+function storyMorgen() {
+  if (!stand.quest || !K.auswertung(stand, jetzt()).heuteAntwort) return null;
+  const d = jetzt(); d.setDate(d.getDate() + 1);
+  try {
+    const st = I.storyWoche(stand, d, aktuelleVorlage(), TABELLE, STORIES, nameVon);
+    return st.teile[st.frei] ? { ...st.teile[st.frei], titelWoche: st.titel, neueGeschichte: st.woche !== story().woche } : null;
+  } catch (e) { console.warn('Story-Andeutung:', e.message); return null; }
+}
+// Andeutungs-Ereignis höchstens einmal je Tag und Art zählen
+const angedeutet = {};
+function andeutungGesehen(art) {
+  const k = K.tagKey(jetzt());
+  if (angedeutet[art] === k) return;
+  angedeutet[art] = k;
+  trackEvent(art + '_teaser_seen', {});
+}
+
+function storyKarte() {
+  const st = story();
+  const morgen = storyMorgen();
+  if (morgen) andeutungGesehen('story');
+  const sub = st.frei === 0 && !morgen ? 'Der erste Teil wartet nach deinem nächsten Tages-Check.'
+    : morgen ? (morgen.neueGeschichte ? T('story.morgenNeu', { titel: morgen.titelWoche }) : T('story.morgenTeil', { nr: morgen.nr, titel: morgen.titel }))
+    : `${T('story.frei', { frei: st.frei, gesamt: st.teile.length })} · ${T(st.frei < st.teile.length ? 'story.weiter' : 'story.fertig')}`;
+  return `<button class="karte story-karte tippbar" data-a="story-oeffnen" aria-label="Geschichte lesen: ${esc(st.titel)}">
+    <span class="spalte"><span class="eyebrow akzent">GESCHICHTE · WOCHE ${st.wocheNr}${st.neu ? ' · <span class="neu">NEUER TEIL</span>' : ''}</span>
+    <span class="nm gross-nm">${esc(st.titel)}</span><span class="klein">${esc(sub)}</span></span>${icon('buch')}</button>`;
+}
+
+function mikroKarte() {
+  const liste = mikroListe();
+  if (!liste.length) return '';
+  const fertig = liste.filter(m => m.erledigt).length;
+  return `<div class="karte spalte mikro">
+    <div class="zeile"><span class="eyebrow">KLEINE TAGESAUFGABEN</span><span class="mini rechts-oben">${fertig} von ${liste.length} · je +${K.XP.mikro} XP</span></div>
+    ${liste.map(m => `<button class="mikro-zeile ${m.erledigt ? 'fertig' : ''}" data-a="mikro" data-id="${esc(m.held + '|' + m.id)}" aria-pressed="${m.erledigt}"><span class="haken-kreis">${m.erledigt ? icon('check') : ''}</span><span class="mikro-text">${esc(m.text)}</span>${spiel.helden.length > 1 ? img(m.held, nameVon(m.held), 'held', 'mikro-held', nameVon(m.held)) : ''}</button>`).join('')}
+  </div>`;
+}
+
+function storyAnsicht(nurNr = null) {
+  const st = story();
+  const teile = nurNr ? st.teile.filter(t => t.nr === nurNr) : st.teile;
+  return teile.map(t => t.frei
+    ? `<article class="teil"><span class="eyebrow">TEIL ${t.nr}</span><h3>${esc(t.titel)}</h3><p>${esc(t.text)}</p></article>`
+    : `<article class="teil gesperrt"><span class="eyebrow">TEIL ${t.nr}</span><h3>${esc(t.titel)}</h3><p class="klein">Wird nach einem weiteren Tages-Check frei.</p></article>`).join('');
+}
+
+function mikro(schluessel) {
+  const [hid, id] = String(schluessel).split('|');
+  const ids = mikroListe().filter(m => m.held === hid).map(m => m.id);
+  let r;
+  try { r = K.mikroUmschalten(H.ansicht(spiel, hid), jetzt(), id, ids); }
+  catch (e) { hinweis = e.message; render(); return; }
+  setzeStand(r.stand, hid);
+  speichere();
+  trackEvent(r.an ? 'mikroquest_done' : 'mikroquest_undone', { id, held: hid });
+  const xp = r.ereignisse.find(e => e.typ === 'xp');
+  if (xp && xp.xp > 0) {
+    ui.xpFlug = xp.xp;
+    try { navigator.vibrate && navigator.vibrate(15); } catch (e) { /* optional */ }
+    setTimeout(() => { ui.xpFlug = null; if (ui.screen === 'start' && !ui.feier) render(); }, 1300);
+  }
+  const lvl = r.ereignisse.find(e => e.typ === 'levelup');
+  if (lvl) { ui.schlange.push({ art: 'levelup', level: lvl.level, titel: lvl.titel, held: hid }); if (!ui.feier) zeigeNaechstes(); return; }
+  render();
+}
+
+function storyGelesenBis(nr) {
+  const st = story();
+  if (nr > st.gelesen) {
+    for (let i = st.gelesen + 1; i <= nr; i++) trackEvent('story_part_read', { teil: i, woche: st.wocheNr });
+    setzeStand(K.storyGelesen(stand, st.woche, nr));
+    speichere();
+  }
+}
+
+function extraKarten() {
+  const teile = [];
+  const tag = K.tagKey(jetzt());
+  const spaeter = merkmal('feedback_spaeter');
+  const tageSeit = d => (d ? Math.round((K.ausTagKey(tag) - K.ausTagKey(d)) / 864e5) : Infinity);
+  if (!hatFeedback() && aktiveTage() >= FEEDBACK.abAktivenTagen && tageSeit(spaeter) >= FEEDBACK.erneutNachTagen) {
+    teile.push(`<div class="karte spalte"><span class="eyebrow akzent">DEINE MEINUNG</span><span class="nm">5 kurze Fragen zum Prototyp</span><p class="klein">Dauert etwa 2 Minuten und hilft sehr.</p><div class="zwei"><button class="btn voll" data-a="feedback-oeffnen">Antworten</button><button class="btn" data-a="feedback-spaeter">Später</button></div></div>`);
+  }
+  if (aktiveTage() >= PREMIUM.ab) {
+    if (!ui.premiumGesehen) { ui.premiumGesehen = true; trackEvent('premium_viewed', {}); }
+    teile.push(`<button class="karte premium tippbar" data-a="premium"><span class="stern-klein" aria-hidden="true">${icon('stern')}</span><span class="spalte"><span class="nm">${esc(PREMIUM.titel)}</span><span class="klein">${PREMIUM.punkte.map(esc).join(' · ')}</span><span class="preis">${esc(PREMIUM.preis)}</span></span></button>`);
+  }
+  return teile.join('');
+}
+
+function testleiste() {
+  if (!istTest) return '';
+  return `<div class="testleiste"><span>TESTPROFIL · ${esc(K.tagKey(jetzt()))}</span><span class="tl-knoepfe"><button data-a="tag" data-id="-1">−1 Tag</button><button data-a="tag" data-id="1">+1 Tag</button><button data-a="tag" data-id="0">Heute</button></span></div>`;
+}
+
+// ---------- Rendern ----------
+let letzterScreen = null;
+let letztesOverlay = null;
+function render() {
+  document.documentElement.dataset.stil = stand.stil.aktiv;
+  // Tab-Bildschirme nur, solange der Tab frei ist (z. B. nach Zeitsprung im Testprofil); noch nicht gebaute Tabs → „bald“.
+  const tab = TABS.find(t => t.screen === ui.screen);
+  if (tab && !tabAktiv(tab)) ui.screen = 'start';
+  const fn = tab && tab.bald && tabAktiv(tab) ? () => baldScreen(tab) : (SCREENS[ui.screen] || SCREENS.start);
+  app.innerHTML = testleiste() + fn() + tabLeiste() + blattHtml() + feierHtml();
+  if (letzterScreen !== ui.screen) {
+    app.querySelector('.screen')?.scrollTo?.(0, 0);
+    const h = app.querySelector('.feier h2, .screen h1');
+    if (h && letzterScreen !== null) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+    letzterScreen = ui.screen;
+  }
+  const key = ui.feier ? ui.feier.art + (ui.feier.bewertung || '') : ui.blatt;
+  if (key && key !== letztesOverlay) app.querySelector('.feier .cta, .feier .sc')?.focus({ preventScroll: true });
+  letztesOverlay = key || null;
+}
+
+// Fehlende Bilder → Platzhalter des Stils (kein Leihen aus anderen Stilen)
+app.addEventListener('error', e => {
+  const t = e.target;
+  if (t.tagName === 'IMG' && t.dataset.ph && t.src !== t.dataset.ph) t.src = t.dataset.ph;
+}, true);
+
+function geheZu(screen) {
+  if (ui.screen !== screen) {
+    trackEvent('screen_leave', { screen: ui.screen });
+    trackEvent('screen_enter', { screen });
+  }
+  ui.screen = screen;
+  ui.resetFrage = false;
+  if (screen === 'ob4') starteAnalyse();
+  render();
+}
+
+let analyseTimer = null;
+function starteAnalyse() {
+  clearInterval(analyseTimer);
+  ui.analyseSchritt = bewegungAus ? 4 : 0;
+  if (bewegungAus) return;
+  analyseTimer = setInterval(() => {
+    ui.analyseSchritt++;
+    if (ui.analyseSchritt >= 4) {
+      clearInterval(analyseTimer);
+      setTimeout(() => { if (ui.screen === 'ob4') geheZu('ob5'); }, 600);
+    }
+    if (ui.screen === 'ob4') render();
+  }, 750);
+}
+
+function merkeAuswahl() {
+  if (ui.neu) return; // Auswahl für weiteren Helden nicht als Onboarding-Stand speichern
+  setzeStand({ ...stand, onboarding: { ...stand.onboarding, bereich: ui.bereich, problem: ui.problem, ziel: ui.ziel, freitext: ui.freitext } }, stand.quest ? spiel.fokus : null);
+  speichere();
+}
+
+const REIHE = ['ob1', 'ob2', 'ob3', 'ob4', 'ob5', 'ob6', 'ob7', 'ob8'];
+
+function weiter() {
+  const i = REIHE.indexOf(ui.screen);
+  if (i < 0) return;
+  if (ui.screen === 'ob1' && !ui.bereich) return;
+  if (ui.screen === 'ob2') {
+    if (!ui.problem || (ui.problem === '*' && !ui.freitext.trim())) return;
+  }
+  if (ui.screen === 'ob3') {
+    if (!ui.ziel || !ui.ziel.trim()) return;
+    trackEvent('goal_created', { bereich: ui.bereich, problem: ui.problem, domain: (aktuelleVorlage() || {}).domain, eigen: ui.problem === '*' });
+  }
+  if (ui.screen === 'ob4') clearInterval(analyseTimer);
+  const naechster = REIHE[i + 1];
+  if (naechster === 'ob5') trackEvent('crew_received', { verbuendeter: aktuelleVorlage().held, domain: aktuelleVorlage().domain });
+  if (naechster === 'ob6') trackEvent('boss_revealed', { gegner: aktuelleVorlage().gegner });
+  merkeAuswahl();
+  geheZu(naechster);
+}
+
+function zurueck() {
+  const i = REIHE.indexOf(ui.screen);
+  if (i === 0 && ui.neu) { ui.neu = false; geheZu('start'); return; }
+  if (i <= 0) return;
+  let ziel = REIHE[i - 1];
+  if (ziel === 'ob4') ziel = 'ob3'; // Analyse beim Zurückgehen überspringen
+  if (ui.screen === 'ob4') clearInterval(analyseTimer);
+  geheZu(ziel);
+}
+
+function beginnen() {
+  const v = aktuelleVorlage();
+  if (!v) { hinweis = 'Für diese Auswahl gibt es noch keine Vorlage. Bitte wähle einen anderen Bereich.'; geheZu('ob1'); return; }
+  try {
+    if (ui.neu) {
+      setzeSpiel(H.heldHinzufuegen(spiel, v, ui.ziel, jetzt(), zuordnung));
+      trackEvent('hero_added', { vorlage: v.id, domain: v.domain, helden: spiel.helden.length });
+    } else {
+      setzeStand(K.questAnlegen(stand, v, ui.ziel, jetzt()), null);
+    }
+  } catch (e) {
+    hinweis = e.message; ui.neu = false; geheZu('start'); return;
+  }
+  speichere();
+  if (ui.neu) { ui.neu = false; geheZu('start'); return; }
+  merke('onboarding_ms', Date.now() - ui.obStart);
+  merke('vorlage', v.id);
+  trackEvent('quest_started', { vorlage: v.id, domain: v.domain, anzahl: stand.quest.anzahl });
+  trackEvent('onboarding_finished', { vorlage: v.id });
+  geheZu('start');
+}
+
+function darfFragen(art) {
+  const c = BEWERTUNGEN[art];
+  if (!c) return false;
+  const letzte = letzteBewertungTag(art);
+  if (!letzte) return true;
+  return Math.round((K.ausTagKey(K.tagKey(jetzt())) - K.ausTagKey(letzte)) / 864e5) >= c.abstandTage;
+}
+
+function frage(art) {
+  return darfFragen(art) ? [{ art: 'frage', bewertung: art }] : [];
+}
+
+function zeigeNaechstes() {
+  const war = ui.feier;
+  if (war && war.art === 'sieg') { trackEvent('story_completed', {}); trackEvent('screen_enter', { screen: ui.screen }); }
+  if (war && war.art === 'story') { storyGelesenBis(war.nr); trackEvent('screen_enter', { screen: ui.screen }); }
+  ui.feier = ui.schlange.shift() || null;
+  if (ui.feier && ui.feier.art === 'sieg') { trackEvent('story_opened', {}); trackEvent('screen_enter', { screen: 'sieg' }); }
+  if (ui.feier && ui.feier.art === 'story') { trackEvent('story_opened', { teil: ui.feier.nr }); trackEvent('screen_enter', { screen: 'story' }); }
+  if (ui.feier && ui.feier.art === 'gegner') trackEvent('screen_enter', { screen: 'neuer_gegner' });
+  if (war && war.art === 'gegner') trackEvent('screen_enter', { screen: ui.screen });
+  if (!ui.feier && ui.danach) {
+    const z = ui.danach; ui.danach = null;
+    geheZu(z);
+    return;
+  }
+  render();
+}
+
+function check(antwort) {
+  let r;
+  try { r = K.tagesCheck(stand, jetzt(), antwort); }
+  catch (e) { hinweis = e.message; render(); return; }
+  setzeStand(r.stand);
+  speichere();
+  const xp = r.ereignisse.find(e => e.typ === 'xp');
+  const sieg = r.ereignisse.find(e => e.typ === 'sieg');
+  const lvl = r.ereignisse.find(e => e.typ === 'levelup');
+  const frei = r.ereignisse.some(e => e.typ === 'stil_frei');
+  trackEvent('quest_checkin', { antwort });
+  if (xp && xp.xp > 0) {
+    ui.xpFlug = xp.xp;
+    ui.wackeln = !bewegungAus;
+    try { navigator.vibrate && navigator.vibrate(20); } catch (e) { /* optional */ }
+    setTimeout(() => { ui.xpFlug = null; ui.wackeln = false; if (ui.screen === 'start' && !ui.feier) render(); }, 1300);
+  }
+  const neu = [];
+  const st = story();
+  if (st.neu) neu.push({ art: 'story', nr: st.frei });
+  if (sieg) {
+    trackEvent('quest_completed', { woche: sieg.woche, gegner: sieg.gegner });
+    neu.push({ art: 'sieg', gegner: sieg.gegner, neuerGegner: sieg.neuerGegner });
+    if (sieg.neuerGegner) neu.push({ art: 'lauf', von: sieg.gegner, nach: sieg.naechster });
+    if (sieg.neuerGegner) { neu.push({ art: 'gegner', gegner: sieg.naechster, kapitel: sieg.kapitel }); trackEvent('boss_revealed', { gegner: sieg.naechster, kapitel: sieg.kapitel }); }
+    if (lvl) neu.push({ art: 'levelup', level: lvl.level, titel: lvl.titel });
+    neu.push(...frage('hero_score'));
+    if (frei) { neu.push(...frage('story_curiosity_score')); ui.danach = 'stilwahl'; }
+  } else {
+    if (lvl) neu.push({ art: 'levelup', level: lvl.level, titel: lvl.titel });
+    if (antwort === 'ja' && r.vorher.treffer === 0 && r.nachher.treffer === 1) neu.push(...frage('boss_score'));
+  }
+  if (neu.length) {
+    ui.schlange.push(...neu);
+    if (!ui.feier) setTimeout(() => { if (!ui.feier) zeigeNaechstes(); }, bewegungAus ? 0 : 700);
+  }
+  render();
+}
+
+const ZAEHLER = { crew: 'crew_besuche', boss: 'boss_besuche', faehigkeit: 'skill_besuche' };
+function oeffneBlatt(art) {
+  ui.blatt = art;
+  if (ZAEHLER[art]) {
+    const n = (merkmal(ZAEHLER[art]) || 0) + 1;
+    merke(ZAEHLER[art], n);
+    if (art === 'crew') { trackEvent('crew_viewed', {}); trackEvent('character_opened', {}); if (n > 1) trackEvent('crew_revisited', { n }); }
+    if (art === 'boss') { trackEvent('boss_viewed', {}); if (n > 1) trackEvent('boss_revisited', { n }); }
+    if (art === 'faehigkeit') trackEvent('skill_viewed', {});
+  }
+  trackEvent('screen_enter', { screen: art });
+  render();
+}
+
+function schliesseBlatt() {
+  const art = ui.blatt;
+  ui.blatt = null;
+  trackEvent('screen_enter', { screen: ui.screen });
+  // Zweiter Besuch beim Verbündeten → Crew-Bewertung
+  if (art === 'crew' && (merkmal('crew_besuche') || 0) >= 2) {
+    const q = frage('crew_score');
+    if (q.length) { ui.schlange.push(...q); if (!ui.feier) zeigeNaechstes(); return; }
+  }
+  render();
+}
+
+// ---------- Admin ----------
+async function ladeAdmin() {
+  ui.admin.laden = true; ui.admin.fehler = null; render();
+  try {
+    if (!ui.db) throw new Error(T('import.ohneDb'));
+    if (!ui.istBesitzer) throw new Error('Die Auswertung ist nur für den Besitzer der App sichtbar.');
+    const profile = await ui.db.collection('ana').limit(500).get();
+    const tester = [];
+    for (const d of profile.docs) {
+      const p = d.data() || {};
+      const tage = {};
+      const ts = await ui.db.collection(`ana/${d.id}/tage`).limit(400).get();
+      for (const t of ts.docs) { const x = t.data() || {}; if (x.tag) tage[x.tag] = x; }
+      tester.push({ id: d.id, profil: p.profil, istBesitzer: !!(p.merkmale && p.merkmale.ist_besitzer), erster: p.erster, merkmale: p.merkmale || {}, bewertungen: p.bewertungen || {}, feedback: p.feedback || null, tage, zuletzt: p.zuletzt, quelle: p.quelle || 'db' });
+    }
+    ui.admin.daten = tester;
+  } catch (e) {
+    ui.admin.fehler = (e && e.message) || 'Die Daten konnten nicht geladen werden.';
+  }
+  ui.admin.laden = false;
+  render();
+}
+
+// ---------- Ereignisse ----------
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-a]');
+  if (!b || b.disabled) return;
+  const id = b.dataset.id;
+  switch (b.dataset.a) {
+    case 'bereich': ui.bereich = id; ui.problem = null; ui.ziel = null; ui.freitext = ''; render(); break;
+    case 'problem': {
+      ui.problem = id; ui.ziel = null;
+      render();
+      if (id === '*') app.querySelector('#freitext')?.focus();
+      break;
+    }
+    case 'ziel': ui.ziel = id; render(); break;
+    case 'weiter': weiter(); break;
+    case 'zurueck': zurueck(); break;
+    case 'beginnen': beginnen(); break;
+    case 'check': check(id === 'ja' || id === 'nein' ? id : null); break;
+    case 'feier-weiter': zeigeNaechstes(); break;
+    case 'bewerte': {
+      const n = Number(id);
+      if (ui.feier && ui.feier.art === 'frage') bewerte(ui.feier.bewertung, n >= 1 && n <= 5 ? n : null);
+      zeigeNaechstes(); break;
+    }
+    case 'blatt': oeffneBlatt(id); break;
+    case 'blatt-zu': schliesseBlatt(); break;
+    case 'premium': trackEvent('premium_clicked', { preis: PREMIUM.preis }); oeffneBlatt('premium'); break;
+    case 'feedback-oeffnen': ui.fb = {}; ui.fbFehler = false; geheZu('feedback'); break;
+    case 'feedback-spaeter': merke('feedback_spaeter', K.tagKey(jetzt())); render(); break;
+    case 'fb-wahl': { const [k, w] = id.split(':'); ui.fb[k] = w; render(); break; }
+    case 'feedback-senden': {
+      const fehlt = FEEDBACK.fragen.some(q => q.art === 'wahl' && !ui.fb[q.id]);
+      if (fehlt) { ui.fbFehler = true; render(); break; }
+      sendeFeedback(ui.fb); ui.fbDanke = true; geheZu('start'); break;
+    }
+    case 'admin': geheZu('admin'); ladeAdmin(); break;
+    case 'admin-neu': ladeAdmin(); break;
+    case 'admin-import': importiere(); break;
+    case 'export': erstelleExport(); break;
+    case 'export-kopieren': kopiereExport(); break;
+    case 'export-teilen': teileExport(); break;
+    case 'admin-test': ui.admin.test = !ui.admin.test; render(); break;
+    case 'admin-besitzer': ui.admin.besitzer = !ui.admin.besitzer; render(); break;
+    case 'stilwahl': ui.stilAuswahl = stand.stil.aktiv; geheZu('stilwahl'); break;
+    case 'stil': ui.stilAuswahl = id; render(); break;
+    case 'stil-uebernehmen':
+      try { setzeStand(K.stilWaehlen(stand, ui.stilAuswahl || stand.stil.aktiv, STIL_REIHENFOLGE)); }
+      catch (err) { hinweis = err.message; }
+      speichere(); trackEvent('style_selected', { stil: stand.stil.aktiv }); geheZu('start'); break;
+    case 'stil-spaeter': setzeStand(K.stilAngeboten(stand)); speichere(); geheZu('start'); break;
+    case 'einstellungen': geheZu('einstellungen'); break;
+    case 'start': geheZu('start'); break;
+    case 'botschaft-zu':
+      ui.botschaftOffen = false;
+      try { setzeSpiel(H.botschaftGelesen(spiel, spiel.fokus, K.tagKey(jetzt()))); speichere(); } catch (e) { console.warn('Botschaft:', e.message); }
+      render(); break;
+    case 'botschaft-auf': ui.botschaftOffen = true; trackEvent('crew_message_reopened', {}); render(); break;
+    case 'tab': {
+      const t = TABS.find(x => x.screen === id && tabSichtbar(x));
+      if (!t) break;
+      if (tabAktiv(t)) { geheZu(id); break; }
+      hinweis = sperrTextVon(t);
+      if (ui.screen !== 'start') { geheZu('start'); break; }
+      render(); break;
+    }
+    case 'hinweis-weg': hinweis = null; render(); break;
+    case 'danke-weg': ui.fbDanke = false; render(); break;
+    case 'reset':
+      if (!ui.resetFrage) { ui.resetFrage = true; render(); break; }
+      speicher.loeschen();
+      setzeSpiel(H.neuesSpiel(testerId));
+      Object.assign(ui, { bereich: null, problem: null, ziel: null, freitext: '', feier: null, resetFrage: false });
+      speichere();
+      trackEvent('onboarding_started', { neu: true });
+      geheZu('ob1');
+      break;
+    case 'mikro': mikro(id); break;
+    case 'fokus': ui.botschaftOffen = false; if (id !== spiel.fokus) { setzeSpiel(H.fokusSetzen(spiel, id)); speichere(); trackEvent('hero_focus', { held: id }); } render(); app.querySelector('.screen')?.scrollTo?.(0, 0); break;
+    case 'schnell': setzeSpiel(H.fokusSetzen(spiel, id)); trackEvent('hero_focus', { held: id, quelle: 'schnell' }); check('ja'); break;
+    case 'neues-abenteuer':
+      Object.assign(ui, { neu: true, bereich: null, problem: null, ziel: null, freitext: '', obStart: Date.now() });
+      trackEvent('new_adventure_started', { helden: spiel.helden.length });
+      geheZu('ob1'); break;
+    case 'angebot-spaeter': setzeSpiel(H.angebotAblehnen(spiel)); speichere(); trackEvent('new_adventure_declined', {}); render(); break;
+    case 'story-oeffnen': { const st = story(); trackEvent('story_opened', { quelle: 'karte' }); storyGelesenBis(st.frei); geheZu('story'); break; }
+    case 'tag': {
+      const n = Number(id);
+      tagVersatz = n === 0 ? 0 : tagVersatz + n;
+      render(); break;
+    }
+  }
+});
+
+app.addEventListener('change', e => {
+  if (e.target.id === 'import-csv') importiereCsv(e.target.files && e.target.files[0]);
+});
+
+app.addEventListener('input', e => {
+  if (e.target.id === 'freitext') {
+    ui.freitext = e.target.value.slice(0, 120);
+    // Freitext wird als Ziel vorgeschlagen, bleibt aber änderbar
+    if (!ui.ziel || ui.ziel === ui.letzterFreitext) ui.ziel = ui.freitext;
+    ui.letzterFreitext = ui.freitext;
+    const btn = app.querySelector('.fuss .cta');
+    if (btn) btn.disabled = !ui.freitext.trim();
+  }
+  if (e.target.id && e.target.id.startsWith('fb-')) {
+    ui.fb[e.target.id.slice(3)] = e.target.value.slice(0, 600);
+    return;
+  }
+  if (e.target.id === 'zieltext') {
+    ui.ziel = e.target.value.slice(0, 120);
+    const btn = app.querySelector('.fuss .cta');
+    if (btn) btn.disabled = !ui.ziel.trim();
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (ui.feier) { if (ui.feier.art === 'frage') bewerte(ui.feier.bewertung, null); zeigeNaechstes(); }
+  else if (ui.blatt) schliesseBlatt();
+});
+
+// ---------- Start ----------
+// Wechsel zwischen #test, #admin und Hauptprofil bei offener Seite: neu laden, damit Profil und Ansicht stimmen.
+addEventListener('hashchange', () => { try { location.reload(); } catch (e) { /* ignorieren */ } });
+trackEvent('session_started', { screen: ui.screen });
+if (!stand.onboarding.fertig && !stand.onboarding.bereich) trackEvent('onboarding_started', {});
+if (ui.screen === 'ob4') starteAnalyse();
+// Unterbrochenes Onboarding mitten in der Analyse: dort fortsetzen, wo die Auswahl vollständig ist
+if (!istAdmin && !stand.onboarding.fertig && ui.bereich) {
+  ui.screen = ui.ziel ? 'ob3' : ui.problem ? 'ob2' : 'ob1';
+}
+trackEvent('screen_enter', { screen: ui.screen });
+render();
+
+// Seiten-Datenbank verbinden (nur auf claude.ai). Ohne Datenbank bleibt alles im Browser.
+beiAenderung(() => { if (ui.screen === 'einstellungen') render(); });
+(async () => {
+  const c = window.claude;
+  if (!c || typeof c.use !== 'function') { verbinde(VERSAND.art ? formSender(VERSAND) : null); if (istAdmin) ladeAdmin(); return; }
+  try {
+    const [db, user] = await Promise.all([c.use('db'), c.use('user')]);
+    ui.db = db;
+    ui.istBesitzer = user ? await user.isOwner() : false;
+    if (ui.istBesitzer) merke('ist_besitzer', true);
+    verbinde(db ? dbSender(db) : null);
+  } catch (e) {
+    verbinde(null);
+  }
+  if (ui.screen === 'admin') ladeAdmin(); else render();
+})();
