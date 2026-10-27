@@ -1,7 +1,7 @@
 // Oberfläche: liest Daten und Logik, rendert Bildschirme, speichert nach jeder Änderung.
 import * as K from './logik/kern.js';
 import { TABELLE, pruefeTabelle } from './daten/vorlagen.js';
-import { STILE, STIL_REIHENFOLGE, stilId, EIGENE_BILDER } from './daten/stile.js';
+import { STILE, STIL_REIHENFOLGE, STIL_WAEHLBAR, STIL_ARCHIV_VORSCHAU, istWaehlbar, stilId, EIGENE_BILDER } from './daten/stile.js';
 import { DOMAIN_RUECKFALL, LEBENSBEREICHE } from './daten/lebensbereiche.js';
 import { SILHOUETTEN } from './daten/stadt.js';
 import { stadtAnsicht, stadtSichtbar, STATUS } from './logik/stadt.js';
@@ -21,8 +21,10 @@ import * as EW from './logik/einwilligung.js';
 import * as I from './logik/inhalte.js';
 import * as H from './logik/helden.js';
 import { BOTSCHAFTEN, STORIES, MIKRO, MIKRO_JE_TAG, MIKRO_RUECKFALL } from './daten/inhalte.js';
+import * as TB from './logik/tabelle.js';
+import { pflegeHtml, formPos } from './ansicht/pflege.js';
 
-export const VERSION = { nr: 28, datum: '27.10.2026 · 08:15' };
+export const VERSION = { nr: 36, datum: '27.10.2026 · 16:10' };
 
 const istTest = location.hash === '#test';
 const istAdmin = location.hash === '#admin';
@@ -98,6 +100,7 @@ const ui = {
   ziel: stand.onboarding.ziel,
   freitext: stand.onboarding.freitext || '',
   feier: null,        // { art: 'sieg' | 'levelup', ... }
+  pflege: null,       // Inhalte pflegen (Version 29), siehe neuesPflegeFormular()
   stilAuswahl: null,
   resetFrage: false,
   analyseSchritt: 0,
@@ -120,9 +123,18 @@ function kurzDatum(k, versatz = 0) {
 }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const stil = () => STILE[stand.stil.aktiv] || STILE.fantasy;
+// Vorauswahl in der Weltenwahl (Version 33): gewählte → aktive → erste wählbare Welt; nie eine gesperrte.
+const stilVorauswahl = () => [ui.stilAuswahl, stand.stil.aktiv].find(id => id && istWaehlbar(id)) || STIL_WAEHLBAR[0];
 const wort = k => stil().wort[k] || STILE.fantasy.wort[k];
 // Bildschirmtexte aus dem Register (Stil → Standard); Bezirksname je Stil, sonst Name des Lebensbereichs
-const T = (k, w) => textAus(TEXTE, stil().texte, k, w);
+// Version 29: Texte aus der Inhalte-Tabelle haben Vorrang (Tabelle Stil → Tabelle alle → Stil-Datei → Standard)
+let textCache = { stil: null, map: null };
+function stilTexte() {
+  const s = stand.stil.aktiv;
+  if (textCache.stil !== s || !textCache.map) textCache = { stil: s, map: { ...(stil().texte || {}), ...TB.texteFuer(tabelle, s) } };
+  return textCache.map;
+}
+const T = (k, w) => textAus(TEXTE, stilTexte(), k, w);
 const bezirkName = (id, rueckfall) => (stil().bezirke || {})[id] || (STILE.fantasy.bezirke || {})[id] || rueckfall || id;
 const nameVon = id => stil().namen[id] || (TABELLE.helden[id] && TABELLE.helden[id].name) || id;
 
@@ -137,6 +149,31 @@ function aktuelleVorlage() {
   return K.vorlageFuer(TABELLE, ui.bereich, ui.problem || '*');
 }
 
+// Inhalte-Tabelle (Version 29): Index aus der Seiten-Datenbank; bis zur Verbindung der letzte Stand dieses Browsers.
+let tabelleRoh = { inhalte: [], medien: [] };
+let tabelle = TB.leererIndex();
+function setzeTabelle(roh, merken) {
+  tabelleRoh = { inhalte: Array.isArray(roh && roh.inhalte) ? roh.inhalte : [], medien: Array.isArray(roh && roh.medien) ? roh.medien : [] };
+  tabelle = TB.baueIndex(tabelleRoh.inhalte, tabelleRoh.medien, STIL_REIHENFOLGE, TEXTE);
+  textCache = { stil: null, map: null };
+  if (tabelle.fehler.length) console.warn('Inhalte-Tabelle: ' + tabelle.fehler.length + ' ungültige Zeile(n) ignoriert.');
+  if (merken) speicher.setzeEinstellung('tabelle', tabelleRoh);
+}
+try { const c = speicher.einstellung('tabelle'); if (c) setzeTabelle(JSON.parse(c), false); }
+catch (e) { console.warn('Inhalte-Tabelle: gemerkter Stand unlesbar, wird neu geladen.'); }
+
+// Alle bekannten Bildplätze (für Pflege-Vorschläge und Lücken)
+function bildPlaetze() {
+  const s = new Set(['szene', 'karte']);
+  for (const st of Object.values(STILE)) Object.keys(st.bilder || {}).forEach(k => s.add(k));
+  for (const m of Object.values(EIGENE_BILDER)) Object.keys(m).forEach(k => s.add(k));
+  Object.keys(TABELLE.helden || {}).forEach(h => { s.add(h); s.add('banner-' + h); });
+  Object.keys(TABELLE.gegner || {}).forEach(g => s.add('boss-' + g));
+  return [...s].sort();
+}
+const hatDatei = (stilId, platz) => !!((EIGENE_BILDER[stilId] || {})[platz] || (STILE[stilId] && (STILE[stilId].bilder[platz] || (platz === 'karte' && STILE[stilId].karte))));
+
+// Notfall-Platzhalter (Initialen), falls auch die Platzhalter-Datei nicht lädt
 function platzhalter(text, art) {
   const cs = getComputedStyle(document.documentElement);
   const bg = cs.getPropertyValue(art === 'boss' ? '--gegner' : '--panel').trim() || '#888';
@@ -146,18 +183,36 @@ function platzhalter(text, art) {
   return 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
-function bild(platz, text, art = 'held') {
-  // Reihenfolge: eigenes Bild → Datei des Stils → Platzhalter des Stils (kein Leihen aus anderen Stilen)
-  const eigen = (EIGENE_BILDER[stand.stil.aktiv] || {})[platz];
-  const pfad = eigen ? eigen[0] : stil().bilder[platz];
-  const pos = (eigen && eigen[1]) || stil().pos[platz] || '50% 30%';
-  const ph = platzhalter(text, art);
-  return { src: pfad || ph, ph, pos };
+// Eingebautes Bild eines Stils (eigenes Bild aus dem alten Prototyp → Datei des Stils) oder null.
+function eingebautesBild(stilId, platz) {
+  const st = STILE[stilId];
+  if (!st) return null;
+  const eigen = (EIGENE_BILDER[stilId] || {})[platz];
+  if (eigen) return { datei: eigen[0], pos: eigen[1] || (st.pos || {})[platz] || TB.STANDARD_POS };
+  const pfad = st.bilder[platz] || (platz === 'karte' ? st.karte : null);
+  return pfad ? { datei: pfad, pos: (st.pos || {})[platz] || TB.STANDARD_POS } : null;
 }
 
-function img(platz, text, art, cls = '', alt = '') {
-  const b = bild(platz, text, art);
-  return `<img class="${cls}" src="${esc(b.src)}" data-ph="${esc(b.ph)}" alt="${esc(alt)}" style="object-position:${esc(b.pos)}" loading="lazy">`;
+// Bild für Stil, Platz und Darstellung (Version 30).
+// Reihenfolge: Tabelle (Stil) → Tabelle (alle) → eingebautes Bild → Platzhalter des Stils. Kein Leihen aus anderen Stilen.
+// form: 'rund' | 'quadrat' | 'breit' → eigener Ausschnitt je Darstellung, sonst gemeinsamer Ausschnitt.
+function bildFuer(stilId, platz, art = 'held', form = 'breit') {
+  const ph = TB.platzhalterPfad(stilId, art);
+  const ein = eingebautesBild(stilId, platz);
+  const tab = TB.bildAus(tabelle, stilId, platz);
+  if (tab) return { src: tab.url, ph, pos: TB.posFuer(tab, form, ein ? ein.pos : TB.STANDARD_POS), quelle: 'tabelle', eintrag: tab, eingebaut: ein };
+  if (ein) return { src: ein.datei, ph, pos: ein.pos, quelle: 'eingebaut', eingebaut: ein };
+  return { src: ph, ph, pos: TB.STANDARD_POS, quelle: 'platzhalter', eingebaut: null };
+}
+const bild = (platz, text, art = 'held', form = 'breit') => bildFuer(stand.stil.aktiv, platz, art, form);
+
+// Darstellung je CSS-Klasse; Bildstellen mit anderer Form geben `form` beim Aufruf von img() mit.
+const FORM_JE_KLASSE = { rund: 'rund', 'rund-klein': 'rund', 'crew-bild': 'rund', 'mikro-held': 'rund', 'held-kurz-bild': 'quadrat' };
+const formVon = cls => String(cls).split(/\s+/).map(c => FORM_JE_KLASSE[c]).find(Boolean) || 'breit';
+
+function img(platz, text, art, cls = '', alt = '', form = formVon(cls)) {
+  const b = bild(platz, text, art, form);
+  return `<img class="${cls}" src="${esc(b.src)}" data-ph="${esc(b.ph)}" data-ph2="${esc(platzhalter(text, art))}" alt="${esc(alt)}" style="object-position:${esc(b.pos)}" loading="lazy">`;
 }
 
 const ICON = {
@@ -172,7 +227,7 @@ const ICON = {
   glas: '<path d="M7 4h10l-1 16H8zM7 9h10"/>',
   kalender: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
   liste: '<path d="M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/>',
-  zahnrad: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  zahnrad: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   zurueck: '<path d="M15 5l-7 7 7 7"/>',
   check: '<path d="M5 12l5 5L20 7"/>',
   stern: '<path d="M12 3l2.4 5 5.6.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.6-.8z"/>',
@@ -185,6 +240,9 @@ const ICON = {
   schloss: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
 };
 const icon = (n, cls = 'ic') => `<svg class="${cls}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[n] || ICON.stern}</svg>`;
+
+// Einstellungen-Knopf oben rechts (eine Stelle für alle Kopfzeilen).
+const einstellungenKnopf = () => `<button class="icbtn einst-btn" data-a="einstellungen" aria-label="Einstellungen" title="Einstellungen">${icon('zahnrad')}</button>`;
 
 function fortschritt(nr) {
   return `<div class="prog" role="progressbar" aria-valuemin="1" aria-valuemax="8" aria-valuenow="${nr}" aria-label="Schritt ${nr} von 8">${Array.from({ length: 8 }, (_, i) => `<i class="${i < nr ? 'on' : ''}"></i>`).join('')}</div><span class="schritt">${nr} / 8</span>`;
@@ -233,7 +291,7 @@ function tabLeiste() {
 // Platzhalter für freigeschaltete, aber noch nicht gebaute Bereiche (Version 27)
 function baldScreen(t) {
   return `<section class="screen bald">
-      <div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span><button class="icbtn" data-a="einstellungen" aria-label="Einstellungen">${icon('zahnrad')}</button></div>
+      <div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span>${einstellungenKnopf()}</div>
       <div class="inhalt mitte">
         <span class="medaille">${icon(t.icon, 'ic gross')}</span>
         <h1>${esc(T('bald.titel', { bereich: t.label() }))}</h1>
@@ -245,12 +303,160 @@ function baldScreen(t) {
 // Bezirksbild: eigenes Bild → Datei des Stils → gezeichnete Silhouette (kein Leihen aus anderen Stilen)
 function bezirkBild(domainId, name) {
   const platz = 'bezirk-' + domainId;
-  const hatBild = (EIGENE_BILDER[stand.stil.aktiv] || {})[platz] || stil().bilder[platz];
+  const hatBild = TB.bildAus(tabelle, stand.stil.aktiv, platz) || hatDatei(stand.stil.aktiv, platz);
   if (hatBild) return img(platz, name, 'szene', 'bezirk-img');
   return `<svg class="bezirk-svg" viewBox="0 0 64 48" aria-hidden="true">${SILHOUETTEN[domainId] || SILHOUETTEN._standard}</svg>`;
 }
 
+// ---------- Inhalte pflegen (Version 29) ----------
+const leeresFormular = () => ({ typ: 'bild', schluessel: '', stil: TB.ALLE, medium: '', datei: '', pos: TB.STANDARD_POS, formen: {}, text: '', titel: '', art: '' });
+// Formular für einen Bildplatz: vorhandener Eintrag dieses Stils, sonst das eingebaute Bild als Ausgangspunkt (Version 30).
+function formularFuerPlatz(stilId, platz) {
+  const z = tabelle.zeilen.find(x => x.id === TB.docId(stilId, platz));
+  if (z) return { form: zeileAlsFormular(z), bearbeitet: z.id };
+  const ein = stilId !== TB.ALLE ? eingebautesBild(stilId, platz) : null;
+  return { form: { ...leeresFormular(), typ: 'bild', schluessel: platz, stil: stilId, datei: ein ? ein.datei : '', pos: ein ? ein.pos : TB.STANDARD_POS, art: TB.artVon(platz) }, bearbeitet: null };
+}
+const zeileAlsFormular = z => ({ ...leeresFormular(), typ: z.typ, schluessel: z.schluessel, stil: z.stil, medium: z.medium || '', datei: z.datei || '', pos: TB.normPos(z.pos) || TB.STANDARD_POS, formen: { ...(z.formen || {}) }, text: z.text || '' });
+// Schlüssel oder Stil geändert (neuer Eintrag ohne gewähltes Upload-Bild): eingebautes Bild des Platzes vorschlagen.
+function eingebautVorschlagen(p) {
+  if (p.bearbeitet || p.form.typ !== 'bild' || p.form.medium) return;
+  const ein = p.form.stil !== TB.ALLE && p.form.schluessel ? eingebautesBild(p.form.stil, TB.normSchluessel(p.form.schluessel, 'bild')) : null;
+  p.form.datei = ein ? ein.datei : '';
+  if (ein) p.form.pos = ein.pos;
+}
+function pflegeZustand() {
+  if (!ui.pflege) ui.pflege = { form: leeresFormular(), bearbeitet: null, filter: '*', fehler: [], status: '', loeschen: null, laedt: false, speichert: false, formWahl: 'alle', nurLuecken: false, uploadOffen: false };
+  return ui.pflege;
+}
+const pflegeKontext = () => ({ stile: STIL_REIHENFOLGE, medien: tabelle.medien, standardTexte: TEXTE });
+const dbFehlerText = e => (e && e.code === 'permission_denied' ? 'Keine Berechtigung (nur der Besitzer darf die Tabelle ändern).'
+  : e && e.code === 'quota_exceeded' ? 'Speicher der Seite ist voll.'
+  : (e && e.message) || 'Unbekannter Fehler');
+
+async function pflegeSpeichern() {
+  const p = pflegeZustand();
+  const r = TB.neueZeile(p.form, pflegeKontext());
+  p.status = '';
+  if (r.fehler) { p.fehler = r.fehler; render(); return; }
+  // Version 32: unbekannter Bildplatz → einmal nachfragen (zweites Tippen speichert trotzdem)
+  const chk = TB.schluesselPruefen(r.zeile.schluessel, r.zeile.typ, bildPlaetze());
+  if (r.zeile.typ === 'bild' && !chk.bekannt && p.unbekanntFrage !== r.zeile.schluessel) {
+    p.unbekanntFrage = r.zeile.schluessel; p.fehler = []; render(); return;
+  }
+  p.unbekanntFrage = null;
+  p.fehler = []; p.speichert = true; render();
+  try {
+    await ui.db.doc('inhalte/' + r.id).set({ ...r.zeile, geaendert: new Date().toISOString() });
+    // Schlüssel oder Stil beim Bearbeiten geändert: alte Zeile entfernen, sonst gäbe es zwei
+    if (p.bearbeitet && p.bearbeitet !== r.id) await ui.db.doc('inhalte/' + p.bearbeitet).delete();
+    p.status = `Gespeichert: ${r.zeile.schluessel} (${r.zeile.stil === TB.ALLE ? 'alle Stile' : STILE[r.zeile.stil].name}).`;
+    p.form = { ...leeresFormular(), typ: r.zeile.typ, stil: r.zeile.stil }; p.formWahl = 'alle';
+    p.bearbeitet = null;
+  } catch (e) { p.fehler = ['Nicht gespeichert: ' + dbFehlerText(e)]; }
+  p.speichert = false; render();
+}
+
+async function pflegeHochladen(datei) {
+  const p = pflegeZustand();
+  p.fehler = []; p.status = '';
+  if (!datei) return;
+  if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(datei.type)) { p.fehler = ['Nur PNG, JPG, WebP oder SVG.']; render(); return; }
+  if (datei.size > (datei.type === 'image/svg+xml' ? 2 : 20) * 1024 * 1024) { p.fehler = ['Die Datei ist zu groß (Bilder bis 20 MB, SVG bis 2 MB).']; render(); return; }
+  if (!ui.assets) { p.fehler = ['Hochladen ist hier nicht möglich.']; render(); return; }
+  const art = TB.ARTEN.includes(p.form.art) ? p.form.art : TB.artVon(p.form.schluessel);
+  const titel = (p.form.titel || datei.name.replace(/\.[^.]+$/, '')).slice(0, TB.GRENZEN.titel);
+  p.laedt = true; render();
+  try {
+    const up = await ui.assets.upload(datei);
+    await ui.db.doc('medien/' + up.id).set({ asset: up.id, art, titel, erstellt: new Date().toISOString() });
+    p.form.medium = up.id; p.form.datei = ''; p.form.titel = ''; p.uploadOffen = false;
+    p.status = `Hochgeladen: ${titel}. Jetzt Schlüssel und Stil wählen und speichern.`;
+  } catch (e) { p.fehler = ['Hochladen fehlgeschlagen: ' + dbFehlerText(e)]; }
+  p.laedt = false; render();
+}
+
+// ----- Medienliste (Version 31) -----
+async function medienSpeichern(id) {
+  const p = pflegeZustand();
+  const r = TB.medienAenderung(p.medienForm);
+  p.status = '';
+  if (r.fehler) { p.fehler = r.fehler; render(); return; }
+  try {
+    await ui.db.doc('medien/' + id).update(r.daten);
+    p.medienBearbeitet = null; p.fehler = []; p.status = 'Gespeichert.';
+  } catch (e) { p.fehler = ['Nicht gespeichert: ' + dbFehlerText(e)]; }
+  render();
+}
+
+async function medienLoeschen(id) {
+  const p = pflegeZustand();
+  p.status = ''; p.fehler = [];
+  if (!TB.darfLoeschen(tabelle, id)) { p.medienLoeschen = null; p.fehler = ['Dieses Bild wird noch verwendet und kann nicht gelöscht werden.']; render(); return; }
+  if (p.medienLoeschen !== id) { p.medienLoeschen = id; render(); return; }
+  p.medienLoeschen = null;
+  try {
+    // Erst die Datei, dann der Eintrag: scheitert die Datei, bleibt alles sichtbar und kann erneut gelöscht werden.
+    if (ui.assets) {
+      try { await ui.assets.delete(id); }
+      catch (e) { if (!e || e.code !== 'not_found') throw e; } // Datei schon weg: Eintrag trotzdem entfernen
+    }
+    await ui.db.doc('medien/' + id).delete();
+    p.status = 'Bild gelöscht.';
+  } catch (e) { p.fehler = ['Nicht gelöscht: ' + dbFehlerText(e)]; }
+  render();
+}
+
+async function pflegeLoeschen(id) {
+  const p = pflegeZustand();
+  if (p.loeschen !== id) { p.loeschen = id; render(); return; }
+  p.loeschen = null;
+  try { await ui.db.doc('inhalte/' + id).delete(); p.status = 'Eintrag gelöscht. Das Bild bleibt in der Medien-Tabelle.'; p.fehler = []; }
+  catch (e) { p.fehler = ['Nicht gelöscht: ' + dbFehlerText(e)]; }
+  render();
+}
+
+function pflegeBearbeiten(id) {
+  const p = pflegeZustand();
+  const z = tabelle.zeilen.find(x => x.id === id);
+  if (!z) return;
+  p.form = zeileAlsFormular(z);
+  p.bearbeitet = id; p.formWahl = 'alle'; p.fehler = []; p.status = ''; p.loeschen = null;
+  render();
+  app.querySelector('#pf-form')?.scrollIntoView({ block: 'start' });
+}
+
+// Seiten-Datenbank abonnieren (einmal je Seitenaufruf). Fehler lassen die eingebauten Inhalte stehen.
+let tabelleAbo = false;
+function abonniereTabelle(db) {
+  if (tabelleAbo || !db) return;
+  tabelleAbo = true;
+  const roh = { inhalte: tabelleRoh.inhalte, medien: tabelleRoh.medien };
+  const geladen = { inhalte: false, medien: false };
+  const aus = snap => snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const neu = () => {
+    if (!geladen.inhalte || !geladen.medien) return; // erst beide Tabellen, sonst flackern Bilder auf Platzhalter
+    setzeTabelle(roh, true);
+    // Beim Tippen in der Pflege nicht neu zeichnen (Fokus bliebe sonst nicht erhalten)
+    const tippt = ui.screen === 'pflege' && document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    if (!tippt) render();
+  };
+  const fehler = name => e => console.warn(`Inhalte-Tabelle (${name}) nicht geladen: ${dbFehlerText(e)}`);
+  db.collection('medien').limit(1000).onSnapshot(s => { roh.medien = aus(s); geladen.medien = true; neu(); }, fehler('medien'));
+  db.collection('inhalte').limit(1000).onSnapshot(s => { roh.inhalte = aus(s); geladen.inhalte = true; neu(); }, fehler('inhalte'));
+}
+
 const SCREENS = {
+  pflege() {
+    if (!ui.istBesitzer) return SCREENS.einstellungen();
+    return pflegeHtml({
+      esc, icon, index: tabelle, p: pflegeZustand(),
+      stile: STIL_REIHENFOLGE.map(id => ({ id, name: STILE[id].name })),
+      plaetze: bildPlaetze(), standardTexte: TEXTE, bildFuer, eingebautesBild,
+      eingebaut: stilId => bildPlaetze().map(platz => ({ platz, ...eingebautesBild(stilId, platz) })).filter(b => b.datei).map(b => ({ ...b, eigen: b.datei.startsWith('/_blob/') })),
+      kannHochladen: !!ui.assets, verbunden: !!ui.db
+    });
+  },
   ob1() {
     const bereiche = TABELLE.gruppen.filter(b => b.onboarding);
     return `<section class="screen">
@@ -280,7 +486,7 @@ const SCREENS = {
     catch (e) { console.warn('Stadt:', e.message); bezirke = []; }
     const entsteht = bezirke.filter(b => b.status === STATUS.entsteht);
     return `<section class="screen stadt">
-      <div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span><button class="icbtn" data-a="einstellungen" aria-label="Einstellungen">${icon('zahnrad')}</button></div>
+      <div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span>${einstellungenKnopf()}</div>
       <div class="inhalt start-inhalt">
         <div><span class="eyebrow">${esc(T('stadt.eyebrow', { STADT: wort('stadt').toUpperCase() }))}</span>
         <h1>${esc(T('stadt.titel', { stadtname: wort('stadtname') }))}</h1>
@@ -443,7 +649,7 @@ const SCREENS = {
     const datum = jetzt().toLocaleDateString('de-AT', { weekday: 'long', day: 'numeric', month: 'short' });
     const antw = a.heuteAntwort;
     return `<section class="screen start">
-      <div class="start-kopf"><span class="datum">${esc(datum)}</span><button class="icbtn" data-a="einstellungen" aria-label="Einstellungen">${icon('zahnrad')}</button></div>
+      <div class="start-kopf"><span class="datum">${esc(datum)}</span>${einstellungenKnopf()}</div>
       <div class="inhalt start-inhalt">
         ${hinweisBox()}
         ${EW.istOffen(einw) ? einwKarte(false) : ''}
@@ -496,16 +702,25 @@ const SCREENS = {
   },
 
   stilwahl() {
-    const sel = ui.stilAuswahl || stand.stil.aktiv;
+    const sel = stilVorauswahl();
     const g = TABELLE.gegner[aktuelleVorlage().gegner];
     return `<section class="screen stilwahl dunkel">
-      <div class="inhalt mitte">
-        <span class="chip gut">${esc(g.kurz.toUpperCase())} BESIEGT</span>
-        <span class="stern-gross erscheint" aria-hidden="true">${icon('stern', 'ic gross')}</span>
-        <h1 class="mittel">Neuer Darstellungsstil freigeschaltet</h1>
+      <div class="inhalt mitte stilwahl-inhalt">
+        <div class="stil-kopf">
+          <span class="stern-klein erscheint" aria-hidden="true">${icon('stern')}</span>
+          <div class="stil-kopf-text">
+            <span class="chip gut">${esc(g.kurz.toUpperCase())} BESIEGT</span>
+            <h1 class="stil-titel">Neue Welten freigeschaltet</h1>
+          </div>
+        </div>
         <p class="lead">Wähle deine Welt</p>
         <div class="welten" role="group" aria-label="Stil">
-          ${STIL_REIHENFOLGE.map(id => `<button class="welt ${sel === id ? 'sel' : ''}" aria-pressed="${sel === id}" data-a="stil" data-id="${id}"><img src="${esc(STILE[id].karte)}" data-ph="${esc(platzhalter(STILE[id].name, 'szene'))}" alt=""><span>${esc(STILE[id].name)}${stand.stil.aktiv === id ? ' · aktiv' : ''}</span></button>`).join('')}
+          ${STIL_REIHENFOLGE.map(id => {
+            const frei = istWaehlbar(id);
+            const zusatz = stand.stil.aktiv === id ? ' · aktiv' : (frei ? '' : ' · bald');
+            return `<button class="welt ${sel === id ? 'sel' : ''} ${frei ? '' : 'gesperrt'}" ${frei ? `aria-pressed="${sel === id}"` : 'disabled aria-disabled="true"'} data-a="stil" data-id="${id}"><img src="${esc((TB.bildAus(tabelle, id, 'karte') || {}).url || STILE[id].karte)}" data-ph="${esc(TB.platzhalterPfad(id, 'szene'))}" data-ph2="${esc(platzhalter(STILE[id].name, 'szene'))}" alt="">${frei ? '' : `<span class="welt-schloss" aria-hidden="true">${icon('schloss')}</span>`}<span>${esc(STILE[id].name)}${zusatz}</span></button>`;
+          }).join('')}
+          ${STIL_ARCHIV_VORSCHAU.map(w => `<button class="welt gesperrt" disabled aria-disabled="true"><img src="${esc(platzhalter(w.name, 'szene'))}" alt=""><span class="welt-schloss" aria-hidden="true">${icon('schloss')}</span><span>${esc(w.name)} · bald</span></button>`).join('')}
         </div>
       </div>
       <div class="fuss">
@@ -639,6 +854,7 @@ const SCREENS = {
           <div class="zwei"><button class="btn" data-a="feedback-oeffnen">${hatFeedback() ? 'Feedback ändern' : 'Feedback geben'}</button><button class="btn" data-a="premium">Premium ansehen</button></div>
           ${EW.darfSenden(einw) && analyticsStatus() !== 'zentral' ? exportHtml() : ''}
           ${ui.istBesitzer ? '<button class="btn voll" data-a="admin">Auswertung öffnen</button>' : ''}
+          ${ui.istBesitzer && ui.db ? '<button class="btn" data-a="pflege">Inhalte pflegen</button>' : ''}
         </div>
         <div class="karte spalte">
           <span class="eyebrow">NEU BEGINNEN</span>
@@ -835,9 +1051,9 @@ function feierHtml() {
       <div class="feier-karte erscheint">
         <h2 id="feier-t">${esc(T('lauf.titel', { held: nameVon(v.held) }))}</h2>
         <div class="lauf-bahn" aria-hidden="true">
-          <span class="lauf-station links">${img('boss-' + alt, '', 'boss', 'cover grau')}<i class="station-haken">${icon('check')}</i></span>
-          <span class="lauf-station rechts">${img('boss-' + neuId, '?', 'boss', 'cover schatten')}</span>
-          <span class="lauf-held">${img(v.held, nameVon(v.held), 'held', 'cover')}</span>
+          <span class="lauf-station links">${img('boss-' + alt, '', 'boss', 'cover grau', '', 'rund')}<i class="station-haken">${icon('check')}</i></span>
+          <span class="lauf-station rechts">${img('boss-' + neuId, '?', 'boss', 'cover schatten', '', 'rund')}</span>
+          <span class="lauf-held">${img(v.held, nameVon(v.held), 'held', 'cover', '', 'rund')}</span>
         </div>
         <p>${esc(T('lauf.text', { gegner: I.gegnerFormen(TABELLE.gegner[alt]).nom }))}</p>
         <button class="cta" data-a="feier-weiter">Weiter</button>
@@ -920,14 +1136,14 @@ function wegHtml(a, v, g) {
     if (st.status === W.STATION.nebel) return `<span class="station nebel" style="${lage}"></span>`;
     const gg = TABELLE.gegner[st.gegner] || g;
     const bildCls = st.status === W.STATION.verborgen ? 'cover schatten' : st.status === W.STATION.besiegt ? 'cover grau' : 'cover';
-    return `<span class="station ${st.status}" style="${lage}">${img('boss-' + st.gegner, gg.name, 'boss', bildCls)}${st.status === W.STATION.besiegt ? `<i class="station-haken">${icon('check')}</i>` : ''}</span>`;
+    return `<span class="station ${st.status}" style="${lage}">${img('boss-' + st.gegner, gg.name, 'boss', bildCls, '', 'rund')}${st.status === W.STATION.besiegt ? `<i class="station-haken">${icon('check')}</i>` : ''}</span>`;
   };
   const text = a.rundeTag < 0 ? T('weg.morgen', { kapitel: wort('kapitel'), gegner: g.kurz })
     : [T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }), rest ? T('weg.rest', { rest, gegner: g.kurz }) : '', T('weg.kapitel', { kapitel: wort('kapitel'), nr: w.kapitel })].filter(Boolean).join(' · ');
   return `<div class="weg" role="img" aria-label="${esc(T('weg.aria', { held: nameVon(v.held), text }))}">
       <svg viewBox="0 0 300 92" preserveAspectRatio="none" aria-hidden="true"><path class="weg-rest" d="${linie(pkt)}"/><path class="weg-geschafft" d="${linie(geschafft)}"/></svg>
       ${w.stationen.map(stationHtml).join('')}
-      <span class="weg-held" style="left:${prozent(held.x, 300)};top:${prozent(held.y, 92)}">${img(v.held, nameVon(v.held), 'held', 'cover')}</span>
+      <span class="weg-held" style="left:${prozent(held.x, 300)};top:${prozent(held.y, 92)}">${img(v.held, nameVon(v.held), 'held', 'cover', '', 'rund')}</span>
     </div>
     <span class="mini gut-text">${esc(text)}</span>`;
 }
@@ -939,7 +1155,7 @@ function naechsterGegnerHtml(a, g) {
   if (!id || !TABELLE.gegner[id]) return '';
   andeutungGesehen('boss');
   return `<div class="naechster">
-    <span class="naechster-bild" aria-hidden="true">${img('boss-' + id, '?', 'boss', 'cover schatten')}</span>
+    <span class="naechster-bild" aria-hidden="true">${img('boss-' + id, '?', 'boss', 'cover schatten', '', 'quadrat')}</span>
     <span class="spalte"><span class="eyebrow">${esc(T('teaser.kapitel', { KAPITEL: wort('kapitel').toUpperCase(), nr: a.gegnerNr + 1 }))}</span><span class="nm">${esc(T('teaser.name'))}</span>
     <span class="klein">${esc(T('teaser.wartet', { gegner: I.gegnerFormen(g).nom, sieg: wort('sieg') }))}</span></span></div>`;
 }
@@ -1158,7 +1374,19 @@ function testleiste() {
 // ---------- Rendern ----------
 let letzterScreen = null;
 let letztesOverlay = null;
+// Kein verschachteltes Neuzeichnen (Version 31): Entfernt render() ein fokussiertes Feld, löst der Browser
+// „blur“/„change“ aus; ein Handler, der dann wieder render() ruft, würde mitten im Austausch zeichnen.
+let rendertGerade = false, nochmalRendern = false;
 function render() {
+  if (rendertGerade) { nochmalRendern = true; return; }
+  rendertGerade = true;
+  try { renderJetzt(); }
+  finally {
+    rendertGerade = false;
+    if (nochmalRendern) { nochmalRendern = false; render(); }
+  }
+}
+function renderJetzt() {
   document.documentElement.dataset.stil = stand.stil.aktiv;
   // Tab-Bildschirme nur, solange der Tab frei ist (z. B. nach Zeitsprung im Testprofil); noch nicht gebaute Tabs → „bald“.
   const tab = TABS.find(t => t.screen === ui.screen);
@@ -1176,10 +1404,13 @@ function render() {
   letztesOverlay = key || null;
 }
 
-// Fehlende Bilder → Platzhalter des Stils (kein Leihen aus anderen Stilen)
+// Fehlende Bilder → Platzhalter des Stils → Initialen (kein Leihen aus anderen Stilen)
 app.addEventListener('error', e => {
   const t = e.target;
-  if (t.tagName === 'IMG' && t.dataset.ph && t.src !== t.dataset.ph) t.src = t.dataset.ph;
+  if (t.tagName !== 'IMG') return;
+  const stufe = t.dataset.stufe || '0';
+  if (stufe === '0' && t.dataset.ph) { t.dataset.stufe = '1'; t.src = t.dataset.ph; }
+  else if (stufe !== '2' && t.dataset.ph2) { t.dataset.stufe = '2'; t.src = t.dataset.ph2; }
 }, true);
 
 function geheZu(screen) {
@@ -1421,6 +1652,34 @@ app.addEventListener('click', e => {
       sendeFeedback(ui.fb); ui.fbDanke = true; geheZu('start'); break;
     }
     case 'admin': geheZu('admin'); ladeAdmin(); break;
+    case 'pflege': pflegeZustand(); geheZu('pflege'); break;
+    case 'pf-typ': { const p = pflegeZustand(); if (id === 'bild' || id === 'text') { p.form.typ = id; p.fehler = []; } render(); break; }
+    case 'pf-neu': { const p = pflegeZustand(); p.form = leeresFormular(); p.bearbeitet = null; p.fehler = []; p.status = ''; p.formWahl = 'alle'; render(); break; }
+    case 'pf-formwahl': { const p = pflegeZustand(); if (id === 'alle' || TB.FORMEN.includes(id)) p.formWahl = id; render(); break; }
+    case 'pf-form-zurueck': { const p = pflegeZustand(); if (p.form.formen) delete p.form.formen[id]; render(); break; }
+    case 'pf-ansicht': { const p = pflegeZustand(); if (id === 'eintraege' || id === 'medien') { p.ansicht = id; p.fehler = []; p.status = ''; p.medienLoeschen = null; } render(); break; }
+    case 'pf-m-bearbeiten': { const p = pflegeZustand(); const m = tabelle.medien[id]; if (m) { p.medienBearbeitet = id; p.medienForm = { titel: m.titel || '', art: m.art }; p.medienLoeschen = null; } render(); break; }
+    case 'pf-m-abbrechen': { const p = pflegeZustand(); p.medienBearbeitet = null; p.fehler = []; render(); break; }
+    case 'pf-m-speichern': medienSpeichern(id); break;
+    case 'pf-m-loeschen': medienLoeschen(id); break;
+    case 'pf-m-verwenden': {
+      const p = pflegeZustand();
+      if (!tabelle.medien[id]) break;
+      p.form = { ...leeresFormular(), typ: 'bild', medium: id, stil: p.form.stil || TB.ALLE };
+      Object.assign(p, { ansicht: 'eintraege', bearbeitet: null, fehler: [], status: 'Bild gewählt. Jetzt Schlüssel und Stil eintragen und speichern.', formWahl: 'alle' });
+      render(); app.querySelector('#pf-form')?.scrollIntoView({ block: 'start' }); break;
+    }
+    case 'pf-vorschlag': { const p = pflegeZustand(); p.form.schluessel = id; p.unbekanntFrage = null; eingebautVorschlagen(p); render(); break; }
+    case 'pf-nur-luecken': { const p = pflegeZustand(); p.nurLuecken = !p.nurLuecken; render(); break; }
+    case 'pf-speichern': pflegeSpeichern(); break;
+    case 'pf-bearbeiten': pflegeBearbeiten(id); break;
+    case 'pf-loeschen': pflegeLoeschen(id); break;
+    case 'pf-platz': {
+      const p = pflegeZustand();
+      if (!STILE[p.filter]) break;
+      Object.assign(p, formularFuerPlatz(p.filter, id), { fehler: [], status: '', formWahl: 'alle', loeschen: null });
+      render(); app.querySelector('#pf-form')?.scrollIntoView({ block: 'start' }); break;
+    }
     case 'admin-neu': ladeAdmin(); break;
     case 'admin-import': importiere(); break;
     case 'export': erstelleExport(); break;
@@ -1429,9 +1688,9 @@ app.addEventListener('click', e => {
     case 'admin-test': ui.admin.test = !ui.admin.test; render(); break;
     case 'admin-besitzer': ui.admin.besitzer = !ui.admin.besitzer; render(); break;
     case 'stilwahl': ui.stilAuswahl = stand.stil.aktiv; geheZu('stilwahl'); break;
-    case 'stil': ui.stilAuswahl = id; render(); break;
+    case 'stil': if (istWaehlbar(id)) { ui.stilAuswahl = id; render(); } break;
     case 'stil-uebernehmen':
-      try { setzeStand(K.stilWaehlen(stand, ui.stilAuswahl || stand.stil.aktiv, STIL_REIHENFOLGE)); }
+      try { setzeStand(K.stilWaehlen(stand, stilVorauswahl(), STIL_REIHENFOLGE, STIL_WAEHLBAR)); }
       catch (err) { hinweis = err.message; }
       speichere(); trackEvent('style_selected', { stil: stand.stil.aktiv }); geheZu('start'); break;
     case 'stil-spaeter': setzeStand(K.stilAngeboten(stand)); speichere(); geheZu('start'); break;
@@ -1478,8 +1737,31 @@ app.addEventListener('click', e => {
   }
 });
 
+// Ein „change“ beim Verlassen eines Feldes kommt vor dem Klick. Würde sofort neu gezeichnet, verschwände der
+// angetippte Knopf unter dem Finger und der Klick ginge verloren. Deshalb erst nach dem Loslassen zeichnen.
+let zeigerUnten = false, zeichnenOffen = false;
+function renderNachZeiger() { if (zeigerUnten) zeichnenOffen = true; else render(); }
+document.addEventListener('pointerdown', () => { zeigerUnten = true; }, true);
+const zeigerLos = () => setTimeout(() => { zeigerUnten = false; if (zeichnenOffen) { zeichnenOffen = false; render(); } }, 0);
+document.addEventListener('pointerup', zeigerLos, true);
+document.addEventListener('pointercancel', zeigerLos, true);
+
 app.addEventListener('change', e => {
   if (e.target.id === 'import-csv') importiereCsv(e.target.files && e.target.files[0]);
+  if (ui.screen === 'pflege' && ui.pflege) {
+    const p = ui.pflege, t = e.target;
+    if (t.id === 'pf-datei') { pflegeHochladen(t.files && t.files[0]); t.value = ''; }
+    else if (t.id === 'pf-medium') {
+      if (t.value === '__datei') { const ein = eingebautesBild(p.form.stil, TB.normSchluessel(p.form.schluessel, 'bild')); p.form.medium = ''; p.form.datei = ein ? ein.datei : ''; }
+      else { p.form.medium = t.value; p.form.datei = ''; }
+      render();
+    }
+    else if (t.id === 'pf-stil') { p.form.stil = t.value; eingebautVorschlagen(p); render(); }
+    else if (t.id === 'pf-schluessel') { p.unbekanntFrage = null; eingebautVorschlagen(p); renderNachZeiger(); }
+    else if (t.id === 'pf-art') { p.form.art = t.value; }
+    else if (t.id === 'pf-m-art' && p.medienForm) { p.medienForm.art = t.value; }
+    else if (t.id === 'pf-filter') { p.filter = t.value; p.loeschen = null; render(); }
+  }
 });
 
 app.addEventListener('input', e => {
@@ -1490,6 +1772,23 @@ app.addEventListener('input', e => {
     ui.letzterFreitext = ui.freitext;
     const btn = app.querySelector('.fuss .cta');
     if (btn) btn.disabled = !ui.freitext.trim();
+  }
+  if (ui.screen === 'pflege' && ui.pflege && e.target.id && e.target.id.startsWith('pf-')) {
+    const p = ui.pflege, t = e.target;
+    if (t.id === 'pf-schluessel') p.form.schluessel = t.value;
+    else if (t.id === 'pf-text') p.form.text = t.value;
+    else if (t.id === 'pf-titel') p.form.titel = t.value;
+    else if (t.id === 'pf-m-titel' && p.medienForm) p.medienForm.titel = t.value;
+    else if (t.id === 'pf-x' || t.id === 'pf-y') {
+      const wahl = p.formWahl || 'alle';
+      const [x, y] = formPos(p.form, wahl).split(' ');
+      const neu = t.id === 'pf-x' ? `${t.value}% ${y}` : `${x} ${t.value}%`;
+      if (wahl === 'alle') p.form.pos = neu; else (p.form.formen ||= {})[wahl] = neu;
+      // Vorschau direkt anpassen, ohne neu zu zeichnen (Regler bleibt greifbar)
+      for (const k of TB.FORMEN) { const i = app.querySelector(`.pf-v-${k} img`); if (i) i.style.objectPosition = formPos(p.form, k); }
+      const w = app.querySelector('#' + t.id + '-wert'); if (w) w.textContent = t.value + '%';
+    }
+    return;
   }
   if (e.target.id && e.target.id.startsWith('fb-')) {
     ui.fb[e.target.id.slice(3)] = e.target.value.slice(0, 600);
@@ -1527,8 +1826,10 @@ beiAenderung(() => { if (ui.screen === 'einstellungen') render(); });
   const c = window.claude;
   if (!c || typeof c.use !== 'function') { senderKandidat = VERSAND.art ? formSender(VERSAND) : null; verbindeSender(); if (istAdmin) ladeAdmin(); return; }
   try {
-    const [db, user] = await Promise.all([c.use('db'), c.use('user')]);
+    const [db, user, assets] = await Promise.all([c.use('db'), c.use('user'), c.use('assets')]);
     ui.db = db;
+    ui.assets = assets; // null für Betrachter ohne Bearbeitungsrecht
+    abonniereTabelle(db);
     ui.istBesitzer = user ? await user.isOwner() : false;
     if (ui.istBesitzer) merke('ist_besitzer', true);
     senderKandidat = db ? dbSender(db) : null;

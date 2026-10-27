@@ -9,9 +9,13 @@
 
 export const STIL_REIHENFOLGE = ['fantasy', 'scifi', 'myth', 'cozy', 'monster', 'strasse'];
 
+// Version 33: `waehlbar` je Stil steuert, ob die Welt gewählt werden kann. Gesperrte Welten werden
+// in der Auswahl gezeigt, aber mit Schloss. Fehlt das Feld, gilt der Stil als gesperrt (sicherer Rückfall).
+// Zum Freigeben einer Welt nur `waehlbar: true` setzen – kein Code ändern.
+
 export const STILE = {
   fantasy: {
-    name: 'Fantasy', alt: [],
+    name: 'Fantasy', alt: [], waehlbar: true,
     karte: 'bilder/fantasy/szene.jpg',
     wort: { crew: 'Gefährten', verbuendeter: 'Verbündeter', gegner: 'Gegner', quest: 'Hauptquest', woche: 'Quest der Woche', faehigkeit: 'Fähigkeit', stufe: 'Stufe', sieg: 'besiegt', stadt: 'Stadt', bezirk: 'Bezirk', stadtname: 'Talwacht', kapitel: 'Kapitel' },
     namen: {},
@@ -49,7 +53,7 @@ export const STILE = {
     pos: { trogadon: '50% 22%', 'boss-zuckerkobold': '50% 30%' }
   },
   scifi: {
-    name: 'Sci-Fi', alt: [],
+    name: 'Sci-Fi', alt: [], waehlbar: true,
     karte: 'bilder/scifi/karte.jpg',
     wort: { crew: 'Crew', verbuendeter: 'Copilot', gegner: 'Störsignal', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Protokoll', stufe: 'Rang', sieg: 'neutralisiert', stadt: 'Station', bezirk: 'Sektor', stadtname: 'Station Aurora' },
     namen: { trogadon: 'Kommandant Trog-7', khara: 'Funkerin Kha-4', fisker: 'Scout Fisk-3', uldini: 'Administrator Uld-1', goldwin: 'Quartiermeister Gold-5', ahren: 'Offizier Ahr-2' },
@@ -80,7 +84,7 @@ export const STILE = {
     pos: {}
   },
   myth: {
-    name: 'Mythologie', alt: [],
+    name: 'Mythologie', alt: [], waehlbar: false,
     karte: 'bilder/myth/szene.jpg',
     wort: { crew: 'Bund', verbuendeter: 'Gefährte', gegner: 'Prüfung', quest: 'Heldenfahrt', woche: 'Prüfung der Woche', faehigkeit: 'Gabe', stufe: 'Rang', sieg: 'bestanden', stadt: 'Polis', bezirk: 'Viertel', stadtname: 'Neu-Ithaka' },
     namen: { trogadon: 'Trogaides', khara: 'Charis', fisker: 'Fiskeus', uldini: 'Uldinos', goldwin: 'Ploutos', ahren: 'Ahrenos' },
@@ -88,7 +92,7 @@ export const STILE = {
     pos: {}
   },
   cozy: {
-    name: 'Cozy', alt: [],
+    name: 'Cozy', alt: [], waehlbar: false,
     karte: 'bilder/cozy/szene.jpg',
     wort: { crew: 'Nachbarschaft', verbuendeter: 'Nachbar', gegner: 'Sturm', quest: 'Ernteziel', woche: 'Aufgabe der Woche', faehigkeit: 'Werkzeug', stufe: 'Stufe', sieg: 'vorübergezogen', stadt: 'Dorf', bezirk: 'Hof', stadtname: 'Sonnenhang' },
     namen: { trogadon: 'Trogi', khara: 'Kari', fisker: 'Fiski', uldini: 'Uldi', goldwin: 'Goldi', ahren: 'Ahri' },
@@ -114,7 +118,7 @@ export const STILE = {
     pos: {}
   },
   monster: {
-    name: 'Monsterjäger', alt: [],
+    name: 'Monsterjäger', alt: [], waehlbar: false,
     karte: 'bilder/monster/szene.jpg',
     wort: { crew: 'Team', verbuendeter: 'Partner', gegner: 'Monster', quest: 'Hauptauftrag', woche: 'Auftrag der Woche', faehigkeit: 'Attacke', stufe: 'Level', sieg: 'gefangen', stadt: 'Basis', bezirk: 'Zone', stadtname: 'Basislager' },
     namen: {},
@@ -137,7 +141,7 @@ export const STILE = {
     pos: {}
   },
   strasse: {
-    name: 'Miami Nights', alt: [],
+    name: 'Miami Nights', alt: [], waehlbar: true,
     karte: 'bilder/strasse/szene.jpg',
     wort: { crew: 'Crew', verbuendeter: 'Partner', gegner: 'Rivale', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Move', stufe: 'Rang', sieg: 'erledigt', stadt: 'City', bezirk: 'Block', stadtname: 'Neon City' },
     namen: { trogadon: 'Tank Trogg', khara: 'Lady Kay', fisker: 'Captain Fisk', uldini: 'Mr. Uld', goldwin: 'Der Quartiermeister', 'der-erste': 'Brick', ahren: 'Party-Ari' },
@@ -169,6 +173,23 @@ export const STILE = {
 // Haben Vorrang vor den Dateien. Eintrag: [Adresse, Bildausschnitt]. Zoom aus dem alten Prototyp ist noch nicht übernommen.
 // GitHub-Pages-Fassung: Bilder aus dem claude.ai-Bildspeicher (/_blob/…) sind hier nicht erreichbar → Dateien gelten.
 export const EIGENE_BILDER = {};
+
+// Wählbare Stile in Anzeige-Reihenfolge. Nie leer: ohne wählbaren Stil bleibt Fantasy.
+export const STIL_WAEHLBAR = (() => {
+  const l = STIL_REIHENFOLGE.filter(id => STILE[id] && STILE[id].waehlbar === true);
+  if (!l.length) console.warn('Stile: keine Welt wählbar, Rückfall auf Fantasy');
+  return l.length ? l : ['fantasy'];
+})();
+export const istWaehlbar = id => STIL_WAEHLBAR.includes(id);
+
+// Version 35: Archivierte Stile aus dem alten Prototyp, NUR als gesperrte Kachel in der Weltenwahl.
+// Kein Eintrag in STILE (keine Farben, Wörter, Bilder, kein Speichern, keine Pflege). Immer gesperrt.
+// Zurückholen = vollständigen Eintrag in STILE anlegen und hier entfernen.
+export const STIL_ARCHIV_VORSCHAU = [
+  { id: 'midnight', name: 'Mitternachtsgold' },
+  { id: 'modern', name: 'Modern' },
+  { id: 'zombie', name: 'Zombie' }
+].filter(x => !STILE[x.id]); // Schutz: ein zurückgeholter Stil erscheint nie doppelt
 
 // Alte oder unbekannte IDs → gültige ID (Rückfall: fantasy).
 export function stilId(id) {

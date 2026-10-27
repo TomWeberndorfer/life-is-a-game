@@ -121,6 +121,9 @@ h1.name { font-size: 30px; font-weight: 800; }
 .ob-kopf.hell { color: #FBF3DC; }
 .icbtn, .icplatz { width: 44px; height: 44px; flex: none; }
 .icbtn { border: 0; background: none; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; color: inherit; }
+.einst-btn { background: var(--panel); border: 1.5px solid var(--edge); box-shadow: 0 2px 0 var(--line); color: var(--ink); }
+.einst-btn .ic { width: 26px; height: 26px; stroke-width: 1.9; }
+.einst-btn:active { transform: translateY(1px); box-shadow: none; }
 .prog { flex: 1; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
 .prog i { height: 6px; border-radius: 3px; background: var(--line); }
 .prog i.on { background: var(--ac); }
@@ -260,6 +263,18 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .welt img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .welt span { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 10px 8px; background: linear-gradient(180deg, transparent, rgba(10,8,5,.88)); color: #FBF3DC; font: 700 14px var(--fh); text-align: left; }
 .welt.sel { border: 3px solid #E9C46A; box-shadow: 0 0 0 3px rgba(233,196,106,.35); }
+.welt.gesperrt { cursor: not-allowed; }
+.welt.gesperrt img { filter: grayscale(1) brightness(.45); }
+.welt.gesperrt span:last-child { color: rgba(251,243,220,.7); }
+.welt .welt-schloss { position: absolute; top: 8px; right: 8px; left: auto; bottom: auto; padding: 0; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(10,8,5,.7); color: #FBF3DC; }
+.welt .welt-schloss svg { width: 16px; height: 16px; }
+.stilwahl-inhalt { padding-top: 16px; gap: 10px; }
+.stil-kopf { display: flex; align-items: center; gap: 12px; align-self: stretch; text-align: left; }
+.stil-kopf .stern-klein { width: 48px; height: 48px; box-shadow: 0 0 0 5px rgba(233,196,106,.2); }
+.stil-kopf .stern-klein .ic { width: 26px; height: 26px; }
+.stil-kopf-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stilwahl-inhalt .stil-kopf-text .chip { align-self: flex-start; font-size: 11px; padding: 3px 10px; }
+.stil-titel { font-size: 19px; line-height: 1.2; }
 .stern-gross { width: 76px; height: 76px; border-radius: 50%; background: #E9C46A; color: #2E2114; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 8px rgba(233,196,106,.2); }
 .stern-gross .ic { width: 40px; height: 40px; }
 
@@ -308,6 +323,55 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .fehler { margin: 0; color: var(--gegner); font-weight: 700; }
 .hinweis.gut-rand { border-color: var(--gut); }
 .klein-btn { min-height: 44px; font-size: 13px; }
+/* Inhalte pflegen (Version 29) */
+.feld select { min-height: 52px; box-sizing: border-box; width: 100%; border-radius: var(--r); border: 2px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 10px; font: 500 17px var(--fb); }
+.feld input[type=range] { min-height: 32px; padding: 0; border: 0; background: none; accent-color: var(--ac); }
+.pf-wert { font-weight: 500; color: var(--soft); }
+.pf-vorschau { display: grid; grid-template-columns: 72px 72px minmax(0, 1fr); gap: 10px; align-items: end; }
+.pf-v { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pf-v figcaption { font: 700 11px var(--fh); letter-spacing: .06em; color: var(--mute); text-align: center; }
+.pf-v.an figcaption { color: var(--ac); }
+.pf-v-bild { display: block; width: 100%; height: 72px; object-fit: cover; border: 2px solid var(--edge); background: var(--tief); box-sizing: border-box; }
+.pf-v.an .pf-v-bild { border-color: var(--ac); }
+.pf-v-rund .pf-v-bild { border-radius: 50%; }
+.pf-v-quadrat .pf-v-bild { border-radius: var(--r); }
+.pf-v-breit .pf-v-bild { border-radius: var(--r); }
+.pf-formwahl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.pf-formwahl .opt { min-height: 44px; padding: 4px; font-size: 14px; }
+.pf-upload-box summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+.pf-warn { color: var(--gegner); }
+.pf-plaetze { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.pf-platz { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 4px; border: 2px solid var(--line); border-radius: var(--r); background: var(--panel); color: var(--ink); cursor: pointer; text-align: left; }
+.pf-platz.q-tabelle { border-color: var(--gut); }
+.pf-platz.q-platzhalter { border-style: dashed; }
+.pf-platz-bild { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: var(--tief); }
+.pf-platz-nm { font: 700 12px var(--fb); overflow-wrap: anywhere; line-height: 1.2; }
+.pf-platz-q { font-size: 11px; color: var(--mute); }
+.pf-platz.q-tabelle .pf-platz-q { color: var(--gut-text); }
+.pf-upload { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: end; padding-top: 6px; }
+.pf-upload .pf-datei { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; }
+.pf-datei input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.pf-datei:focus-within { outline: 3px solid var(--ac); outline-offset: 2px; }
+.pf-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pf-zeile { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pf-zeile .spalte { flex: 1; overflow-wrap: anywhere; }
+.pf-mini { width: 44px; height: 44px; flex: none; border-radius: var(--r); object-fit: cover; border: 1px solid var(--line); background: var(--tief); }
+.pf-mini-text { display: flex; align-items: center; justify-content: center; font: 700 18px var(--fh); color: var(--mute); }
+.pf-knoepfe { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.pf-knoepfe .btn { min-height: 40px; padding: 0 10px; }
+.pf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-chips .chip { cursor: pointer; min-height: 32px; }
+.pf-medium { display: flex; align-items: flex-start; gap: 10px; min-width: 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.pf-medium .spalte { flex: 1; overflow-wrap: anywhere; }
+.pf-mini.gross { width: 64px; height: 64px; }
+.pf-unbenutzt { color: var(--ac); font-weight: 700; }
+.pf-stilgruppe summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+.pf-stilgruppe .pf-plaetze { padding-bottom: 8px; }
+.pf-platz.q-eigen { border-color: var(--ac); }
+.pf-hinweis { padding: 8px 12px; border-radius: var(--r); border: 1px solid var(--ac); background: var(--sel); }
+.pf-hinweis p { margin: 0; font-size: 15px; line-height: 1.4; color: var(--ink); }
+.pf-hinweis .link { min-height: 36px; font-size: 15px; }
+.pf-fehler { margin: 0; padding-left: 18px; color: var(--gegner); font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
 .admin .inhalt { gap: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
 .kachel { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 10px; display: flex; flex-direction: column; gap: 2px; }

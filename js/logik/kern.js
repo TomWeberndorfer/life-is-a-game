@@ -355,8 +355,11 @@ export function tagesCheck(stand, heute, antwort) {
 }
 
 // ---------- Stil ----------
-export function stilWaehlen(stand, stilId, stilIds) {
+// waehlbar (Version 33): Stile, die gewählt werden dürfen; ohne Angabe alle bekannten.
+// Der aktive Stil darf immer erneut übernommen werden (kein Zwangswechsel für bestehende Stände).
+export function stilWaehlen(stand, stilId, stilIds, waehlbar = stilIds) {
   if (!stilIds.includes(stilId)) throw new Error(`Unbekannter Stil: ${stilId}`);
+  if (!waehlbar.includes(stilId) && stilId !== stand.stil.aktiv) throw new Error('Diese Welt ist noch gesperrt.');
   if (stilId !== 'fantasy' && !stand.stil.frei) throw new Error('Weitere Stile werden nach dem ersten Sieg freigeschaltet.');
   const s = kopie(stand);
   s.stil.aktiv = stilId;
