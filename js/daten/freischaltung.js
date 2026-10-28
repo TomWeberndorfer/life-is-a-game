@@ -15,12 +15,13 @@ export const ZAEHLER = ['siege', 'rueckfaelle'];
 // label: { text: '<Textschlüssel>' } oder { wort: '<Stil-Wort>' } (z. B. Stadt heißt in Sci-Fi „Station“).
 // sperrText: Textschlüssel für den Hinweis beim Antippen eines gesperrten Tabs (optional).
 //   Ohne sperrText: bei Stufen-Regeln „öffnet sich ab Stufe X“, sonst ein allgemeiner Satz.
+// neuText: Textschlüssel für den Hinweis „Neu für dich“ nach der Freischaltung (Version 50, optional).
 // bald: true = Bereich ist noch nicht gebaut; frei geschaltet zeigt er den Platzhalter „kommt bald“.
 export const MAX_TABS = 5;
 export const TABS = [
   { screen: 'start', label: { text: 'tab.start' }, icon: 'haus' },
-  { screen: 'stadt', label: { wort: 'stadt' }, icon: 'burg', frei: { art: 'sieg' }, sperrText: 'tab.stadtGesperrt' },
-  { screen: 'logbuch', label: { text: 'tab.logbuch' }, icon: 'buch', frei: { art: 'stufe', ab: 2 } }, // gebaut seit Version 41
+  { screen: 'stadt', label: { wort: 'stadt' }, icon: 'burg', frei: { art: 'sieg' }, sperrText: 'tab.stadtGesperrt', neuText: 'neu.stadt' },
+  { screen: 'logbuch', label: { text: 'tab.logbuch' }, icon: 'buch', frei: { art: 'stufe', ab: 2 }, neuText: 'neu.logbuch' }, // gebaut seit Version 41
   { screen: 'karte', label: { text: 'tab.karte' }, icon: 'karte', frei: { art: 'stufe', ab: 4 }, bald: true },
   { screen: 'gruppe', label: { text: 'tab.gruppe' }, icon: 'menschen', frei: { art: 'stufe', ab: 4 }, bald: true }
 ];

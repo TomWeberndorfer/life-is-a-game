@@ -12,6 +12,18 @@ export const TEXTE = {
   'tab.stadtGesperrt': 'Deine {stadt} öffnet sich nach dem ersten Sieg.',
   'tab.stufeGesperrt': '{bereich} öffnet sich, sobald ein Held {stufe} {nr} erreicht.',
   'tab.logbuch': 'Logbuch',
+  // „Neu für dich“ nach einer Freischaltung (Version 50)
+  'neu.eyebrow': 'NEU FÜR DICH',
+  'neu.titel': 'Freigeschaltet: {bereiche}',
+  'neu.stadt': 'Mit jedem Sieg wächst hier ein Bezirk deiner {stadt}.',
+  'neu.logbuch': 'Alles, was du geschafft hast, auf einen Blick.',
+  'neu.oeffnen': '{bereich} öffnen',
+  'neu.ok': 'Später',
+  'neu.tab': 'neu',
+  'premium.kleiner': 'Kleiner',
+  'klapp.kleiner': 'Kleiner',
+  'klapp.mehr': 'Mehr zeigen',
+  'premium.groesser': 'Mehr zeigen',
   'tab.karte': 'Karte',
   'tab.gruppe': 'Gruppe',
   'bald.titel': '{bereich} ist freigeschaltet',
@@ -125,6 +137,13 @@ export const TEXTE = {
   'tat.woche': '{n} von {anzahl} diese Woche',
   'tat.naechster': 'Nächster offener Check',
   'tat.weiter': 'Weiter zu {held}',
+  // Momente der Startseite (Version 49): Erfolgsbild nach „Ja“, Banner beim Heldenwechsel
+  'erfolg.eyebrow': 'HELDENMOMENT',
+  'erfolg.text': '{held} hat es gesehen. Das war deine Heldentat.',
+  'erfolg.klein': 'Kleiner',
+  'wechsel.eyebrow': 'JETZT AN DEINER SEITE',
+  'wechsel.offen': 'Heute: {faehigkeit}',
+  'wechsel.erledigt': 'Heldentat für heute erledigt',
   'tat.alleErledigt': 'Alle Helden haben ihre Heldentat für heute erledigt.',
 
   // Duell-Karte und Bonus (Version 45)
@@ -147,6 +166,17 @@ export const TEXTE = {
   'story.folgt': 'Fortsetzung folgt …',
   'story.knopf': 'Zurück zum Abenteuer',
   'story.knopfEnde': 'Woche abschließen',
+  // Geheimnisvolle Story (Version 48): Story nur, wenn neu; Siegel, Nebel
+  'story.siegel': 'Ein Siegel wartet',
+  'story.siegelBrechen': 'Siegel brechen',
+  'story.siegelOhne': 'Etwas ist geschehen, während du weg warst.',
+  'story.bereit': 'Öffnet sich nach dem Teil davor',
+  'story.wartet': 'Öffnet sich nach deinem nächsten Tages-Check',
+  'story.nebel': 'Noch im Nebel',
+  'story.hinweisLeer': 'Teil 1 öffnet sich nach deinem nächsten Tages-Check.',
+  'story.hinweisGelesen': 'Alles gelesen. Der nächste Teil öffnet sich nach deinem nächsten Tages-Check.',
+  'story.lesen': 'Lesen',
+  'story.seite': 'Jeder Tages-Check bricht ein neues Siegel.',
 
   // Einwilligung zur Datenübertragung (Version 28)
   'daten.eyebrow': 'TESTPHASE · DATENSCHUTZ',

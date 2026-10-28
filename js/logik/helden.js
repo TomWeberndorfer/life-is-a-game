@@ -40,7 +40,7 @@ export function zuordner(tabelle, rueckfall) {
 
 export function neuesSpiel(profilId) {
   const s = K.neuerStand(profilId);
-  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {} };
+  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [] };
 }
 
 function heldAusAnsicht(heroId, domainId, a) {
@@ -115,6 +115,18 @@ export function botschaftGelesen(spiel, heroId, tag) {
   if (!heldVon(spiel, heroId)) throw new Error('Unbekannter Held');
   if (!TAG.test(String(tag))) throw new Error('Ungültiger Tag');
   return { ...kopie(spiel), gelesen: { ...(spiel.gelesen || {}), [heroId]: tag } };
+}
+// „Neu für dich“ (Version 50): Bereiche (Tab-IDs), deren Freischaltung schon gezeigt oder die schon geöffnet wurden.
+// Gehört zum Spielstand (gilt auf allen Geräten). Ungültiges wird verworfen, höchstens 30 Einträge.
+const BEREICH_ID = /^[a-z0-9_-]{1,40}$/;
+export function bereinigeGesehen(roh) {
+  if (!Array.isArray(roh)) return [];
+  return [...new Set(roh.filter(x => typeof x === 'string' && BEREICH_ID.test(x)))].slice(0, 30);
+}
+export function neuGesehen(spiel, ids) {
+  const neu = (Array.isArray(ids) ? ids : [ids]).filter(x => typeof x === 'string' && BEREICH_ID.test(x));
+  if (!neu.length) throw new Error('Ungültiger Bereich');
+  return { ...kopie(spiel), neuGesehen: bereinigeGesehen([...(spiel.neuGesehen || []), ...neu]) };
 }
 export const istGelesen = (spiel, heroId, tag) => !!spiel.gelesen && spiel.gelesen[heroId] === tag;
 
@@ -196,5 +208,6 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
   s.stil.frei = s.stil.frei || s.helden.some(h => h.siege.length > 0);
   s.gelesen = {};
   if (roh.gelesen && typeof roh.gelesen === 'object') for (const [id, t] of Object.entries(roh.gelesen)) if (heldVon(s, id) && TAG.test(String(t))) s.gelesen[id] = t;
+  s.neuGesehen = bereinigeGesehen(roh.neuGesehen);
   return s;
 }

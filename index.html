@@ -434,6 +434,77 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .story-folgt { font: italic 500 16px var(--fi); color: var(--mute) !important; }
 @keyframes story-nah { from { transform: scale(1.08); } to { transform: scale(1); } }
 @keyframes story-auf { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Geheimnisvolle Story (Version 48): Siegel, eingeklappte Teile, Nebel, Satz für Satz */
+.story-neu { border-color: var(--ac); }
+.siegel-mark { width: 46px; height: 46px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--ac); color: var(--auf-ac); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ac) 25%, transparent); }
+.story-karte .siegel-mark .ic { width: 26px; height: 26px; color: var(--auf-ac); }
+.story-andeutung { font: italic 500 16px/1.4 var(--fi); color: var(--ink); }
+.story-hinweis { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 8px 4px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--mute); text-align: left; font: 500 15px/1.35 var(--fb); cursor: pointer; }
+.story-hinweis .ic { width: 20px; height: 20px; flex: none; color: var(--ac); }
+.story-hinweis .klein { color: var(--mute); }
+.teil.gelesen summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-height: 44px; }
+.teil.gelesen summary::-webkit-details-marker { display: none; }
+.teil.gelesen summary h3::after { content: ' ▾'; color: var(--mute); font-size: 14px; }
+.teil.gelesen[open] summary h3::after { content: ' ▴'; }
+.teil.gelesen p { margin-top: 6px; }
+.teil.versiegelt { padding: 12px 14px; border: 2px dashed var(--edge); border-radius: 12px; gap: 8px; }
+.teil.frei-siegel { border-style: solid; border-color: var(--ac); }
+.andeutung { margin: 0; font: italic 500 17px/1.45 var(--fi) !important; color: var(--ink); }
+.siegel-knopf { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; min-height: 48px; }
+.siegel-knopf .ic { width: 20px; height: 20px; }
+.teil.nebel { position: relative; min-height: 64px; justify-content: center; align-items: center; border-radius: 12px; overflow: hidden; }
+.nebel-schleier { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mute) 22%, transparent), transparent); filter: blur(8px); }
+.teil.nebel .klein { position: relative; font-style: italic; }
+.teil.gebrochen summary { animation: siegel-bricht 520ms cubic-bezier(.2,.8,.3,1) both; }
+.satz { opacity: 0; animation: story-auf .5s ease-out forwards; animation-delay: calc(300ms + var(--i, 0) * 650ms); }
+@media (prefers-reduced-motion: reduce) { .satz { opacity: 1; } }
+:root[data-bewegung="aus"] .satz { opacity: 1; animation: none; }
+@keyframes siegel-bricht { 0% { transform: scale(.94); opacity: .4; filter: blur(2px); } 60% { transform: scale(1.02); opacity: 1; filter: none; } 100% { transform: none; } }
+/* Momente der Startseite (Version 49): großes Heldenbild nach „Ja“, Banner beim Heldenwechsel */
+.erfolg-bild { position: relative; margin: 0; height: 210px; border-radius: var(--r); overflow: hidden; background: var(--nacht); border: 2px solid var(--panel); }
+.erfolg-bild.neu { animation: erfolg-auf 650ms cubic-bezier(.2,.8,.3,1) both; }
+.erfolg-bild.neu img { animation: story-nah 5s ease-out both; }
+.erfolg-verlauf { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,8,5,0) 40%, rgba(10,8,5,.85) 100%); }
+.erfolg-bild figcaption { position: absolute; left: 12px; right: 12px; bottom: 10px; display: flex; flex-direction: column; gap: 2px; color: #FBF3DE; }
+.erfolg-bild figcaption .eyebrow { color: #E8C46A; }
+.erfolg-text { font: 700 18px/1.3 var(--fh); }
+.erfolg-klein-knopf { position: absolute; top: 8px; right: 8px; min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1.5px solid #FBF3DE; background: rgba(10,8,5,.55); color: #FBF3DE; font: 700 13px var(--fb); cursor: pointer; }
+.erfolg-mini { width: 30px; height: 30px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--gut); box-sizing: border-box; }
+@keyframes erfolg-auf { 0% { opacity: 0; transform: scale(.92); } 60% { opacity: 1; transform: scale(1.02); } 100% { transform: none; } }
+.wechsel-banner, .wechsel-banner.auftritt { position: absolute; z-index: 6; top: 8px; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); height: 96px; border-radius: var(--r); overflow: hidden; background: var(--nacht); border: 2px solid var(--ac); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; animation: wechsel-banner var(--dauer, 2600ms) ease-in-out both; }
+.wechsel-text { position: absolute; left: 12px; right: 12px; bottom: 8px; display: flex; flex-direction: column; gap: 1px; color: #FBF3DE; }
+.wechsel-text .eyebrow { color: #E8C46A; }
+.wechsel-text .klein { color: #FBF3DE; opacity: .9; }
+.wechsel-name { font: 800 22px/1.1 var(--fh); }
+@keyframes wechsel-banner { 0% { opacity: 0; transform: translateY(-12px); } 12% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .wechsel-banner, .wechsel-banner.auftritt { opacity: 1; transform: none; } }
+/* Version 50: „Neu für dich“ und verkleinerbares Premium */
+.neu-karte { border-color: var(--ac); gap: 8px; }
+.neu-zeile { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.neu-zeile .spalte { flex: 1; }
+.neu-zeile .btn { flex: none; padding: 0 12px; }
+.neu-ic { width: 38px; height: 38px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--sel); color: var(--ac); }
+.neu-ok { align-self: flex-start; }
+.tab-neu { position: absolute; top: -3px; right: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ac); border: 2px solid var(--panel); }
+.neu-tab .tab-nm { color: var(--ac); }
+.premium-rahmen { position: relative; }
+.premium-kleiner { position: absolute; top: 2px; right: 6px; min-height: 36px; font-size: 14px; color: var(--mute); }
+.premium-rahmen .karte.premium { padding-right: 70px; }
+.premium-klein { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); }
+.premium-zeile { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--mute); font: 600 15px var(--fb); cursor: pointer; text-align: left; }
+.stern-mini { width: 24px; height: 24px; flex: none; border-radius: 50%; background: #E9C46A; color: #2E2114; display: flex; align-items: center; justify-content: center; }
+.stern-mini .ic { width: 14px; height: 14px; }
+.premium-klein .link { font-size: 14px; color: var(--mute); white-space: nowrap; }
+/* Einklappbare Abschnitte (Version 52) */
+.klapp-rahmen { position: relative; display: flex; flex-direction: column; }
+.klapp-knopf { align-self: flex-end; min-height: 36px; margin-top: -4px; font-size: 14px; color: var(--mute); }
+.klapp-zeile { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; }
+.klapp-zeile .spalte { flex: 1; gap: 2px; }
+.klapp-mehr { flex: none; font: italic 500 14px var(--fi); color: var(--mute); text-decoration: underline; }
+.story-ruhig { flex-direction: row; align-items: center; gap: 12px; padding: 10px 14px; }
+.story-ruhig .spalte { flex: 1; gap: 2px; }
+.story-ruhig > .ic { width: 26px; height: 26px; flex: none; color: var(--ac); }
+.test-fehler { border-color: #B0205F; border-width: 2px; }
 .sr-titel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .start-fuss .version { display: block; margin-top: 6px; font: 600 12px var(--fb); font-style: normal; letter-spacing: .04em; color: var(--mute); opacity: .8; }

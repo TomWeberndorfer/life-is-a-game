@@ -5,7 +5,7 @@ import { STILE, STIL_REIHENFOLGE, STIL_WAEHLBAR, STIL_ARCHIV_VORSCHAU, istWaehlb
 import { DOMAIN_RUECKFALL, LEBENSBEREICHE } from './daten/lebensbereiche.js';
 import { SILHOUETTEN } from './daten/stadt.js';
 import { stadtAnsicht, stadtSichtbar, STATUS } from './logik/stadt.js';
-import { hoechsteStufe, istFrei, pruefeFreischaltung } from './logik/freischaltung.js';
+import { hoechsteStufe, istFrei, pruefeFreischaltung, neuFreigeschaltet } from './logik/freischaltung.js';
 import { TABS, MAX_TABS, FUNKTIONEN, ZAEHLER as FREI_ZAEHLER } from './daten/freischaltung.js';
 import * as W from './logik/weg.js';
 import { TEXTE } from './daten/texte.js';
@@ -28,11 +28,12 @@ import * as H from './logik/helden.js';
 import { BOTSCHAFTEN, STORIES, MIKRO, MIKRO_JE_TAG, MIKRO_RUECKFALL } from './daten/inhalte.js';
 import * as TB from './logik/tabelle.js';
 import { pflegeHtml, formPos } from './ansicht/pflege.js';
-import { START_ABSCHNITTE, HELDENKOPF, BONUS } from './daten/startseite.js';
+import { START_ABSCHNITTE, HELDENKOPF, BONUS, START_MOMENTE } from './daten/startseite.js';
+import { NEUIGKEITEN } from './daten/neuigkeiten.js';
 import { BEWEGUNG } from './daten/bewegung.js';
-import { ordneAbschnitte, heldenKopf, tagesfrage, naechsterOffener, bonusAnsicht } from './logik/startseite.js';
+import { ordneAbschnitte, heldenKopf, tagesfrage, naechsterOffener, bonusAnsicht, startMomente, erfolgGroesse, wechselBanner, tabPunkte, pruefeNeuigkeiten, klappZustand, klappUmschalten } from './logik/startseite.js';
 
-export const VERSION = { nr: 47, datum: '28.10.2026 · 13:35' };
+export const VERSION = { nr: 55, datum: '28.10.2026 · 15:15' };
 
 const istTest = location.hash === '#test';
 const istAdmin = location.hash === '#admin';
@@ -112,7 +113,10 @@ const ui = {
   blatt: null,        // Detailblatt: 'crew' | 'boss' | 'faehigkeit' | 'premium'
   heldenWahl: false,  // Popup „Helden wechseln“ (Version 43)
   bonusMehr: false,   // alle Bonus-Aufgaben zeigen (Version 45), nur in dieser Sitzung
-  einmal: new Set(),  // Einmal-Effekte für das nächste Zeichnen (Version 46): 'check', 'treffer', 'bonus'
+  einmal: new Set(),  // Einmal-Effekte für das nächste Zeichnen (Version 46): 'check', 'treffer', 'bonus', 'siegel' (48)
+  storyOffen: null,   // Story-Teil, dessen Siegel gerade gebrochen wurde (Version 48): bleibt aufgeklappt
+  erfolgFrisch: null, // Version 49: { heroId, tag } nach „Ja“ in dieser Sitzung → großes Heldenbild bis Einklappen/Verlassen
+  wechselVon: null,   // Version 49: Held vor dem letzten Wechsel (für das Banner beim nächsten Zeichnen)
   xpVon: null,        // XP-Balken vor dem Check in % (Version 46), damit er sichtbar wächst
   schlange: [],       // weitere Einblendungen (Sieg, Level-up, Bewertungen)
   danach: null,       // Bildschirm nach der letzten Einblendung
@@ -250,6 +254,7 @@ function img(platz, text, art, cls = '', alt = '', form = formVon(cls)) {
 }
 
 const ICON = {
+  siegel: '<circle cx="12" cy="11" r="6"/><path d="M12 8v6M9 11h6"/><path d="M8 16l-2 5 3-1 1 3 2-4M16 16l2 5-3-1-1 3-2-4"/>',
   herz: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
   menschen: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 5.5 5"/>',
   ziel: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
@@ -308,6 +313,12 @@ const freiKontext = () => ({
 });
 const regelFrei = r => istFrei(r, freiKontext(), m => console.warn(m), FREI_ZAEHLER);
 const tabAktiv = t => regelFrei(t.frei);
+// Version 50: frisch freigeschaltete Bereiche, bis sie geöffnet oder mit „Später“ bestätigt wurden (spiel.neuGesehen)
+const neuBereiche = () => neuFreigeschaltet(TABS.filter(tabSichtbar), tabAktiv, spiel.neuGesehen);
+function alsGesehen(ids) {
+  if (!ids.length) return;
+  try { setzeSpiel(H.neuGesehen(spiel, ids)); speichere(); } catch (e) { console.warn('Neu für dich:', e.message); }
+}
 // Abfrage für Funktionen außerhalb der Leiste (Notfallkarte, Wochenrunden, Wheel …). Unbekannte Funktion = gesperrt.
 const funktionFrei = id => {
   const f = FUNKTIONEN[id];
@@ -319,13 +330,36 @@ const sperrTextVon = t => t.sperrText ? T(t.sperrText, { stadt: wort('stadt'), b
   : T('tab.gesperrt');
 pruefeFreischaltung({ tabs: TABS, funktionen: FUNKTIONEN, maxTabs: MAX_TABS, zaehler: FREI_ZAEHLER })
   .forEach(m => console.warn('Freischaltung:', m));
+// Neuigkeiten-Punkte (Version 51). Register: daten/neuigkeiten.js. Jede Quelle liefert eine Kennung, solange die
+// Neuigkeit besteht (nur für den aktiven Helden, denn die Startseite zeigt ihn), sonst null.
+const NEU_QUELLEN = {
+  story: () => { const st = story(); const z = I.storyZustaende(st).find(x => x.zustand === 'siegel'); return z ? `${spiel.fokus}:${st.woche}:${z.nr}` : null; },
+  botschaft: () => {
+    const tag = K.tagKey(jetzt());
+    if (H.istGelesen(spiel, spiel.fokus, tag) || K.auswertung(stand, jetzt()).heuteAntwort) return null; // gleiche Regel wie crewKarte()
+    const b = I.botschaft(stand, jetzt(), aktuelleVorlage(), TABELLE, BOTSCHAFTEN, nameVon);
+    return b.text && b.anlass !== 'erster_tag' ? `${spiel.fokus}:${tag}` : null;
+  },
+  gegner: () => { const a = K.auswertung(stand, jetzt()); return a.neuerGegner && (a.siegHeute || a.rundeTag <= 0) ? `${spiel.fokus}:${a.gegner}` : null; },
+  welten: () => (stand.stil.frei && !stand.stil.angeboten ? 'offen' : null)
+};
+pruefeNeuigkeiten(NEUIGKEITEN, Object.keys(NEU_QUELLEN), TABS.map(t => t.screen)).forEach(m => console.warn(m));
+const neuSitzung = new Set(); // Kennungen, die auf ihrem Tab schon offen waren (bis: 'gesehen')
+function neuPunkte() {
+  if (!stand.quest) return [];
+  const p = tabPunkte(NEUIGKEITEN, NEU_QUELLEN, ui.screen, neuSitzung);
+  p.aktuell.filter(x => x.tab === ui.screen).forEach(x => neuSitzung.add(x.kennung));
+  return p.tabs;
+}
+
 function tabLeiste() {
   if (!stand.onboarding.fertig || !TABS.some(t => t.screen === ui.screen)) return '';
   const sichtbar = TABS.filter(tabSichtbar).slice(0, MAX_TABS);
   if (sichtbar.length < 2) return '';
+  const neu = [...neuBereiche(), ...neuPunkte()];
   return `<nav class="tabs" aria-label="Bereiche">${sichtbar.map(t => {
-    const an = ui.screen === t.screen, frei = tabAktiv(t);
-    return `<button class="tab ${an ? 'an' : ''} ${frei ? '' : 'gesperrt'}" data-a="tab" data-id="${t.screen}" ${an ? 'aria-current="page"' : ''} ${frei ? '' : 'aria-disabled="true"'}><span class="tab-ic">${icon(t.icon)}${frei ? '' : icon('schloss', 'ic tab-schloss')}</span><span class="tab-nm">${esc(tabLabel(t))}</span></button>`;
+    const an = ui.screen === t.screen, frei = tabAktiv(t), istNeu = neu.includes(t.screen);
+    return `<button class="tab ${an ? 'an' : ''} ${frei ? '' : 'gesperrt'}${istNeu ? ' neu-tab' : ''}" data-a="tab" data-id="${t.screen}" ${an ? 'aria-current="page"' : ''} ${frei ? '' : 'aria-disabled="true"'} aria-label="${esc(tabLabel(t))}${istNeu ? esc(', ' + T('neu.tab')) : ''}"><span class="tab-ic">${icon(t.icon)}${frei ? '' : icon('schloss', 'ic tab-schloss')}${istNeu ? '<span class="tab-neu" aria-hidden="true"></span>' : ''}</span><span class="tab-nm">${esc(tabLabel(t))}</span></button>`;
   }).join('')}</nav>`;
 }
 
@@ -343,6 +377,8 @@ function baldScreen(t) {
 
 // ---------- Weltenwahl als eigener Moment (Version 42) ----------
 pruefeMomente(MOMENTE).forEach(m => console.warn('Momente:', m));
+const SM = startMomente(START_MOMENTE); // Version 49: Erfolgsbild und Wechsel-Banner
+SM.fehler.forEach(m => console.warn('Start-Momente:', m));
 // Bis zur Wahl: ruhige Karte auf der Startseite. An einem späteren Tag öffnet sich die Weltenwahl einmal von selbst.
 function weltenKarte() {
   if (!stand.stil.frei || stand.stil.angeboten) return '';
@@ -788,9 +824,14 @@ const SCREENS = {
     const datum = jetzt().toLocaleDateString('de-AT', { weekday: 'long', day: 'numeric', month: 'short' });
     const ctx = { v, f, g, a };
     // Version 43: Reihenfolge aus daten/startseite.js; ein kaputter Abschnitt bricht nicht die ganze Seite.
+    const k = klapp();
     const teile = START_IDS.map(id => {
-      try { return START_TEILE[id](ctx); }
-      catch (e) { console.warn(`Startseite: Abschnitt ${id}:`, e.message); return ''; }
+      try { return mitKlappe(id, START_TEILE[id](ctx), ctx, k); }
+      catch (e) {
+        console.warn(`Startseite: Abschnitt ${id}:`, e.message);
+        // Version 55: im Testprofil sichtbar machen (sonst fällt ein fehlender Abschnitt nicht auf, siehe Version 54)
+        return istTest ? `<div class="hinweis test-fehler" role="alert"><span>Testprofil: Abschnitt „${esc(id)}“ konnte nicht angezeigt werden (${esc(e.message)}).</span></div>` : '';
+      }
     }).join('');
     return `<section class="screen start">
       <div class="start-kopf"><span class="datum">${esc(datum)}</span>${einstellungenKnopf()}</div>
@@ -953,7 +994,7 @@ const SCREENS = {
       <div class="inhalt">
         <span class="eyebrow akzent">GESCHICHTE · WOCHE ${st.wocheNr}</span>
         <h1>${esc(st.titel)}</h1>
-        <p class="klein">Jeder Tages-Check öffnet einen neuen Teil. Diese Woche: ${st.frei} von ${st.teile.length}.</p>
+        <p class="klein">${esc(T('story.seite'))} ${esc(T('story.frei', { frei: st.frei, gesamt: st.teile.length }))}.</p>
         <div class="teile">${storyAnsicht()}</div>
       </div>
     </section>`;
@@ -1369,10 +1410,45 @@ function heldenKopfDaten() {
   return { k, ansichten };
 }
 
+// „Neu für dich“ (Version 50): ruhiger Hinweis nach einer Freischaltung statt stiller Änderung der Leiste.
+function neuKarte() {
+  const ids = neuBereiche();
+  if (!ids.length) return '';
+  const tabs = ids.map(id => TABS.find(t => t.screen === id)).filter(Boolean);
+  const namen = tabs.map(tabLabel);
+  return `<div class="karte neu-karte" role="status">
+    <span class="eyebrow akzent">${esc(T('neu.eyebrow'))}</span>
+    <span class="nm gross-nm">${esc(T('neu.titel', { bereiche: namen.join(' · ') }))}</span>
+    ${tabs.map(t => `<div class="neu-zeile"><span class="neu-ic" aria-hidden="true">${icon(t.icon)}</span><span class="spalte"><b>${esc(tabLabel(t))}</b>${t.neuText ? `<span class="klein">${esc(T(t.neuText, { stadt: wort('stadt'), bereich: tabLabel(t) }))}</span>` : ''}</span><button class="btn klein-btn voll" data-a="tab" data-id="${esc(t.screen)}">${esc(T('neu.oeffnen', { bereich: tabLabel(t) }))}</button></div>`).join('')}
+    <button class="link neu-ok" data-a="neu-ok">${esc(T('neu.ok'))}</button>
+  </div>`;
+}
+
+// Erfolgsmoment (Version 49): großes Heldenbild direkt nach „Ja“, einklappbar; danach klein (siehe erfolgGroesse).
+function erfolgHtml(antw) {
+  if (erfolgGroesse(antw, ui.erfolgFrisch, spiel.fokus, K.tagKey(jetzt()), SM.erfolg.an) !== 'gross') return '';
+  const id = spiel.fokus;
+  const name = nameVon(id);
+  return `<figure class="erfolg-bild${ui.einmal.has('check') ? ' neu' : ''}">${img('banner-' + id, name, 'szene', 'cover', '')}<span class="erfolg-verlauf" aria-hidden="true"></span>
+    <figcaption><span class="eyebrow">${esc(T('erfolg.eyebrow'))}</span><span class="erfolg-text">${esc(T('erfolg.text', { held: name }))}</span></figcaption>
+    <button class="erfolg-klein-knopf" data-a="erfolg-klein">${esc(T('erfolg.klein'))}</button></figure>`;
+}
+
+// Wechsel-Banner (Version 49): kurz Bild und Name beim bewussten Heldenwechsel; verschwindet nach SM.wechsel.dauerMs.
+function wechselBannerHtml(h) {
+  if (!ui.einmal.has('wechsel') || !wechselBanner(ui.wechselVon, h.id, spiel.helden.map(x => x.heroId), SM.wechsel.an)) return '';
+  const name = nameVon(h.id);
+  const f = TABELLE.faehigkeiten[h.v.faehigkeit];
+  const zeile = h.x.heuteAntwort ? T('wechsel.erledigt') : T('wechsel.offen', { faehigkeit: f ? f.name : '' });
+  return `<div class="wechsel-banner" role="status" style="--dauer:${SM.wechsel.dauerMs}ms">${img('banner-' + h.id, name, 'szene', 'cover', '')}<span class="erfolg-verlauf" aria-hidden="true"></span>
+    <span class="wechsel-text"><span class="eyebrow">${esc(T('wechsel.eyebrow'))}</span><span class="wechsel-name">${esc(name)}</span><span class="klein">${esc(zeile)}</span></span></div>`;
+}
+
 function heldenkopfHtml() {
   const { k, ansichten } = heldenKopfDaten();
   const h = ansichten.find(x => x.id === k.aktiv);
   if (!h) return '';
+  const banner = wechselBannerHtml(h);
   const name = nameVon(h.id);
   const bereich = bereichName(h.domainId);
   const knopf = k.mitWechsel ? `<button class="wechsel-knopf" data-a="helden-wahl" aria-haspopup="dialog" aria-expanded="${!!ui.heldenWahl}" aria-label="${esc(T('kopf.wechseln'))}${k.offen ? esc(', ' + T('kopf.offen', { n: k.offen })) : ''}">
@@ -1381,7 +1457,7 @@ function heldenkopfHtml() {
   // Version 45: Porträt öffnet die Heldenseite (Detailblatt „crew“), XP-Balken aus der früheren Verbündeten-Karte.
   const x = h.x;
   const xpProzent = x.proLevel > 0 ? Math.round(100 * x.imLevel / x.proLevel) : 0;
-  return `<div class="heldenkopf">
+  return `${banner}<div class="heldenkopf">
     <button class="kopf-portraet" data-a="blatt" data-id="crew" aria-label="${esc(T('kopf.ansehen', { held: name }))}">${img(h.id, name, 'held', 'kopf-bild', '')}<span class="kopf-info" aria-hidden="true">i</span></button>
     <div class="kopf-text"><span class="eyebrow">${esc(T('kopf.aktiv'))}</span><span class="kopf-name">${esc(name)}</span><span class="klein">${esc([bereich, `${wort('stufe')} ${x.level}`].filter(Boolean).join(' · '))}</span>
       <div class="balken xp kopf-xp" role="img" aria-label="${esc(`${x.imLevel} von ${x.proLevel} XP bis ${wort('stufe')} ${x.level + 1}`)}"><i style="width:${xpProzent}%"></i></div></div>
@@ -1424,7 +1500,7 @@ function heldenWahlHtml() {
 
 // Abschnitte der Startseite (Version 43). Reihenfolge und Ein/Aus: daten/startseite.js.
 const START_TEILE = {
-  hinweise: () => `${hinweisBox()}${EW.istOffen(einw) ? einwKarte(false) : ''}${ui.fbDanke ? '<div class="hinweis gut-rand" role="status"><span>Danke für dein Feedback!</span><button class="link" data-a="danke-weg">OK</button></div>' : ''}`,
+  hinweise: () => `${neuKarte()}${hinweisBox()}${EW.istOffen(einw) ? einwKarte(false) : ''}${ui.fbDanke ? '<div class="hinweis gut-rand" role="status"><span>Danke für dein Feedback!</span><button class="link" data-a="danke-weg">OK</button></div>' : ''}`,
   heldenkopf: () => heldenkopfHtml(),
   angebot: () => angebotKarte(),
   botschaft: () => crewKarte(),
@@ -1443,7 +1519,7 @@ const START_TEILE = {
       <span class="eyebrow tat-eyebrow">${esc(T('tat.eyebrow'))}</span>
       <button class="tat-name tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(f.name)} ansehen">${esc(f.name)}</button>
       <p class="tat-plan">${esc(f.wenn)} <b>${esc(T('tat.dann'))}</b> ${esc(f.kurz)}</p>
-      ${antw ? `<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}" role="status">${icon('check')}<span>${antw === 'ja' ? `Heute ${esc(f.verb)}. Stark!` : 'Heute nicht gebraucht. Auch gut.'}</span><button class="link" data-a="check" data-id="">Ändern</button></div>${weiterZuHtml()}`
+      ${antw ? `${erfolgHtml(antw)}<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}" role="status">${erfolgGroesse(antw, ui.erfolgFrisch, spiel.fokus, K.tagKey(jetzt()), SM.erfolg.an) === 'klein' ? img(v.held, nameVon(v.held), 'held', 'erfolg-mini', '') : icon('check')}<span>${antw === 'ja' ? `Heute ${esc(f.verb)}. Stark!` : 'Heute nicht gebraucht. Auch gut.'}</span><button class="link" data-a="check" data-id="">Ändern</button></div>${weiterZuHtml()}`
         : `<p class="tat-frage">${esc(frage)}</p>
       <div class="zwei"><button class="btn voll" data-a="check" data-id="ja">${esc(T('tat.ja'))}</button><button class="btn tat-nein" data-a="check" data-id="nein">${esc(T('tat.nein'))}</button></div>`}
     </div>`;
@@ -1468,6 +1544,19 @@ const START_TEILE = {
   welten: () => weltenKarte(),
   extra: () => extraKarten()
 };
+// Kurzzeilen eingeklappter Abschnitte (Version 52). Neue klappbare Karte = Eintrag hier + `klappbar: true` in den Daten.
+const START_KURZ = {
+  quest: ({ a }) => `<span class="eyebrow akzent">MEINE ${esc(wort('quest').toUpperCase())}</span><span class="nm">${esc(stand.quest.ziel)}</span><span class="klein">${esc([T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }), a.gegnerAnzahl > 1 ? T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr }) : ''].filter(Boolean).join(' · '))}</span>`
+};
+const klapp = () => klappZustand(START_ABSCHNITTE, Object.keys(START_KURZ), merkmal('start_klein'));
+klappZustand(START_ABSCHNITTE, Object.keys(START_KURZ), []).fehler.forEach(m => console.warn(m));
+// Abschnitt mit Klapp-Knopf: klein → Kurzzeile (tippbar zum Aufklappen), offen → normale Karte + „Kleiner“.
+function mitKlappe(id, html, ctx, k) {
+  if (!k.klappbar.includes(id) || !html) return html;
+  if (k.klein.includes(id)) return `<button class="karte klapp-zeile tippbar" data-a="klapp-auf" data-id="${esc(id)}" aria-expanded="false"><span class="spalte">${START_KURZ[id](ctx)}</span><span class="klapp-mehr">${esc(T('klapp.mehr'))}</span></button>`;
+  return `<div class="klapp-rahmen">${html}<button class="link klapp-knopf" data-a="klapp-zu" data-id="${esc(id)}" aria-expanded="true">${esc(T('klapp.kleiner'))}</button></div>`;
+}
+
 const START_IDS = (() => {
   const { ids, fehler } = ordneAbschnitte(START_ABSCHNITTE, Object.keys(START_TEILE));
   if (fehler.length) console.warn(fehler.join('\n'));
@@ -1517,18 +1606,7 @@ function andeutungGesehen(art) {
   trackEvent(art + '_teaser_seen', {});
 }
 
-function storyKarte() {
-  const st = story();
-  const morgen = storyMorgen();
-  if (morgen) andeutungGesehen('story');
-  const sub = st.frei === 0 && !morgen ? 'Der erste Teil wartet nach deinem nächsten Tages-Check.'
-    : morgen ? (morgen.neueGeschichte ? T('story.morgenNeu', { titel: morgen.titelWoche }) : T('story.morgenTeil', { nr: morgen.nr, titel: morgen.titel }))
-    : `${T('story.frei', { frei: st.frei, gesamt: st.teile.length })} · ${T(st.frei < st.teile.length ? 'story.weiter' : 'story.fertig')}`;
-  return `<button class="karte story-karte tippbar" data-a="story-oeffnen" aria-label="Geschichte lesen: ${esc(st.titel)}">
-    <span class="spalte"><span class="eyebrow akzent">GESCHICHTE · WOCHE ${st.wocheNr}${st.neu ? ' · <span class="neu">NEUER TEIL</span>' : ''}</span>
-    <span class="nm gross-nm">${esc(st.titel)}</span><span class="klein">${esc(sub)}</span></span>${icon('buch')}</button>`;
-}
-
+// Bonus-Aufgaben (Version 45). Version 54: wieder eingefügt, war in Version 48 versehentlich entfernt worden.
 function mikroKarte() {
   const liste = mikroListe();
   if (!liste.length) return '';
@@ -1543,12 +1621,48 @@ function mikroKarte() {
   </div>`;
 }
 
-function storyAnsicht(nurNr = null) {
+
+// Story-Karte (Version 48, „Story nur, wenn neu“): groß nur, wenn ein Siegel wartet; sonst eine ruhige Hinweiszeile.
+function storyKarte() {
   const st = story();
-  const teile = nurNr ? st.teile.filter(t => t.nr === nurNr) : st.teile;
-  return teile.map(t => t.frei
-    ? `<article class="teil"><span class="eyebrow">TEIL ${t.nr}</span><h3>${esc(t.titel)}</h3><p>${esc(t.text)}</p></article>`
-    : `<article class="teil gesperrt"><span class="eyebrow">TEIL ${t.nr}</span><h3>${esc(t.titel)}</h3><p class="klein">Wird nach einem weiteren Tages-Check frei.</p></article>`).join('');
+  const siegel = I.storyZustaende(st).find(z => z.zustand === 'siegel');
+  if (siegel) {
+    const teil = st.teile[siegel.nr - 1] || {};
+    andeutungGesehen('story_siegel');
+    return `<button class="karte story-karte story-neu tippbar" data-a="story-oeffnen" aria-label="${esc(T('story.siegel'))}: ${esc(st.titel)}">
+    <span class="siegel-mark" aria-hidden="true">${icon('siegel')}</span>
+    <span class="spalte"><span class="eyebrow akzent">GESCHICHTE · WOCHE ${st.wocheNr} · <span class="neu">NEUER TEIL</span></span>
+    <span class="nm gross-nm">${esc(T('story.siegel'))}</span><span class="story-andeutung">${esc(teil.vorschau || T('story.siegelOhne'))}</span></span>${icon('pfeilRechts')}</button>`;
+  }
+  const morgen = storyMorgen();
+  if (morgen) andeutungGesehen('story');
+  const sub = st.frei === 0 && !morgen ? T('story.hinweisLeer')
+    : morgen ? (morgen.neueGeschichte ? T('story.morgenNeu', { titel: morgen.titelWoche }) : T('story.morgenTeil', { nr: morgen.nr, titel: morgen.vorschau || morgen.titel }))
+    : st.frei >= st.teile.length ? T('story.fertig') : T('story.hinweisGelesen');
+  // Version 55: als Karte im Stil der eingeklappten Quest (vorher eine kleine Zeile, schwer lesbar)
+  return `<button class="karte story-ruhig tippbar" data-a="story-oeffnen" aria-label="Geschichte: ${esc(st.titel)}">${icon('buch')}<span class="spalte"><span class="eyebrow akzent">GESCHICHTE · WOCHE ${st.wocheNr}</span><span class="nm">${esc(st.titel)}</span><span class="klein">${esc(sub)}</span></span><span class="klapp-mehr">${esc(T('story.lesen'))}</span></button>`;
+}
+
+// Story-Seite (Version 48): gelesen eingeklappt, erster ungelesener Teil versiegelt mit Andeutung,
+// nächster noch nicht freier Teil versiegelt, alles Weitere als ein Nebelblock. Zustände: logik/inhalte.js storyZustaende().
+function storyAnsicht() {
+  const st = story();
+  const satzweise = ui.einmal.has('siegel') && !bewegungAus;
+  let nebel = false;
+  return I.storyZustaende(st).map(({ nr, zustand }) => {
+    const t = st.teile[nr - 1] || {};
+    const andeutung = `<p class="andeutung">${esc(t.vorschau || T('story.siegelOhne'))}</p>`;
+    if (zustand === 'gelesen') {
+      const frisch = ui.storyOffen === nr;
+      const text = frisch && satzweise ? I.saetze(t.text).map((x, i) => `<span class="satz" style="--i:${i}">${esc(x)} </span>`).join('') : esc(t.text);
+      return `<details class="teil gelesen${frisch && ui.einmal.has('siegel') ? ' gebrochen' : ''}"${frisch ? ' open' : ''}><summary><span class="eyebrow">TEIL ${nr}</span><h3>${esc(t.titel)}</h3></summary><p>${text}</p></details>`;
+    }
+    if (zustand === 'siegel') return `<article class="teil versiegelt frei-siegel"><span class="eyebrow akzent">TEIL ${nr} · NEU</span>${andeutung}<button class="btn voll siegel-knopf" data-a="story-siegel" data-id="${nr}">${icon('siegel')} ${esc(T('story.siegelBrechen'))}</button></article>`;
+    if (zustand === 'bereit' || zustand === 'wartet') return `<article class="teil versiegelt"><span class="eyebrow">TEIL ${nr}</span>${andeutung}<p class="klein">${esc(T(zustand === 'bereit' ? 'story.bereit' : 'story.wartet'))}</p></article>`;
+    if (nebel) return '';
+    nebel = true;
+    return `<div class="teil nebel" role="note"><span class="nebel-schleier" aria-hidden="true"></span><span class="klein">${esc(T('story.nebel'))}</span></div>`;
+  }).join('');
 }
 
 function mikro(schluessel) {
@@ -1590,7 +1704,10 @@ function extraKarten() {
   }
   if (aktiveTage() >= PREMIUM.ab) {
     if (!ui.premiumGesehen) { ui.premiumGesehen = true; trackEvent('premium_viewed', {}); }
-    teile.push(`<button class="karte premium tippbar" data-a="premium"><span class="stern-klein" aria-hidden="true">${icon('stern')}</span><span class="spalte"><span class="nm">${esc(PREMIUM.titel)}</span><span class="klein">${PREMIUM.punkte.map(esc).join(' · ')}</span><span class="preis">${esc(PREMIUM.preis)}</span></span></button>`);
+    // Version 50: verkleinerbar (Wahl je Gerät in den Analytics-Merkmalen, kein Spielstand)
+    teile.push(merkmal('premium_klein') === true
+      ? `<div class="premium-klein"><button class="premium-zeile" data-a="premium"><span class="stern-mini" aria-hidden="true">${icon('stern')}</span><span>${esc(PREMIUM.titel)} · ${esc(PREMIUM.preis)}</span></button><button class="link" data-a="premium-gross">${esc(T('premium.groesser'))}</button></div>`
+      : `<div class="premium-rahmen"><button class="karte premium tippbar" data-a="premium"><span class="stern-klein" aria-hidden="true">${icon('stern')}</span><span class="spalte"><span class="nm">${esc(PREMIUM.titel)}</span><span class="klein">${PREMIUM.punkte.map(esc).join(' · ')}</span><span class="preis">${esc(PREMIUM.preis)}</span></span></button><button class="premium-kleiner link" data-a="premium-klein">${esc(T('premium.kleiner'))}</button></div>`);
   }
   return teile.join('');
 }
@@ -1633,6 +1750,8 @@ function renderJetzt() {
     letzterScreen = ui.screen;
   }
   bewegungNachZeichnen(auftritt);
+  const banner = app.querySelector('.wechsel-banner');
+  if (banner) setTimeout(() => banner.remove(), SM.wechsel.dauerMs); // Version 49: nur dieses Element, kein Neuzeichnen
   const key = ui.feier ? ui.feier.art + (ui.feier.bewertung || '') : ui.blatt || (ui.heldenWahl ? 'heldenwahl' : null);
   if (key && key !== letztesOverlay) app.querySelector(key === 'heldenwahl' ? '.wahl-zeile.an .wahl-info' : '.feier .cta, .feier .sc')?.focus({ preventScroll: true });
   if (!key && letztesOverlay === 'heldenwahl') app.querySelector('.wechsel-knopf')?.focus({ preventScroll: true });
@@ -1675,6 +1794,8 @@ app.addEventListener('error', e => {
 }, true);
 
 function geheZu(screen) {
+  if (screen !== 'start') ui.erfolgFrisch = null; // Version 49: beim nächsten Öffnen der Startseite klein
+  if (neuBereiche().includes(screen)) { alsGesehen([screen]); trackEvent('unlock_opened', { bereich: screen }); } // Version 50
   if (ui.screen !== screen) {
     trackEvent('screen_leave', { screen: ui.screen });
     trackEvent('screen_enter', { screen });
@@ -1796,6 +1917,8 @@ function check(antwort) {
   try { r = K.tagesCheck(stand, jetzt(), antwort); }
   catch (e) { hinweis = e.message; render(); return; }
   // Version 46: Rückmeldungen nur beim nächsten Zeichnen (Haken zeichnet sich, Segment bricht, XP wächst)
+  // Version 49: großes Heldenbild nur direkt nach dem eigenen „Ja“ (nicht nach Nein oder Rückgängig)
+  ui.erfolgFrisch = antwort === 'ja' ? { heroId: spiel.fokus, tag: K.tagKey(jetzt()) } : null;
   if (antwort) {
     ui.einmal.add('check');
     ui.xpVon = xpVon;
@@ -1936,6 +2059,12 @@ app.addEventListener('click', e => {
     case 'blatt-zu': schliesseBlatt(); break;
     case 'premium': trackEvent('premium_clicked', { preis: PREMIUM.preis }); oeffneBlatt('premium'); break;
     case 'feedback-oeffnen': ui.fb = {}; ui.fbFehler = false; geheZu('feedback'); break;
+    case 'neu-ok': { const ids = neuBereiche(); alsGesehen(ids); trackEvent('unlock_later', { anzahl: ids.length }); render(); break; }
+    case 'klapp-zu': case 'klapp-auf':
+      if (klapp().klappbar.includes(id)) { merke('start_klein', klappUmschalten(merkmal('start_klein'), id, b.dataset.a === 'klapp-zu')); trackEvent(b.dataset.a === 'klapp-zu' ? 'section_collapsed' : 'section_expanded', { abschnitt: id }); }
+      render(); break;
+    case 'premium-klein': merke('premium_klein', true); trackEvent('premium_collapsed', {}); render(); break;
+    case 'premium-gross': merke('premium_klein', false); render(); break;
     case 'feedback-spaeter': merke('feedback_spaeter', K.tagKey(jetzt())); render(); break;
     case 'fb-wahl': { const [k, w] = id.split(':'); ui.fb[k] = w; render(); break; }
     case 'feedback-senden': {
@@ -2028,7 +2157,11 @@ app.addEventListener('click', e => {
       const ausWahl = ui.heldenWahl;
       ui.heldenWahl = false; ui.botschaftOffen = false;
       if (id !== spiel.fokus) {
-        try { setzeSpiel(H.fokusSetzen(spiel, id)); speichere(); trackEvent('hero_focus', { held: id, quelle: ausWahl ? 'wahl' : 'karte' }); }
+        const von = spiel.fokus;
+        try {
+          setzeSpiel(H.fokusSetzen(spiel, id)); speichere(); trackEvent('hero_focus', { held: id, quelle: ausWahl ? 'wahl' : 'karte' });
+          ui.wechselVon = von; ui.einmal.add('wechsel'); ui.erfolgFrisch = null; // Version 49: Banner beim nächsten Zeichnen
+        }
         catch (err) { hinweis = T('kopf.heldFehlt'); console.warn('Fokus:', err.message); }
       }
       render(); app.querySelector('.screen')?.scrollTo?.(0, 0); break;
@@ -2049,7 +2182,20 @@ app.addEventListener('click', e => {
       trackEvent('new_adventure_started', { helden: spiel.helden.length });
       geheZu('ob1'); break;
     case 'angebot-spaeter': setzeSpiel(H.angebotAblehnen(spiel)); speichere(); trackEvent('new_adventure_declined', {}); render(); break;
-    case 'story-oeffnen': { const st = story(); trackEvent('story_opened', { quelle: 'karte' }); storyGelesenBis(st.frei); geheZu('story'); break; }
+    // Version 48: Öffnen der Seite liest nichts mehr; erst „Siegel brechen“ zählt den Teil als gelesen
+    case 'erfolg-klein': ui.erfolgFrisch = null; trackEvent('erfolg_eingeklappt', {}); render(); break;
+    case 'story-oeffnen': trackEvent('story_opened', { quelle: 'karte' }); ui.storyOffen = null; geheZu('story'); break;
+    case 'story-siegel': {
+      const nr = parseInt(id, 10);
+      const z = I.storyZustaende(story()).find(x => x.nr === nr);
+      if (!z || z.zustand !== 'siegel') { console.warn('Siegel: Teil nicht versiegelt', id); render(); break; } // z. B. doppelt getippt oder anderes Gerät war schneller
+      trackEvent('story_opened', { quelle: 'siegel', teil: nr });
+      storyGelesenBis(nr);
+      ui.storyOffen = nr;
+      ui.einmal.add('siegel');
+      render();
+      break;
+    }
     case 'tag': {
       const n = Number(id);
       tagVersatz = n === 0 ? 0 : tagVersatz + n;

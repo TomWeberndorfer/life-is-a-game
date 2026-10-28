@@ -6,6 +6,7 @@
 // stadt/bezirk/stadtname: Heldenstadt (nur Darstellung). Bezirksbilder: Bildplatz `bezirk-<domainId>`, sonst gezeichnete Silhouette.
 // Regel: Kein Stil leiht Bilder eines anderen. Fehlt ein Bild, zeigt die App den Platzhalter des Stils.
 // Archiviert (nur im alten Prototyp): midnight (Mitternachtsgold/Aufgabenplaner), modern, zombie.
+// In der Weltenwahl als gesperrte Kachel nur noch: zombie (Version 53).
 
 export const STIL_REIHENFOLGE = ['fantasy', 'scifi', 'myth', 'cozy', 'monster', 'strasse'];
 
@@ -343,9 +344,8 @@ export const istWaehlbar = id => STIL_WAEHLBAR.includes(id);
 // Version 35: Archivierte Stile aus dem alten Prototyp, NUR als gesperrte Kachel in der Weltenwahl.
 // Kein Eintrag in STILE (keine Farben, Wörter, Bilder, kein Speichern, keine Pflege). Immer gesperrt.
 // Zurückholen = vollständigen Eintrag in STILE anlegen und hier entfernen.
+// Version 53: Mitternachtsgold und Modern auf Wunsch aus der Weltenwahl entfernt (bleiben nur im alten Prototyp).
 export const STIL_ARCHIV_VORSCHAU = [
-  { id: 'midnight', name: 'Mitternachtsgold' },
-  { id: 'modern', name: 'Modern' },
   { id: 'zombie', name: 'Zombie' }
 ].filter(x => !STILE[x.id]); // Schutz: ein zurückgeholter Stil erscheint nie doppelt
 

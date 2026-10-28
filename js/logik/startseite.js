@@ -69,3 +69,112 @@ export function bonusAnsicht(liste, max, mehr = false) {
   const sichtbar = mehr ? alle : alle.slice(0, m);
   return { sichtbar, weitere: alle.length - sichtbar.length, umschaltbar: alle.length > m };
 }
+
+// ---------- Momente der Startseite (Version 49) ----------
+// Gültige Konfiguration; kaputte Felder fallen einzeln auf den Standard zurück. fehler = lesbare Meldungen.
+export const START_MOMENTE_STANDARD = Object.freeze({ erfolg: { an: true }, wechsel: { an: true, dauerMs: 2600 } });
+export function startMomente(cfg) {
+  const c = cfg && typeof cfg === 'object' ? cfg : {};
+  const fehler = [];
+  const an = (wert, wo, std) => { if (typeof wert === 'boolean') return wert; if (wert !== undefined) fehler.push(`${wo}: an muss true oder false sein`); return std; };
+  const e = c.erfolg && typeof c.erfolg === 'object' ? c.erfolg : {};
+  const w = c.wechsel && typeof c.wechsel === 'object' ? c.wechsel : {};
+  const S = START_MOMENTE_STANDARD;
+  let dauerMs = S.wechsel.dauerMs;
+  if (w.dauerMs !== undefined) {
+    if (Number.isFinite(w.dauerMs) && w.dauerMs >= 800 && w.dauerMs <= 8000) dauerMs = Math.round(w.dauerMs);
+    else fehler.push('wechsel.dauerMs muss zwischen 800 und 8000 liegen');
+  }
+  if (!cfg || typeof cfg !== 'object') fehler.push('Start-Momente: keine Konfiguration');
+  return {
+    erfolg: { an: an(e.an, 'erfolg', S.erfolg.an) },
+    wechsel: { an: an(w.an, 'wechsel', S.wechsel.an), dauerMs },
+    fehler
+  };
+}
+
+// Erfolgsmoment: Wie groß erscheint das Heldenbild in der Heldentat-Karte?
+// Groß nur direkt nach dem eigenen „Ja“ in dieser Sitzung (frisch), für diesen Helden und diesen Tag.
+// Danach klein: nach dem Einklappen, beim nächsten Öffnen, auf einem anderen Gerät, am nächsten Tag.
+// Grund (Entscheidung 13): Gewöhnung vermeiden; das große Bild bleibt an die Handlung gekoppelt.
+// frisch = { heroId, tag } oder null. Ergebnis: 'gross' | 'klein' | null (kein „Ja“ heute → kein Bild)
+export function erfolgGroesse(antwort, frisch, heroId, heute, an = true) {
+  if (antwort !== 'ja') return null;
+  if (!an) return 'klein';
+  return frisch && typeof frisch === 'object' && frisch.heroId === heroId && frisch.tag === heute ? 'gross' : 'klein';
+}
+
+// Wechsel-Banner: nur bei einem echten Wechsel zwischen zwei vorhandenen, verschiedenen Helden.
+// Nicht beim App-Start (vorher fehlt), nicht beim Tippen auf den schon aktiven Helden, nicht bei unbekanntem Ziel.
+export function wechselBanner(vorher, nachher, heldenIds, an = true) {
+  if (!an || typeof vorher !== 'string' || !vorher || typeof nachher !== 'string' || !nachher || vorher === nachher) return false;
+  return Array.isArray(heldenIds) && heldenIds.includes(nachher);
+}
+
+// ---------- Neuigkeiten-Punkte an den Tabs (Version 51) ----------
+const BIS = ['erledigt', 'gesehen'];
+// Prüft das Register gegen die bekannten Quellen und Tabs. Liefert lesbare Fehler, wirft nie.
+export function pruefeNeuigkeiten(register, quellenIds, tabIds) {
+  if (!Array.isArray(register)) return ['Neuigkeiten: Register ist keine Liste'];
+  const f = [];
+  const ids = new Set();
+  register.forEach((z, i) => {
+    const wo = `Neuigkeit ${i + 1}${z && z.id ? ` (${z.id})` : ''}`;
+    if (!z || typeof z.id !== 'string' || !z.id) { f.push(`${wo}: id fehlt`); return; }
+    if (ids.has(z.id)) f.push(`${wo}: doppelt`);
+    ids.add(z.id);
+    if (!(quellenIds || []).includes(z.id)) f.push(`${wo}: keine Quelle`);
+    if (!(tabIds || []).includes(z.tab)) f.push(`${wo}: unbekannter Tab „${z.tab}“`);
+    if (!BIS.includes(z.bis)) f.push(`${wo}: bis muss ${BIS.join(' oder ')} sein`);
+  });
+  return f;
+}
+
+// Welche Tabs bekommen einen Punkt?
+// quellen: { id: () => Kennung | null } (Kennung = was genau neu ist, z. B. Woche und Teil; null = nichts Neues)
+// aktiv: gerade offener Tab (bekommt nie einen Punkt)
+// gesehen: Set der Kennungen, die auf ihrem Tab schon zu sehen waren (zählt nur bei bis: 'gesehen')
+// Ergebnis: { tabs: [Tab-IDs, Reihenfolge wie im Register], aktuell: [{ tab, kennung }] } — Kennungen mit
+// vorangestellter id („gegner:…“), damit gleiche Werte verschiedener Quellen nicht kollidieren.
+// Kaputte Zeilen und Quellen, die werfen, zählen als „nichts Neues“.
+export function tabPunkte(register, quellen, aktiv, gesehen) {
+  const schon = gesehen instanceof Set ? gesehen : new Set();
+  const aktuell = [];
+  const tabs = [];
+  for (const z of Array.isArray(register) ? register : []) {
+    if (!z || typeof z.id !== 'string' || typeof z.tab !== 'string' || !BIS.includes(z.bis)) continue;
+    const q = quellen && quellen[z.id];
+    if (typeof q !== 'function') continue;
+    let roh = null;
+    try { roh = q(); } catch (e) { roh = null; }
+    if (typeof roh !== 'string' || !roh) continue;
+    const kennung = `${z.id}:${roh}`;
+    aktuell.push({ tab: z.tab, kennung });
+    if (z.tab === aktiv || (z.bis === 'gesehen' && schon.has(kennung)) || tabs.includes(z.tab)) continue;
+    tabs.push(z.tab);
+  }
+  return { tabs, aktuell };
+}
+
+// ---------- Einklappbare Abschnitte (Version 52) ----------
+// Welche Abschnitte sind gerade klein? liste = START_ABSCHNITTE, mitKurz = IDs mit Kurzzeile in app.js,
+// gespeichert = Liste eingeklappter IDs (je Gerät). Nur klappbare Abschnitte mit Kurzzeile können klein sein;
+// alte oder fremde IDs in `gespeichert` werden ignoriert. Liefert { klappbar: [ids], klein: [ids], fehler }.
+export function klappZustand(liste, mitKurz, gespeichert) {
+  const kurz = new Set(Array.isArray(mitKurz) ? mitKurz : []);
+  const fehler = [];
+  const klappbar = [];
+  for (const z of Array.isArray(liste) ? liste : []) {
+    if (!z || typeof z.id !== 'string' || z.klappbar !== true) continue;
+    if (!kurz.has(z.id)) { fehler.push(`Startseite: „${z.id}“ ist klappbar, hat aber keine Kurzzeile`); continue; }
+    if (!klappbar.includes(z.id)) klappbar.push(z.id);
+  }
+  const g = new Set(Array.isArray(gespeichert) ? gespeichert.filter(x => typeof x === 'string') : []);
+  return { klappbar, klein: klappbar.filter(id => g.has(id)), fehler };
+}
+
+// Neue gespeicherte Liste nach „Kleiner“ (klein = true) bzw. „Mehr zeigen“ (false). Ohne Doppel, nur Strings.
+export function klappUmschalten(gespeichert, id, klein) {
+  const alt = Array.isArray(gespeichert) ? gespeichert.filter(x => typeof x === 'string' && x !== id) : [];
+  return klein ? [...alt, id] : alt;
+}

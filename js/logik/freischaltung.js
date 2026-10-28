@@ -80,3 +80,16 @@ export function pruefeFreischaltung({ tabs, funktionen, maxTabs, zaehler }) {
   }
   return f;
 }
+
+// „Neu für dich“ (Version 50): freigeschaltete Bereiche, deren Freischaltung noch nicht gezeigt wurde.
+// Zählt nur Tabs mit echter Freischaltregel (nicht „immer“/ohne Regel), die gebaut sind (kein `bald`: „kommt bald“
+// wird nicht angekündigt) und gerade frei sind. aktiv(tab) → bool; gesehen = Liste von Tab-IDs.
+// Reihenfolge wie in TABS. Wirft nie; ein Fehler in aktiv() zählt als „nicht frei“.
+export function neuFreigeschaltet(tabs, aktiv, gesehen) {
+  const schon = new Set(Array.isArray(gesehen) ? gesehen : []);
+  return (Array.isArray(tabs) ? tabs : []).filter(t => {
+    if (!t || typeof t.screen !== 'string' || t.bald === true || schon.has(t.screen)) return false;
+    if (!t.frei || t.frei.art === 'immer') return false;
+    try { return !!aktiv(t); } catch (e) { return false; }
+  }).map(t => t.screen);
+}

@@ -8,6 +8,8 @@
 // bewertungen     Kandidaten je Anlass, in Vorrang-Reihenfolge; es kommt nur, was darfFragen() erlaubt
 // storyBeiSieg    'spaeter' = neuer Story-Teil nicht als Popup (bleibt auf der Story-Karte), 'danach' = nach dem Kapitelwechsel
 // levelupBeiSieg  'zeile' = Stufe als Zeile auf der Siegkarte, 'eigen' = eigene Einblendung
+// storyNachCheck  'karte' = neuer Story-Teil nie als Popup, sondern als versiegelter Teil auf der Story-Karte (Version 48,
+//                 Entscheidung Startseite: „Story nur, wenn neu“); 'popup' = wie bis Version 47 (dann gilt storyBeiSieg)
 // weltenwahl      'naechsterBesuch' = Weltenwahl erst an einem späteren Tag als eigener Moment, 'sofort' = direkt nach dem Sieg
 
 export const MOMENTE = {
@@ -17,6 +19,7 @@ export const MOMENTE = {
     sieg: ['hero_score', 'story_curiosity_score'],
     ersterTreffer: ['boss_score']
   },
+  storyNachCheck: 'karte',
   storyBeiSieg: 'spaeter',
   levelupBeiSieg: 'zeile',
   weltenwahl: 'naechsterBesuch'

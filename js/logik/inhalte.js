@@ -98,11 +98,40 @@ export function storyWoche(stand, heute, vorlage, tabelle, stories, nameVon) {
     woche: a.woche,
     wocheNr: a.wocheNr,
     titel: fuelle(geschichte.titel, w),
-    teile: geschichte.teile.map((t, i) => ({ nr: i + 1, titel: fuelle(t.titel, w), text: fuelle(storyText(t, stand.tage[tageRunde[i]]), w), frei: i < frei })),
+    teile: geschichte.teile.map((t, i) => ({ nr: i + 1, titel: fuelle(t.titel, w), vorschau: typeof t.vorschau === 'string' && t.vorschau.trim() ? fuelle(t.vorschau, w) : '', text: fuelle(storyText(t, stand.tage[tageRunde[i]]), w), frei: i < frei })),
     frei,
     gelesen,
     neu: frei > gelesen
   };
+}
+
+// Darstellung der Story-Seite (Version 48, „Geschichten geheimnisvoller“). Reine Ableitung aus storyWoche().
+// Zustand je Teil:
+//   gelesen  schon geöffnet → eingeklappt (Titel sichtbar, Text auf Antippen)
+//   siegel   der erste freie, ungelesene Teil → versiegelt mit Andeutung, „Siegel brechen“ öffnet ihn
+//   bereit   weitere freie, ungelesene Teile (nach Pausen) → versiegelt, öffnen erst nach dem vorigen (Reihenfolge bleibt)
+//   wartet   der erste noch nicht freie Teil → versiegelt mit Andeutung, öffnet sich nach dem nächsten Tages-Check
+//   nebel    alles danach → nur Nebel, kein Titel, keine Andeutung (offener Horizont wie beim Weg)
+// Kaputte Zahlen werden begrenzt: 0 ≤ gelesen ≤ frei ≤ Zahl der Teile.
+export const STORY_ZUSTAENDE = ['gelesen', 'siegel', 'bereit', 'wartet', 'nebel'];
+export function storyZustaende(st) {
+  const teile = st && Array.isArray(st.teile) ? st.teile : [];
+  const ganz = x => (Number.isFinite(x) ? Math.floor(x) : 0);
+  const frei = Math.max(0, Math.min(teile.length, ganz(st && st.frei)));
+  const gelesen = Math.max(0, Math.min(frei, ganz(st && st.gelesen)));
+  return teile.map((t, i) => {
+    const nr = i + 1;
+    const zustand = nr <= gelesen ? 'gelesen' : nr === gelesen + 1 && nr <= frei ? 'siegel' : nr <= frei ? 'bereit' : nr === frei + 1 ? 'wartet' : 'nebel';
+    return { nr, zustand };
+  });
+}
+
+// Text in Sätze zerlegen (für „Satz für Satz“ beim Öffnen). Satzende: . ! ? … auch vor schließenden Anführungszeichen.
+// Leerer oder falscher Text → []; Text ohne Satzzeichen → ein Satz.
+export function saetze(text) {
+  if (typeof text !== 'string' || !text.trim()) return [];
+  const m = text.trim().match(/[^.!?…]+(?:[.!?…]+[“”"‘’'»«]*|$)/g) || [text.trim()];
+  return m.map(x => x.trim()).filter(Boolean);
 }
 
 // Heutige Mikroquests: feste Auswahl je Tag aus dem Pool der Onboarding-Gruppe.

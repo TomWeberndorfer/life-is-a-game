@@ -5,12 +5,13 @@ export const STANDARD = Object.freeze({
   reihenfolge: ['sieg', 'lauf', 'gegner', 'levelup', 'story', 'frage'],
   maxBewertungen: 1,
   bewertungen: { sieg: ['hero_score'], ersterTreffer: ['boss_score'] },
+  storyNachCheck: 'karte',
   storyBeiSieg: 'spaeter',
   levelupBeiSieg: 'zeile',
   weltenwahl: 'naechsterBesuch'
 });
 
-const WERTE = { storyBeiSieg: ['spaeter', 'danach'], levelupBeiSieg: ['zeile', 'eigen'], weltenwahl: ['naechsterBesuch', 'sofort'] };
+const WERTE = { storyNachCheck: ['karte', 'popup'], storyBeiSieg: ['spaeter', 'danach'], levelupBeiSieg: ['zeile', 'eigen'], weltenwahl: ['naechsterBesuch', 'sofort'] };
 
 // Liefert lesbare Fehler, wirft nie.
 export function pruefeMomente(cfg) {
@@ -49,7 +50,8 @@ export function momenteNachCheck(e, cfgRoh, darfFragen = () => true) {
   const sieg = ev.find(x => x && x.typ === 'sieg');
   const lvl = ev.find(x => x && x.typ === 'levelup');
   const frei = ev.some(x => x && x.typ === 'stil_frei');
-  const story = (e && e.story) || {};
+  // Version 48: bei 'karte' kommt der neue Teil nie als Popup (er wartet versiegelt auf der Story-Karte)
+  const story = cfg.storyNachCheck === 'popup' ? ((e && e.story) || {}) : {};
   const m = [];
 
   if (sieg) {
