@@ -7,53 +7,74 @@
 export const BOTSCHAFTEN = [
   { anlass: 'erster_tag', texte: [
     '{Gegner} und ich kennen uns schon lange. Heute zeige ich dir, wie wir {ihn} packen.',
-    'Ein neues Abenteuer! Merk dir nur eines: {faehigkeit}. Den Rest machen wir gemeinsam.'
+    'Ein neues Abenteuer! Merk dir nur eines: {faehigkeit}. Den Rest machen wir gemeinsam.',
+    'Ich kenne {gegner} besser als jeder andere. {Er} wirkt groß, aber {er} hat eine Schwäche. Wir finden sie zusammen.'
   ] },
   { anlass: 'neuer_gegner', texte: [
     'Kaum liegt der eine am Boden, steht schon der Nächste vor der Tür: {Gegner}. Gleiche Fähigkeit, neuer Kampf.',
-    '{Gegner} hat von deinem Sieg gehört und will es jetzt selbst wissen. Wir sind bereit.'
+    '{Gegner} hat von deinem Sieg gehört und will es jetzt selbst wissen. Wir sind bereit.',
+    'Neuer Gegner, alte Stärke: Du weißt jetzt, wie man gewinnt. {Gegner} weiß es noch nicht.',
+    'Ich habe {gegner} beobachtet, während du gekämpft hast. {Er} ist anders, aber nicht stärker.'
   ] },
   { anlass: 'besiegt', texte: [
     '{Gegner} liegt am Boden. Ich habe {ihn} noch nie so schnell fallen sehen. Was machst du mit dem Rest der Woche?',
     'Sieg! Jede weitere Anwendung diese Woche ist pure Stärke, kein Muss.',
-    'Ich habe von dir erzählt, unten im Lager. Sie wollten es kaum glauben.'
+    'Ich habe von dir erzählt, unten im Lager. Sie wollten es kaum glauben.',
+    'Das war kein Glück. Das warst du, Tag für Tag. Heute darfst du stolz sein.'
   ] },
   { anlass: 'fast', texte: [
     'Noch ein einziges Mal {faehigkeit}, dann fällt {gegner}. Ich kann es schon riechen.',
-    '{Gegner} wankt. Ein Treffer noch. Heute vielleicht?'
+    '{Gegner} wankt. Ein Treffer noch. Heute vielleicht?',
+    'Nur noch ein Treffer. {Gegner} weiß das, und {er} wird nervös.',
+    'Ich spüre, dass es kippt. Noch ein Treffer, und {gegner} liegt am Boden.'
   ] },
   { anlass: 'montag_sieg', texte: [
     'Neue Woche, und {gegner} ist zurück. {Er} hat aber gelernt, dass du gefährlich bist.',
-    'Letzte Woche hast du gewonnen. {Er} weiß das. Und du auch.'
+    'Letzte Woche hast du gewonnen. {Er} weiß das. Und du auch.',
+    'Du hast schon einmal gewonnen. Das kann dir niemand mehr nehmen, auch {gegner} nicht.'
   ] },
   { anlass: 'montag', texte: [
     'Neue Woche, neues Glück. {Gegner} hat nur einen Vorsprung, keinen Sieg.',
-    'Was letzte Woche war, zählt nicht mehr gegen dich. Heute fängt eine neue Runde an.'
+    'Was letzte Woche war, zählt nicht mehr gegen dich. Heute fängt eine neue Runde an.',
+    'Neue Runde. Ich habe die Karte schon ausgebreitet. Wo wartet {gegner} diesmal?'
   ] },
   { anlass: 'gestern_ja', texte: [
     'Gestern hast du {faehigkeit} eingesetzt. {Gegner} hat es gespürt, glaub mir.',
     'Das war stark gestern. {n} von {anzahl} diese Woche. Weiter so.',
-    'Ich habe gesehen, wie du gestern gehandelt hast, statt einfach zuzugreifen. So fängt es an.'
+    'Ich habe gesehen, wie du gestern gehandelt hast, statt einfach zuzugreifen. So fängt es an.',
+    'Ein Treffer gestern. {Gegner} hat die Nacht damit verbracht, die Wunde zu lecken.',
+    '{n} von {anzahl}. Jeder Haken macht den nächsten leichter, das ist kein Spruch, das ist Übung.',
+    'Ich habe heute Morgen allen erzählt, was du gestern geschafft hast. Ein bisschen angeben darf ich.',
+    'Gestern hat {faehigkeit} funktioniert. Merk dir, wie es sich angefühlt hat. Das hilft heute.'
   ] },
   { anlass: 'gestern_nein', texte: [
     'Gestern hat sich {gegner} nicht blicken lassen. Ruhige Tage sind auch gute Tage.',
-    'Kein Kampf gestern? Dann hattest du Kraft übrig. Die heben wir auf.'
+    'Kein Kampf gestern? Dann hattest du Kraft übrig. Die heben wir auf.',
+    'Gestern war ruhig. Ich habe die Zeit genutzt und {gegner} ein wenig ausgekundschaftet.',
+    'Nicht jeder Tag braucht einen Kampf. Wichtig ist, dass du hingeschaut hast.',
+    'Ruhe gestern. {Gegner} sammelt vielleicht Kraft. Wir auch.'
   ] },
   { anlass: 'pause', texte: [
     'Schön, dass du wieder da bist. Wir machen einfach da weiter, wo wir waren.',
     'Ich habe die Stellung gehalten. Kein Problem, jeder Held braucht Pausen.',
-    'Ein Tag Pause ist kein Rückschritt. Heute zählt.'
+    'Ein Tag Pause ist kein Rückschritt. Heute zählt.',
+    'Da bist du ja. Ich habe {faehigkeit} schon bereitgelegt. Ein Schritt reicht für heute.'
   ] },
   { anlass: 'sonst', texte: [
     'Kleiner Trick: Je früher du an {faehigkeit} denkst, desto leichter wird es.',
     '{Gegner} mag Müdigkeit und Eile. Wenn du beides bemerkst, sei wachsam.',
     'Du musst nicht perfekt sein. Du musst nur öfter gewinnen als {gegner}.',
     'Sag es dir laut: Ich entscheide, nicht die Gewohnheit.',
-    'Heute ist ein guter Tag für einen Treffer. Ich bin bereit, wenn du es bist.'
+    'Heute ist ein guter Tag für einen Treffer. Ich bin bereit, wenn du es bist.',
+    'Wenn {gegner} heute auftaucht: kurz anhalten, an {faehigkeit} denken, dann handeln.',
+    'Ein kleiner Sieg heute zählt mehr als ein großer Plan für morgen.',
+    'Ich frage mich, wo {gegner} sich heute versteckt. Halt die Augen offen.'
   ] }
 ];
 
 const t = (titel, text) => ({ titel, text });
+// Teil mit zwei Fassungen (Version 47): nach „Ja“ und nach „Heute nicht gebraucht“, dazu eine Andeutung.
+const tv = (titel, vorschau, ja, nein) => ({ titel, vorschau, text: { ja, nein } });
 
 // Woche 1 je Gegner, ab Woche 2 die allgemeine Woche.
 export const STORIES = {
@@ -174,14 +195,42 @@ export const STORIES = {
     t('Der Einwand', 'Der alte Trott erinnert dich an alle Male, die es nicht geklappt hat. Du hörst zu, nickst und gehst weiter. Diesmal ist es anders, weil du klein anfängst.'),
     t('Zwei Wege', 'Am Ende der Woche gibt es vor deinem Haus zwei Wege: die alten Rillen und deinen neuen Pfad. Der alte Trott sitzt noch in seinen Rillen. „Er bleibt dort“, sagt {verbuendeter}. „Du nicht.“')
   ] },
-  _allgemein: { titel: 'Neue Spuren', teile: [
-    t('Neue Spuren', 'Eine neue Woche beginnt, und {verbuendeter} hat Neuigkeiten: {Gegner} wurde wieder gesehen, diesmal an einem Ort, an dem ihr {ihn} nicht erwartet habt. „{Er} probiert neue Wege. Das heißt, die alten funktionieren nicht mehr.“'),
-    t('Der Bote', 'Ein Bote bringt eine Karte mit einem roten Kreis darauf. Darunter steht nur: „Hier ist {er} am stärksten.“ {verbuendeter} faltet sie zusammen. „Wenn wir wissen, wo, wissen wir auch, wann.“'),
-    t('Das Training', '{verbuendeter} lässt dich {faehigkeit} immer wieder üben, bis es sich anfühlt wie Atmen. „Im echten Moment denkt keiner nach. Darum muss es vorher sitzen.“'),
-    t('Die List', '{Gegner} versucht es mit einem Trick und tarnt sich als Belohnung. Fast hättest du es nicht bemerkt. {verbuendeter} legt dir eine Hand auf die Schulter: „Belohnungen kommen nach dem Sieg. Nicht statt ihm.“'),
-    t('Verbündete', 'Andere aus dem Dorf haben von euch gehört und wollen helfen. Eine alte Frau bringt dir ein Amulett: „Es erinnert dich, wenn du es vergisst.“ {verbuendeter} lächelt: „Siehst du? Du bist nicht mehr allein in diesem Kampf.“'),
-    t('Die Ruhe vor dem Sturm', 'Zwei Tage lang zeigt sich {gegner} gar nicht. Zu ruhig. {verbuendeter} schläft mit offenen Augen. „{Er} sammelt Kraft. Und wir auch.“'),
-    t('Das Ende der Woche', 'Am Ende der Woche steht ihr beide auf dem Hügel und seht zurück. Was auch passiert ist: Du bist nicht mehr derselbe Mensch wie am Montag. {verbuendeter} zeigt in die Ferne. „Da drüben wartet etwas, das größer ist als {gegner}.“')
+  // Version 47: erste Woche mit zwei Fassungen je Teil (texte-story-drycha.md, freigegeben 28.10.2026).
+  // text.ja nach „Ja, geschafft“, text.nein nach „Heute nicht gebraucht“; vorschau = Andeutung (Anzeige kommt mit Paket B).
+  drycha: { titel: 'Die verbrannte Linie', teile: [
+    tv('Die verbrannte Linie', 'Vor deiner Tür riecht es nach Rauch.',
+      'Am Morgen ist der Boden vor deiner Tür verkohlt, eine dünne Linie, noch warm. {verbuendeter} kniet sich hin und wird still. „{Gegner}“, kommt es leise. Dann ein langer, prüfender Blick zu dir. „{Er} hat nicht dich gesucht. {Er} hat etwas mitgenommen.“',
+      'Ein ruhiger Tag. Erst am Abend bemerkst du die verkohlte Linie vor deiner Tür, längst kalt. {verbuendeter} fährt mit dem Finger darüber. „{Gegner} war hier, während alles still war. {Er} hat etwas mitgenommen.“'),
+    tv('Das Fehlende', 'Was hat {gegner} mitgenommen?',
+      'Du gehst durchs Haus und suchst. Alles ist da, und doch fehlt etwas. Dann merkst du es: Das Lachen ist leiser geworden, als läge eine Decke darüber. Heute, als du {faehigkeit} gewirkt hast, kam ein kleines Stück davon zurück. {verbuendeter} hat es auch gehört.',
+      'Du gehst durchs Haus und suchst. Alles ist da, und doch fehlt etwas: Das Lachen klingt gedämpft, als käme es aus einem anderen Raum. {verbuendeter} schreibt etwas in ein kleines Buch und klappt es schnell zu, als du hinsiehst.'),
+    tv('Das Zeichen', 'Im Holz der Schwelle steckt etwas.',
+      'Im verkohlten Holz der Schwelle steckt ein Splitter. Darauf ein Zeichen: zwei Flammen, die sich umschlingen. {verbuendeter} wird blass. Dasselbe Zeichen ist in den eigenen Stab geschnitzt, halb abgeschliffen. „Frag nicht“, kommt es leise. „Noch nicht.“',
+      'Beim Fegen der Schwelle findest du einen Splitter mit einem eingebrannten Zeichen: zwei verschlungene Flammen. Als du ihn {verbuendeter} zeigst, verschwindet er wortlos in einer Tasche. Später siehst du dasselbe Zeichen am Stab von {verbuendeter}, fast abgeschliffen.'),
+    tv('Mitten am Tag', '{Gegner} wartet nicht mehr auf die Nacht.',
+      'Diesmal kommt {gegner} am helllichten Tag, in einem müden Moment. Du spürst die Hitze im Nacken, den Funken, der überspringen will. Du bleibst stehen. {faehigkeit}. Der Funke findet nichts, woran er sich festhalten kann. Hinter dir zischt etwas, wütend und überrascht.',
+      'Heute bleibt es still, fast zu still. {verbuendeter} sitzt am Fenster und lässt die Straße nicht aus den Augen. „{Er} hat gemerkt, dass die Nacht nicht reicht. Wenn {er} wiederkommt, dann mitten am Tag. Dann, wenn du müde bist.“'),
+    tv('Worte aus Asche', 'Jemand hat dir eine Nachricht hinterlassen.',
+      'Auf dem Tisch liegt Asche, zu Buchstaben geformt: DU KANNST ES NICHT FÜR IMMER. Dein Herz schlägt schneller. Dann siehst du, dass ein Buchstabe fehlt, weggeweht, als hätte die Asche selbst gezögert. {verbuendeter} liest mit und lächelt zum ersten Mal in dieser Woche. „{Er} hat Angst.“',
+      'Auf dem Tisch liegt Asche, zu Buchstaben geformt: DU KANNST ES NICHT FÜR IMMER. {verbuendeter} betrachtet sie lange. Dann öffnet sich das Fenster, und ein Luftzug trägt die Worte hinaus. Nur das Wort NICHT bleibt liegen, als wollte es nicht gehen.'),
+    tv('Der alte Name', '{verbuendeter} kennt {gegner}. Schon sehr lange.',
+      'Am Feuer bricht {verbuendeter} das Schweigen. „Früher hat {gegner} gewacht, so wie ich. {Er} hat die Menschen beschützt, mit aller Kraft und ohne Pause. Aber Kraft, die nie zur Ruhe kommt, wird irgendwann zu Feuer.“ Du verstehst plötzlich, warum {gegner} ausgerechnet dich gefunden hat.',
+      'In der Nacht hörst du {verbuendeter} im Schlaf einen Namen murmeln. Nicht {gegner}, sondern einen anderen, älteren Namen. Am Morgen fragst du nach. Lange keine Antwort. Dann: „So hieß {er}, bevor das Feuer kam.“'),
+    tv('Der verschlossene Raum', 'Eine Tür in deinem Haus ging die ganze Woche nicht auf.',
+      'Hinter der Tür, die nie klemmte und diese Woche nicht aufging, liegt das Fehlende: das Lachen, die leisen Abende, gesammelt wie Glut in einer Schale. Jeder Tag, an dem du dich gestellt hast, hat ein Stück davon zurückgebracht. Als du die Schale hebst, ist sie warm, nicht heiß. Draußen tritt jemand auf die verbrannte Linie und bleibt stehen. Es ist nicht {gegner}. Die Schritte sind ungeduldiger.',
+      'Die Tür, die die ganze Woche klemmte, gibt nach. Dahinter eine Schale voller Glut, warm, nicht heiß. Weniger, als du gehofft hast, aber genug, um zu sehen: Es kommt zurück. Draußen gehen ungeduldige Schritte auf und ab. Jemand klopft auf eine Uhr.')
+  ] },
+  // Version 40: allgemeine Woche neu geschrieben (gilt für jede Runde ohne eigene Geschichte: ab Woche 2 und für neue
+  // Gegner ohne eigene Story). Darum stilneutral (kein Dorf), ohne Annahme über Sieg oder Rückfall, jeder Teil mit offenem Ende.
+  // {gegner}/{Gegner} nur im Nominativ verwenden; sonst {er}/{ihn} (einen Dativ gibt es nicht).
+  _allgemein: { titel: 'Das Kräftemessen', teile: [
+    t('Die Linie', 'Über Nacht hat jemand eine Linie vor deine Tür gezogen, und dahinter wartet {gegner}. {verbuendeter} geht in die Hocke und betrachtet sie. „{Er} will wissen, wie ernst du es meinst. Sieben Tage, dann wissen wir es beide.“ Als du aufschaust, ist {gegner} verschwunden. Nur die Linie bleibt.'),
+    t('Der schwache Moment', '{verbuendeter} breitet eine Karte deiner Woche aus. „Wann wird es schwer? Wenn du müde bist, hungrig, nach einem langen Tag?“ Du zeigst auf eine Stelle, ohne lange zu überlegen. „Genau dort wartet {er}“, sagt {verbuendeter} und zieht einen Kreis darum. „Und genau dort legen wir {faehigkeit} bereit.“'),
+    t('Hingeschaut', 'Ob heute ein guter Tag war oder nicht: Du hast hingeschaut und es eingetragen. {verbuendeter} nickt zufrieden. „Wer zählt, verliert nicht aus Versehen. Wer zählt, lernt.“ In der Nacht hörst du draußen Schritte, die vor deiner Tür kurz stehen bleiben.'),
+    t('Die Verkleidung', 'Heute kommt {gegner} verkleidet, als kleine Ausnahme mit freundlichem Gesicht: „Nur heute, du hast es dir verdient.“ Fast hättest du genickt. {verbuendeter} hebt eine Augenbraue. „Belohnungen kommen nach dem Sieg, nicht statt ihm.“ Du denkst an {faehigkeit}, und die Maske verrutscht.'),
+    t('Die fremde Spur', 'Hinter dir liegen deine Einträge dieser Woche wie Abdrücke im Boden. Jeder steht für einen Tag, an dem du dich gestellt hast. {verbuendeter} geht sie ab und zählt leise mit. Dann bleibt {verbuendeter} stehen und zeigt nach unten. Eine der Spuren ist nicht deine.'),
+    t('Der Kreis', 'Die fremde Spur führt in einem weiten Kreis um deinen Weg. {Gegner} beobachtet dich und sucht die Lücke. „{Er} wartet auf den einen Tag, an dem du aufgibst“, sagt {verbuendeter}. „Also bekommt {er} keinen. Ein kleiner Schritt reicht, auch an einem schlechten Tag.“'),
+    t('Der Blick zurück', 'Am Ende der Woche steht ihr auf einer Anhöhe und schaut zurück. Was auch passiert ist: {Gegner} kennt dich jetzt ein wenig, aber du kennst {ihn} besser. {verbuendeter} zeigt in die Ferne, wo sich etwas im Dunst bewegt. „Nächste Woche sehen wir, wer mehr dazugelernt hat.“')
   ] }
 };
 
@@ -191,31 +240,43 @@ export const MIKRO = {
   gesundheit: [
     ['g-wasser', 'Ein großes Glas Wasser trinken'], ['g-gehen', '10 Minuten spazieren gehen'], ['g-obst', 'Obst statt Süßem als Snack'],
     ['g-treppe', 'Treppe statt Lift nehmen'], ['g-dehnen', '5 Minuten dehnen'], ['g-mahlzeit', 'Eine Mahlzeit ohne Bildschirm essen'],
-    ['g-bett', 'Vor 23 Uhr im Bett sein'], ['g-regal', 'Beim Einkaufen am Süßigkeitenregal vorbeigehen']
+    ['g-bett', 'Vor 23 Uhr im Bett sein'], ['g-regal', 'Beim Einkaufen am Süßigkeitenregal vorbeigehen'],
+    ['g-gemuese', 'Eine Portion Gemüse mehr essen'], ['g-stehen', 'Beim Telefonieren aufstehen und gehen'], ['g-wasserflasche', 'Eine Wasserflasche griffbereit hinstellen'], ['g-strecken', 'Morgens 2 Minuten strecken'], ['g-langsam', 'Eine Mahlzeit bewusst langsam essen'], ['g-licht', '10 Minuten Tageslicht tanken'], ['g-snack', 'Einen Snack vorbereiten, statt spontan zu kaufen']
+  ],
+  gelassenheit: [
+    ['r-atmen', 'Dreimal lang ausatmen (4 ein, 6 aus)'], ['r-pause', '5 Minuten Pause ohne Handy'],
+    ['r-gut', 'Einen Satz aufschreiben, was heute gut gelaufen ist'], ['r-gefuehl', 'Ein Gefühl von heute beim Namen nennen'],
+    ['r-verschieben', 'Eine Bitte freundlich verschieben statt sofort zusagen'], ['r-langsam', 'Eine Sache bewusst langsam machen'],
+    ['r-gehen', '5 Minuten ohne Ziel spazieren gehen'], ['r-freundlich', 'Einen freundlichen Satz zu dir selbst sagen'],
+    ['r-schultern', 'Die Schultern bewusst sinken lassen'], ['r-nein', 'Einmal freundlich Nein sagen'], ['r-musik', 'Ein ruhiges Lied in Ruhe anhören'], ['r-tee', 'Eine Tasse Tee ohne Ablenkung trinken'], ['r-sorge', 'Eine Sorge aufschreiben und das Blatt weglegen'], ['r-boden', 'Die Füße auf dem Boden spüren, 30 Sekunden'], ['r-lob', 'Dich für eine Kleinigkeit loben']
   ],
   familie: [
     ['f-kompliment', 'Jemandem aus der Familie ein ehrliches Kompliment machen'], ['f-zuhoeren', '10 Minuten ungestört zuhören, ohne Handy'],
     ['f-ueberraschung', 'Eine kleine Überraschung vorbereiten'], ['f-essen', 'Ein gemeinsames Essen ohne Bildschirm'],
     ['f-danke', '„Danke“ für etwas Alltägliches sagen'], ['f-wochenende', 'Eine Idee für das Wochenende vorschlagen'],
-    ['f-foto', 'Ein Foto von einem schönen Moment machen'], ['f-umarmung', 'Eine Umarmung mehr als sonst']
+    ['f-foto', 'Ein Foto von einem schönen Moment machen'], ['f-umarmung', 'Eine Umarmung mehr als sonst'],
+    ['f-spiel', '10 Minuten gemeinsam spielen'], ['f-frage', 'Eine offene Frage stellen: „Was war heute schön?“'], ['f-zettel', 'Einen kleinen Zettel mit einem lieben Satz hinterlassen'], ['f-erinnerung', 'Gemeinsam an einen schönen Moment erinnern'], ['f-helfen', 'Ungefragt bei etwas helfen'], ['f-spaziergang', 'Einen kurzen Spaziergang zu zweit machen'], ['f-lachen', 'Etwas Lustiges teilen']
   ],
   fokus: [
     ['k-wichtig', 'Die wichtigste Aufgabe des Tages aufschreiben'], ['k-25', '25 Minuten an einer Sache arbeiten, Handy weg'],
     ['k-tisch', 'Den Schreibtisch 5 Minuten aufräumen'], ['k-klein', 'Eine aufgeschobene Kleinigkeit erledigen'],
     ['k-stumm', 'Benachrichtigungen für 2 Stunden ausschalten'], ['k-morgen', 'Morgen schon heute planen (3 Punkte)'],
-    ['k-sofort', 'Eine Nachricht sofort beantworten statt später'], ['k-tab', 'Einen Tab schließen, den du nicht brauchst']
+    ['k-sofort', 'Eine Nachricht sofort beantworten statt später'], ['k-tab', 'Einen Tab schließen, den du nicht brauchst'],
+    ['k-glas', 'Ein Glas Wasser holen, bevor du anfängst'], ['k-liste', 'Eine Sache von der Liste streichen'], ['k-pause', 'Nach 25 Minuten bewusst 5 Minuten Pause'], ['k-mail', 'Das Postfach einmal auf null bringen oder 10 Minuten sortieren'], ['k-start', 'Eine Aufgabe 2 Minuten anfangen, nur anfangen'], ['k-ablage', 'Einen Stapel Papiere sortieren'], ['k-ziel', 'Für die nächste Stunde ein einziges Ziel setzen']
   ],
   finanzen: [
     ['n-notieren', 'Eine Ausgabe von heute notieren'], ['n-merkliste', 'Einen Spontankauf auf die Merkliste statt in den Warenkorb'],
     ['n-abo', 'Ein Abo prüfen: Brauche ich es noch?'], ['n-beiseite', 'Einen kleinen Betrag zur Seite legen'],
     ['n-konto', 'Den Kontostand ansehen, ohne zu bewerten'], ['n-mittag', 'Mittagessen mitnehmen statt kaufen'],
-    ['n-preis', 'Einen Preis vergleichen, bevor du kaufst'], ['n-verkaufen', 'Eine Sache verkaufen oder verschenken, die du nicht nutzt']
+    ['n-preis', 'Einen Preis vergleichen, bevor du kaufst'], ['n-verkaufen', 'Eine Sache verkaufen oder verschenken, die du nicht nutzt'],
+    ['n-wunsch', 'Einen Wunsch aufschreiben und eine Woche warten'], ['n-rechnung', 'Eine offene Rechnung prüfen oder bezahlen'], ['n-bar', 'Einen Tag nur mit Bargeld oder festem Betrag auskommen'], ['n-vergleich', 'Einen Vertrag (Strom, Handy) auf einen günstigeren prüfen'], ['n-reste', 'Aus Resten kochen statt einzukaufen'], ['n-newsletter', 'Einen Werbe-Newsletter abbestellen'], ['n-ziel', 'Ein Sparziel mit Betrag aufschreiben']
   ],
   lebensfreude: [
     ['l-spass', '10 Minuten etwas tun, nur weil es Spaß macht'], ['l-lied', 'Ein Lied laut hören'],
     ['l-schreiben', 'Jemandem schreiben, an den du gerade denkst'], ['l-neu', 'Etwas Neues ausprobieren, auch winzig'],
     ['l-draussen', '5 Minuten draußen sein und bewusst atmen'], ['l-drei', 'Drei Dinge aufschreiben, die heute gut waren'],
-    ['l-hobby', 'Ein altes Hobby für 10 Minuten aufnehmen'], ['l-ort', 'Einen Ort besuchen, an dem du länger nicht warst']
+    ['l-hobby', 'Ein altes Hobby für 10 Minuten aufnehmen'], ['l-ort', 'Einen Ort besuchen, an dem du länger nicht warst'],
+    ['l-kaffee', 'Einen Kaffee oder Tee draußen trinken'], ['l-buch', '10 Seiten in einem Buch lesen'], ['l-foto', 'Ein Foto von etwas Schönem machen'], ['l-plan', 'Etwas für das Wochenende planen, das dich freut'], ['l-tanzen', 'Zu einem Lied tanzen, auch allein'], ['l-kochen', 'Etwas Neues kochen oder backen'], ['l-danke', 'Jemandem für etwas danken']
   ]
 };
 export const MIKRO_RUECKFALL = 'lebensfreude';

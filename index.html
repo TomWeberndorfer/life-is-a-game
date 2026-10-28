@@ -226,18 +226,28 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .datum { font: 700 15px var(--fh); color: var(--mute); }
 .start-inhalt { gap: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .questtitel { font: 800 22px/1.2 var(--fh); text-wrap: balance; }
+/* Quest bearbeiten (Version 38) */
+.quest-zeile { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.qe-knopf { flex: none; min-height: 44px; font-size: 15px; color: var(--mute); margin-top: -10px; }
+.qe-knopf .ic { width: 18px; height: 18px; }
+.qe-anzahl .opt.kurz { flex: 1 0 40px; min-width: 40px; padding: 6px 0; }
 .zeile { display: flex; align-items: center; gap: 10px; }
 .mini { font: 700 12px var(--fh); }
-.paar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.karte.figur { padding: 0; overflow: hidden; gap: 0; position: relative; min-width: 0; }
-.figur-bild { width: 100%; height: 124px; object-fit: cover; display: block; }
-.figur-text { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .nm { font: 700 16px var(--fh); overflow-wrap: anywhere; }
 .gross-nm { font-size: 18px; }
 .segmente { display: flex; gap: 3px; margin-top: 2px; }
 .segmente i { flex: 1; height: 8px; border-radius: 2px; background: var(--tief); border: 1px solid var(--gegner); transition: background .4s; }
 .segmente i.voll { background: var(--gegner); }
-.karte.besiegt .figur-bild { filter: grayscale(.85) brightness(.85); }
+.karte.besiegt .duell-bild { filter: grayscale(.85) brightness(.85); }
+/* Duell-Karte (Version 45): breites Gegnerbild mit „Held vs Gegner“, darunter Lebensbalken */
+.karte.duell { padding: 0; gap: 0; overflow: hidden; }
+.duell-bildrahmen { position: relative; display: block; height: 180px; }
+.duell-bild { width: 100%; height: 180px; object-fit: cover; display: block; }
+.duell-titel { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 14px 10px; background: linear-gradient(to top, rgba(12,8,4,.85), rgba(12,8,4,0)); color: #FBF3DE; font: 800 19px/1.2 var(--fh); }
+.duell-vs { color: #E8C46A; }
+.duell-text { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px 12px; }
+.duell-zeile { display: flex; justify-content: space-between; gap: 8px; font: 700 14px var(--fh); }
+.duell .segmente i { height: 10px; }
 .wackelt { animation: wackel .5s ease; }
 @keyframes wackel { 20% { transform: translateX(-6px) rotate(-1deg); } 40% { transform: translateX(5px) rotate(1deg); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
 .xpflug { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); padding: 4px 10px; border-radius: 14px; background: var(--ac); color: var(--auf-ac); font: 800 15px var(--fh); animation: steig 1.2s ease-out forwards; pointer-events: none; }
@@ -412,27 +422,97 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .teil p { margin: 0; font-size: 18px; line-height: 1.55; max-width: 65ch; }
 .teil.gesperrt h3 { color: var(--mute); }
 .story-blatt { align-items: stretch; text-align: left; max-height: 86vh; overflow-y: auto; }
+/* Story-Popup als Kapitelmoment (Version 40): Bild oben, Text erscheint kurz danach; ohne Bewegung bei „Bewegung reduzieren“ */
+.story-moment { padding-top: 0; gap: 14px; }
+.story-bild { position: relative; flex: none; height: 190px; margin: 0 -20px; overflow: hidden; border-radius: 8px 8px 0 0; background: var(--tief); }
+.story-bild img { animation: story-nah 7s ease-out both; }
+.story-bild-verlauf { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, var(--panel) 100%); }
+.story-text { display: flex; flex-direction: column; gap: 8px; margin-top: -28px; position: relative; animation: story-auf .6s .25s ease-out both; }
+.story-text h2 { text-align: left; }
+.story-chip { align-self: flex-start; }
+.story-absatz { font-size: 18px; line-height: 1.55; color: var(--ink) !important; max-width: 65ch; }
+.story-folgt { font: italic 500 16px var(--fi); color: var(--mute) !important; }
+@keyframes story-nah { from { transform: scale(1.08); } to { transform: scale(1); } }
+@keyframes story-auf { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .sr-titel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .start-fuss .version { display: block; margin-top: 6px; font: 600 12px var(--fb); font-style: normal; letter-spacing: .04em; color: var(--mute); opacity: .8; }
 
 
-/* Mehrere Helden: Crew-Leiste, Rampenlicht, weitere Helden, neues Abenteuer */
-.crew-leiste { display: flex; flex-direction: column; gap: 6px; }
-.crew-reihe { display: flex; gap: 6px; }
-.crew-held { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 12px; border: 2px solid transparent; background: none; color: var(--ink); cursor: pointer; text-align: center; }
-.crew-held b { font: 700 13px var(--fh); overflow-wrap: anywhere; }
-.crew-held span { font-size: 12px; }
-.crew-bild { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; border: 3px solid var(--line); box-sizing: border-box; }
-.crew-held.an { background: var(--sel); border-color: var(--ac); }
-.crew-held.an .crew-bild { border-color: var(--ac); }
+/* Heldenkopf und „Helden wechseln“ (Version 43), neues Abenteuer */
+.heldenkopf { display: flex; align-items: center; gap: 12px; }
+.kopf-bild { width: 68px; height: 68px; flex: none; border-radius: 50%; object-fit: cover; border: 3px solid var(--ac); box-sizing: border-box; }
+.kopf-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.kopf-name { font: 800 22px/1.15 var(--fh); color: var(--ink); overflow-wrap: anywhere; }
+.wechsel-knopf { flex: none; min-height: 48px; display: flex; align-items: center; gap: 6px; padding: 6px 10px 6px 8px; border-radius: 24px; border: 2px solid var(--edge); background: var(--panel); color: var(--ink); box-shadow: 0 2px 0 var(--line); cursor: pointer; }
+.wechsel-knopf .ic { width: 16px; height: 16px; stroke-width: 2.6; color: var(--mute); }
+.stapel { display: flex; }
+.stapel-bild { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid var(--panel); box-sizing: border-box; }
+.stapel-bild + .stapel-bild { margin-left: -10px; }
+.offen-zahl { min-width: 20px; padding: 1px 6px; box-sizing: border-box; border-radius: 10px; background: var(--ac); color: var(--auf-ac); font: 700 13px var(--fh); text-align: center; }
+.wahl-zeile { display: flex; align-items: center; gap: 8px; border-radius: 12px; }
+.wahl-zeile.an { background: var(--sel); }
+.wahl-info { flex: 1; min-width: 0; min-height: 60px; display: flex; align-items: center; gap: 12px; padding: 6px 8px; border: 0; border-radius: 12px; background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.wahl-info .spalte { flex: 1; min-width: 0; }
+.wahl-bild { width: 48px; height: 48px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--line); box-sizing: border-box; }
+.wahl-zeile.an .wahl-bild { border-color: var(--ac); }
+.wahl-status { flex: none; font: 700 13px var(--fh); }
+.offen-text { color: var(--gegner); }
 .akzent-text { color: var(--ac); }
-.held-kurz { flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; }
-.held-kurz-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
-.held-kurz-bild { width: 48px; height: 48px; flex: none; border-radius: 8px; object-fit: cover; }
-.held-kurz .nm { font-size: 15px; }
 .schnell { width: 48px; height: 48px; flex: none; border-radius: 50%; border: 2px solid var(--ac); background: var(--panel); color: var(--ac); display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.schnell .ic, .held-kurz .rund-ic .ic { width: 22px; height: 22px; stroke-width: 3; }
+.schnell .ic { width: 22px; height: 22px; stroke-width: 3; }
+/* Heutige Heldentat (Version 44): Kontrastkarte in den Farben des Stils (Grund = Schrift, Schrift = Grund) */
+.heldentat { background: var(--ink); color: var(--panel); border-color: var(--ac); gap: 12px; padding: 18px 16px; }
+.heldentat .eyebrow.tat-eyebrow { color: var(--panel); opacity: .85; }
+.tat-name { padding: 0; border: 0; background: none; color: var(--panel); font: 800 27px/1.12 var(--fh); text-align: left; cursor: pointer; }
+.tat-plan { margin: 0; padding: 10px 12px; border-radius: var(--r); background: rgba(127,127,127,.18); font: 500 16px/1.4 var(--fb); }
+.tat-plan b { font-family: var(--fh); }
+.tat-frage { margin: 0; font: 700 17px/1.35 var(--fb); }
+.heldentat .btn { min-height: 56px; }
+.heldentat .btn.voll { background: var(--panel); color: var(--ink); border-color: var(--panel); box-shadow: 0 3px 0 var(--ac); }
+.heldentat .btn.tat-nein { background: transparent; color: var(--panel); border-color: var(--panel); box-shadow: none; }
+.heldentat .erledigt { background: var(--panel); }
+.tat-woche { display: flex; align-items: center; gap: 6px; font-size: 14px; opacity: .9; }
+.tat-woche i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--panel); box-sizing: border-box; }
+.tat-woche i.voll { background: var(--panel); }
+.tat-woche span { margin-left: 4px; }
+/* Version 45: Porträt-Tipp und XP im Heldenkopf, „Weiter zu …“, Bonus-Umschalter */
+.heldenkopf { position: relative; }
+.kopf-portraet { position: relative; flex: none; padding: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; }
+.kopf-info { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; background: var(--panel); border: 2px solid var(--ac); color: var(--ac); font: italic 700 13px/18px Georgia, serif; text-align: center; box-sizing: border-box; }
+.kopf-xp { flex: none; width: 100%; height: 6px; margin-top: 4px; max-width: 180px; }
+.kopf-flug { top: 4px; left: 34px; }
+.weiter-zu { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 6px 14px 6px 6px; border-radius: 28px; border: 2px solid var(--panel); background: transparent; color: var(--panel); text-align: left; cursor: pointer; font: inherit; }
+.weiter-zu .spalte { flex: 1; min-width: 0; }
+.weiter-zu .klein { color: var(--panel); opacity: .85; }
+.weiter-zu .ic { width: 20px; height: 20px; }
+.weiter-bild { width: 44px; height: 44px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--panel); box-sizing: border-box; }
+.tat-alle { margin: 0; font: 600 15px/1.35 var(--fb); }
+.bonus-mehr { align-self: flex-start; min-height: 44px; }
+/* Bewegung (Version 46). Werte aus js/daten/bewegung.js (--bw-*). Nur Auftritt und Rückmeldung, nie Dauerbewegung. */
+.auftritt { animation: bw-auftritt var(--bw-dauer, 380ms) cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(var(--i, 0) * var(--bw-versatz, 40ms)); }
+@keyframes bw-auftritt { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.heldentat.auftritt { animation-name: bw-betont; animation-duration: calc(var(--bw-dauer, 380ms) * 1.4); }
+@keyframes bw-betont { 0% { opacity: 0; transform: translateY(18px) scale(.96); } 70% { opacity: 1; transform: translateY(0) scale(1.015); } 100% { transform: none; } }
+.kopf-bild.auftritt-ring { animation: bw-ring 650ms cubic-bezier(.2,.8,.3,1) both; }
+@keyframes bw-ring { 0% { transform: scale(.7); box-shadow: 0 0 0 0 var(--ac); } 55% { transform: scale(1.06); box-shadow: 0 0 0 7px transparent; } 100% { transform: none; box-shadow: 0 0 0 0 transparent; } }
+.heldentat .btn { transition: transform .12s ease; }
+.heldentat .btn:active { transform: scale(.95); }
+.erledigt.neu { animation: bw-pop 420ms cubic-bezier(.2,.9,.3,1.3) both; }
+.erledigt.neu .ic path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: bw-haken 420ms 160ms ease-out forwards; }
+@keyframes bw-pop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes bw-haken { to { stroke-dashoffset: 0; } }
+.weiter-zu.neu, .tat-alle.neu { animation: bw-auftritt 380ms 520ms cubic-bezier(.2,.8,.3,1) both; }
+.segmente i.bricht { animation: bw-bricht 700ms ease-out both; }
+@keyframes bw-bricht { 0% { background: var(--gegner); transform: none; } 30% { background: var(--gegner); transform: scale(1.25) rotate(-6deg); } 100% { background: var(--tief); transform: none; } }
+.mikro-zeile.neu { animation: bw-auftritt 300ms cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(var(--i, 0) * 50ms); }
+.duell-bild { animation: bw-zoom var(--bw-zoom, 20s) ease-in-out infinite alternate; transform-origin: 60% 40%; }
+@keyframes bw-zoom { from { transform: scale(1); } to { transform: scale(1.07); } }
+:root[data-bewegung="aus"] .duell-bild { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .auftritt, .kopf-bild.auftritt-ring, .erledigt.neu, .erledigt.neu .ic path, .weiter-zu.neu, .tat-alle.neu, .segmente i.bricht, .mikro-zeile.neu, .duell-bild { animation: none !important; stroke-dashoffset: 0 !important; }
+  .heldentat .btn:active { transform: none; }
+}
 .angebot { border-color: var(--ac); border-style: dashed; }
 .opt.belegt { opacity: .55; cursor: not-allowed; box-shadow: none; }
 .opt.belegt small, .opt small { display: block; font: italic 500 14px var(--fi); color: var(--mute); }
@@ -507,6 +587,33 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .rund-klein { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
 .botschaft-ok { display: block; margin-left: auto; min-height: 32px; font-size: 14px; font-style: normal; }
 
+/* Sieg mit Stufe, Karte „Neue Welten“ (Version 42) */
+.sieg-stufe { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; color: var(--ac) !important; }
+.sieg-stufe .ic { width: 20px; height: 20px; }
+.welten-karte { flex-direction: row; align-items: center; gap: 12px; border-style: dashed; border-color: var(--ac); }
+
+/* Logbuch (Version 41): ruhige Zeitleiste, nur Tage mit Einträgen, „nicht gebraucht“ neutral */
+.lb-seit { margin-top: 4px; }
+.lb-filter { display: flex; flex-wrap: wrap; gap: 8px; }
+.lb-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 14px; border-radius: 20px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); font: 700 14px var(--fh); cursor: pointer; }
+.lb-chip .rund-klein { width: 24px; height: 24px; margin-left: -8px; }
+.lb-chip.an { background: var(--ac); border-color: var(--ac); color: var(--auf-ac); }
+.lb-tag { display: flex; flex-direction: column; gap: 6px; }
+.lb-tag-kopf { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; font: 700 13px var(--fh); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.lb-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lb-eintrag { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px; border-radius: var(--r); background: var(--card); border: 1px solid var(--line); }
+.lb-ic { width: 34px; height: 34px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--panel); border: 1.5px solid var(--line); color: var(--ac); }
+.lb-ic .ic { width: 18px; height: 18px; }
+.lb-eintrag.art-anwendung .lb-ic, .lb-eintrag.art-mikro .lb-ic { color: var(--gut-text); border-color: var(--gut); }
+.lb-eintrag.lb-g-meilensteine { border-color: var(--edge); }
+.lb-eintrag.art-sieg .lb-ic { background: var(--gut); border-color: var(--gut); color: var(--auf-gut); }
+.lb-eintrag.art-nicht .lb-ic { color: var(--mute); }
+.lb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 15px; line-height: 1.35; color: var(--ink); overflow-wrap: anywhere; }
+.lb-text small { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mute); }
+.lb-text small .rund-klein { width: 18px; height: 18px; }
+.lb-xp { flex: none; font: 700 12px var(--fh); letter-spacing: .04em; color: var(--gut-text); }
+.lb-mehr { align-self: center; margin: 4px 0 16px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .xpflug { display: none; }
@@ -515,6 +622,7 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 @media (max-height: 700px) {
   .ob-bild.gross { height: 280px; }
   .boss-bild { height: 200px; }
+  .story-bild { height: 140px; }
 }
 </style>
 <div id="app" aria-live="off"><p style="padding:24px">Life is a Game lädt …</p></div>

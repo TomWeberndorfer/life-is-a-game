@@ -18,6 +18,7 @@ export const STILE = {
     name: 'Fantasy', alt: [], waehlbar: true,
     karte: 'bilder/fantasy/szene.jpg',
     wort: { crew: 'Gefährten', verbuendeter: 'Verbündeter', gegner: 'Gegner', quest: 'Hauptquest', woche: 'Quest der Woche', faehigkeit: 'Fähigkeit', stufe: 'Stufe', sieg: 'besiegt', stadt: 'Stadt', bezirk: 'Bezirk', stadtname: 'Talwacht', kapitel: 'Kapitel' },
+    texte: { 'story.knopf': 'Zurück ins Lager' },
     namen: {},
     bilder: {
       szene: 'bilder/fantasy/szene.jpg',
@@ -56,7 +57,8 @@ export const STILE = {
     name: 'Sci-Fi', alt: [], waehlbar: true,
     karte: 'bilder/scifi/karte.jpg',
     wort: { crew: 'Crew', verbuendeter: 'Copilot', gegner: 'Störsignal', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Protokoll', stufe: 'Rang', sieg: 'neutralisiert', stadt: 'Station', bezirk: 'Sektor', stadtname: 'Station Aurora' },
-    namen: { trogadon: 'Kommandant Trog-7', khara: 'Funkerin Kha-4', fisker: 'Scout Fisk-3', uldini: 'Administrator Uld-1', goldwin: 'Quartiermeister Gold-5', ahren: 'Offizier Ahr-2' },
+    texte: { 'story.knopf': 'Zurück auf die Brücke' },
+    namen: { trogadon: 'Kommandant Trog-7', khara: 'Funkerin Kha-4', fisker: 'Scout Fisk-3', uldini: 'Administrator Uld-1', goldwin: 'Quartiermeister Gold-5', ahren: 'Offizier Ahr-2', jelninolan: 'Bordärztin Jel-9', 'der-erste': 'Pilot Prim-0' },
     bilder: {
       trogadon: 'bilder/scifi/trogadon.jpg', khara: 'bilder/scifi/khara.jpg', fisker: 'bilder/scifi/fisker.jpg',
       uldini: 'bilder/scifi/uldini.jpg', goldwin: 'bilder/scifi/goldwin.jpg', 'der-erste': 'bilder/scifi/der-erste.jpg',
@@ -87,7 +89,8 @@ export const STILE = {
     name: 'Mythologie', alt: [], waehlbar: false,
     karte: 'bilder/myth/szene.jpg',
     wort: { crew: 'Bund', verbuendeter: 'Gefährte', gegner: 'Prüfung', quest: 'Heldenfahrt', woche: 'Prüfung der Woche', faehigkeit: 'Gabe', stufe: 'Rang', sieg: 'bestanden', stadt: 'Polis', bezirk: 'Viertel', stadtname: 'Neu-Ithaka' },
-    namen: { trogadon: 'Trogaides', khara: 'Charis', fisker: 'Fiskeus', uldini: 'Uldinos', goldwin: 'Ploutos', ahren: 'Ahrenos' },
+    texte: { 'story.knopf': 'Zurück ans Feuer' },
+    namen: { trogadon: 'Trogaides', khara: 'Charis', fisker: 'Fiskeus', uldini: 'Uldinos', goldwin: 'Ploutos', ahren: 'Ahrenos', jelninolan: 'Eleia', 'der-erste': 'Protos' },
     bilder: { szene: 'bilder/myth/szene.jpg' },
     pos: {}
   },
@@ -95,7 +98,8 @@ export const STILE = {
     name: 'Cozy', alt: [], waehlbar: false,
     karte: 'bilder/cozy/szene.jpg',
     wort: { crew: 'Nachbarschaft', verbuendeter: 'Nachbar', gegner: 'Sturm', quest: 'Ernteziel', woche: 'Aufgabe der Woche', faehigkeit: 'Werkzeug', stufe: 'Stufe', sieg: 'vorübergezogen', stadt: 'Dorf', bezirk: 'Hof', stadtname: 'Sonnenhang' },
-    namen: { trogadon: 'Trogi', khara: 'Kari', fisker: 'Fiski', uldini: 'Uldi', goldwin: 'Goldi', ahren: 'Ahri' },
+    texte: { 'story.knopf': 'Zurück ins Dorf' },
+    namen: { trogadon: 'Trogi', khara: 'Kari', fisker: 'Fiski', uldini: 'Uldi', goldwin: 'Goldi', ahren: 'Ahri', jelninolan: 'Jelli', 'der-erste': 'Primo' },
     bilder: { szene: 'bilder/cozy/szene.jpg',
       // Kopien aus vorhandenen Bildern desselben Stils (Version 16), einzeln ersetzbar
       'bezirk-health': 'bilder/cozy/bezirk-health.jpg',
@@ -121,6 +125,7 @@ export const STILE = {
     name: 'Monsterjäger', alt: [], waehlbar: false,
     karte: 'bilder/monster/szene.jpg',
     wort: { crew: 'Team', verbuendeter: 'Partner', gegner: 'Monster', quest: 'Hauptauftrag', woche: 'Auftrag der Woche', faehigkeit: 'Attacke', stufe: 'Level', sieg: 'gefangen', stadt: 'Basis', bezirk: 'Zone', stadtname: 'Basislager' },
+    texte: { 'story.knopf': 'Zurück zur Basis' },
     namen: {},
     bilder: {
       szene: 'bilder/monster/szene.jpg',
@@ -144,7 +149,8 @@ export const STILE = {
     name: 'Miami Nights', alt: [], waehlbar: true,
     karte: 'bilder/strasse/szene.jpg',
     wort: { crew: 'Crew', verbuendeter: 'Partner', gegner: 'Rivale', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Move', stufe: 'Rang', sieg: 'erledigt', stadt: 'City', bezirk: 'Block', stadtname: 'Neon City' },
-    namen: { trogadon: 'Tank Trogg', khara: 'Lady Kay', fisker: 'Captain Fisk', uldini: 'Mr. Uld', goldwin: 'Der Quartiermeister', 'der-erste': 'Brick', ahren: 'Party-Ari' },
+    texte: { 'story.knopf': 'Zurück auf die Straße' },
+    namen: { trogadon: 'Tank Trogg', khara: 'Lady Kay', fisker: 'Captain Fisk', uldini: 'Mr. Uld', goldwin: 'Der Quartiermeister', 'der-erste': 'Brick', ahren: 'Party-Ari', jelninolan: 'Doc Jell' },
     bilder: {
       szene: 'bilder/strasse/szene.jpg',
       trogadon: 'bilder/strasse/trogadon.jpg', khara: 'bilder/strasse/khara.jpg', fisker: 'bilder/strasse/fisker.jpg',
@@ -171,8 +177,160 @@ export const STILE = {
 
 // Eigene Bilder aus dem alten Prototyp (Bildspeicher, übernommen am 25.10.2026).
 // Haben Vorrang vor den Dateien. Eintrag: [Adresse, Bildausschnitt]. Zoom aus dem alten Prototyp ist noch nicht übernommen.
-// GitHub-Pages-Fassung: Bilder aus dem claude.ai-Bildspeicher (/_blob/…) sind hier nicht erreichbar → Dateien gelten.
-export const EIGENE_BILDER = {};
+export const EIGENE_BILDER = {
+  'fantasy': {
+    'boss-irrlicht': [
+      'bilder/speicher/1b8ceb8f2dd81ac7bdcc3ca928daa49c.jpg',
+      '50% 30%'
+    ],
+    'banner-jelninolan': [
+      'bilder/speicher/95bf1cb615531ccf3630f974c604cad2.jpg',
+      '50% 16%'
+    ],
+    'boss-aufschieberitis': [
+      'bilder/speicher/c1dd443e93d86e586a93b6429da85034.jpg',
+      '67% 0%'
+    ],
+    'boss-drycha': [
+      'bilder/speicher/745cb5d6bd0dddeb5b2c131cc602f0ce.jpg',
+      '50% 30%'
+    ],
+    'boss-gedankenkarussell': [
+      'bilder/speicher/ed3eb52af7384479c161af7dfc411c11.jpg',
+      '50% 30%'
+    ],
+    'boss-geldfresser': [
+      'bilder/speicher/a1f209cce4291a9325e734c70073cdff.png',
+      '83% 4%'
+    ],
+    'boss-kritiker': [
+      'bilder/speicher/745cb5d6bd0dddeb5b2c131cc602f0ce.jpg',
+      '50% 30%'
+    ],
+    'boss-langeweile': [
+      'bilder/speicher/c1dd443e93d86e586a93b6429da85034.jpg',
+      '50% 30%'
+    ],
+    'boss-murrgrim': [
+      'bilder/speicher/a1f209cce4291a9325e734c70073cdff.png',
+      '50% 30%'
+    ],
+    'jelninolan': [
+      'bilder/speicher/95bf1cb615531ccf3630f974c604cad2.jpg',
+      '50% 30%'
+    ],
+    'story-drycha': [
+      'bilder/speicher/745cb5d6bd0dddeb5b2c131cc602f0ce.jpg',
+      '50% 30%'
+    ],
+    'story-murrgrim': [
+      'bilder/speicher/a1f209cce4291a9325e734c70073cdff.png',
+      '50% 30%'
+    ]
+  },
+  'scifi': {
+    'fisker': [
+      'bilder/speicher/dd7a5d6b429f31f68832c5031a5e11dc.jpg',
+      '8% 6%'
+    ],
+    'trogadon': [
+      'bilder/speicher/89b9d7a746276486a11a8a3c5d4e528a.jpg',
+      '25% 30%'
+    ],
+    'uldini': [
+      'bilder/speicher/66f309b9a91cfe6a76d3ccaa49dda788.jpg',
+      '50% 30%'
+    ],
+    'boss-gaehnor': [
+      'bilder/speicher/a2e6ab4931d482fdd2e50c1bb1acf604.jpg',
+      '50% 30%'
+    ],
+    'boss-hetzra': [
+      'bilder/speicher/4e4fac42824aae558ee4ea64f679d7ce.jpg',
+      '50% 30%'
+    ],
+    'boss-zuckerkobold': [
+      'bilder/speicher/e0d4a312a2ebc46e298792603430701f.jpg',
+      '50% 42%'
+    ],
+    'crew': [
+      'bilder/speicher/1da928a1241011680b45c4c0b204be38.jpg',
+      '50% 30%'
+    ],
+    'banner-jelninolan': [
+      'bilder/speicher/7580b3204eed81e44150c2a2f425560a.jpg',
+      '30% 10%'
+    ],
+    'boss-aufschieberitis': [
+      'bilder/speicher/ffde2fa4fe2f45b435117fb4034a94c4.jpg',
+      '50% 30%'
+    ],
+    'boss-geldfresser': [
+      'bilder/speicher/5d0d682ac84ce96a05e9cf8aca04062a.jpg',
+      '50% 30%'
+    ],
+    'boss-heisshunger': [
+      'bilder/speicher/8b8fafc034dcb5c09c850bd17ac08c64.png',
+      '79% 21%'
+    ],
+    'boss-langeweile': [
+      'bilder/speicher/0cad1c9d34997806c9e26c232ec5331f.png',
+      '87% 0%'
+    ],
+    'boss-leere': [
+      'bilder/speicher/48919425afabf951db3f3689a1db8d8a.jpg',
+      '20% 7%'
+    ],
+    'boss-trott': [
+      'bilder/speicher/4e34ed80f69001b6e5cd0bf54dfcb2f4.png',
+      '100% 0%'
+    ],
+    'jelninolan': [
+      'bilder/speicher/cd3c83e00d957a9aa97e7329abb2222a.jpg',
+      '50% 4%'
+    ]
+  },
+  'cozy': {
+    'ahren': [
+      'bilder/speicher/185fb9a161513b8876515e1d4611c8e9.jpg',
+      '50% 30%'
+    ],
+    'der-erste': [
+      'bilder/speicher/05c5ad3021fcc137c58d260ae9ebf11f.jpg',
+      '50% 30%'
+    ],
+    'fisker': [
+      'bilder/speicher/c2c5a944ba95ae9a4a5bd209d95c653f.jpg',
+      '50% 30%'
+    ],
+    'goldwin': [
+      'bilder/speicher/51934e7ab1bd28de8371075938d3ecd3.jpg',
+      '20% 30%'
+    ],
+    'khara': [
+      'bilder/speicher/81a9e6236371856e323834d22ade3270.jpg',
+      '50% 30%'
+    ],
+    'trogadon': [
+      'bilder/speicher/e9ecfac3648d5f937a3962ab6ba6383e.jpg',
+      '50% 30%'
+    ],
+    'uldini': [
+      'bilder/speicher/bef7429d79289ef87bad5288b628e720.jpg',
+      '50% 30%'
+    ]
+  },
+  'strasse': {
+    'banner-jelninolan': [
+      'bilder/speicher/9b9413c06d9e6f4062317bf35e0db519.jpg',
+      '20% 0%'
+    ],
+    'jelninolan': [
+      'bilder/speicher/c005502b17651a6497d49fec2593832f.jpg',
+      '18% 0%'
+    ]
+  }
+};
 
 // Wählbare Stile in Anzeige-Reihenfolge. Nie leer: ohne wählbaren Stil bleibt Fantasy.
 export const STIL_WAEHLBAR = (() => {

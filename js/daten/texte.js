@@ -17,6 +17,44 @@ export const TEXTE = {
   'bald.titel': '{bereich} ist freigeschaltet',
   'bald.text': 'Dieser Bereich wird gerade gebaut und kommt mit einem der nächsten Updates.',
 
+  // Logbuch (Version 41). Einträge werden aus dem Spielstand abgeleitet; Arten in daten/logbuch-arten.js.
+  'lb.eyebrow': 'DEIN WEG',
+  'lb.intro': 'Alles, was du mit deinen Helden erlebt hast. Auch Tage ohne Anwendung zählen.',
+  'lb.seit': 'Seit {datum}: {n} Einträge',
+  'lb.heute': 'Heute',
+  'lb.gestern': 'Gestern',
+  'lb.filterArt': 'Art',
+  'lb.filterHeld': 'Held',
+  'lb.filter.alle': 'Alles',
+  'lb.filter.erledigt': 'Erledigt',
+  'lb.filter.meilensteine': 'Meilensteine',
+  'lb.alleHelden': 'Alle',
+  'lb.mehr': 'Ältere Einträge zeigen',
+  'lb.leer': 'Für diese Auswahl gibt es noch keine Einträge.',
+  'lb.xp': '+{xp} XP',
+  'lb.start': 'Abenteuer begonnen: {ziel}',
+  'lb.anwendung': '{Verb}',
+  'lb.anwendungDetail': '{faehigkeit}',
+  'lb.nicht': 'Nicht gebraucht',
+  'lb.nichtDetail': 'Auch das zählt als Besuch.',
+  'lb.mikro': '{text}',
+  'lb.mikroOhneText': 'Mikroquest erledigt',
+  'lb.sieg': '{gegner} {sieg}',
+  'lb.kapitel': '{kapitel} {nr} beginnt: {gegner}',
+
+  // Quest bearbeiten (Version 38)
+  'qe.knopf': 'Bearbeiten',
+  'qe.titel': '{quest} bearbeiten',
+  'qe.ziel': 'Dein Ziel',
+  'qe.anzahl': 'Wie oft pro Runde?',
+  'qe.anzahlHilfe': '{faehigkeit} {anzahl}× in 7 Tagen anwenden.',
+  'qe.sofort': 'Gilt sofort, auch für die laufende Runde. Geschafft in dieser Runde: {geschafft}.',
+  'qe.siegHinweis': 'Damit ist das Ziel dieser Runde schon erreicht: {gegner} ist sofort {sieg}.',
+  'qe.festHinweis': 'Held, {faehigkeit} und Gegner kommen aus der Vorlage und lassen sich noch nicht ändern.',
+  'qe.speichern': 'Speichern',
+  'qe.abbrechen': 'Abbrechen',
+  'qe.gespeichert': 'Gespeichert.',
+
   // Stadt
   'stadt.eyebrow': 'DEINE {STADT}',
   'stadt.titel': '{stadtname} entsteht',
@@ -24,6 +62,12 @@ export const TEXTE = {
   'stadt.fuss': 'Bald baut jeder Held seinen {bezirk} aus.',
   'bezirk.entsteht': '{helden} · entsteht',
   'bezirk.unentdeckt': 'unentdeckt',
+
+  // Sieg und Weltenwahl (Version 42)
+  'sieg.stufe': '{held} erreicht {stufe} {nr} · {titel}',
+  'welten.eyebrow': 'FREIGESCHALTET',
+  'welten.titel': 'Neue Welten warten auf dich',
+  'welten.text': 'Wähle, in welcher Welt deine Geschichte weitergeht. Du kannst jederzeit wechseln.',
 
   // Weg der Bosskette und Gegner
   'weg.stand': '{treffer} von {anzahl}',
@@ -61,6 +105,35 @@ export const TEXTE = {
   'entw.legende': 'Anwendungen je Woche ab deinem Start (Ziel {anzahl}×), grün = {gegner} {sieg}.',
   'entw.naechsterTitel': 'Nächster Titel: {titel} ab {stufe} {nr}.',
 
+  // Heldenkopf und „Helden wechseln“ (Version 43)
+  'kopf.aktiv': 'AKTIVER HELD',
+  'kopf.ansehen': '{held} ansehen',
+  'kopf.wechseln': 'Helden wechseln',
+  'kopf.offen': '{n} offen',
+  'kopf.wahlTitel': '{crew}', // Stil-Wort (Gefährten, Crew, Bund …), ohne Artikel wegen Grammatik je Stil
+  'kopf.statusAktiv': 'aktiv',
+  'kopf.statusErledigt': '✓ heute',
+  'kopf.statusOffen': 'Check offen',
+  'kopf.heldFehlt': 'Dieser Held ist nicht mehr in deiner Crew. Lade die Seite neu.',
+
+  // Heutige Heldentat (Version 44). Die Frage selbst steht an der Fähigkeit (vorlagen.js → tagesfrage).
+  'tat.eyebrow': 'HEUTIGE HELDENTAT',
+  'tat.dann': 'Dann:',
+  'tat.frage': 'Hast du heute „{faehigkeit}“ angewendet?',
+  'tat.ja': 'Ja, geschafft',
+  'tat.nein': 'Heute nicht gebraucht',
+  'tat.woche': '{n} von {anzahl} diese Woche',
+  'tat.naechster': 'Nächster offener Check',
+  'tat.weiter': 'Weiter zu {held}',
+  'tat.alleErledigt': 'Alle Helden haben ihre Heldentat für heute erledigt.',
+
+  // Duell-Karte und Bonus (Version 45)
+  'duell.vs': 'vs',
+  'duell.kraft': 'Kraft von {gegner}',
+  'bonus.titel': 'BONUS HEUTE · OPTIONAL',
+  'bonus.mehr': '+ {n} weitere anzeigen',
+  'bonus.weniger': 'Weniger anzeigen',
+
   // Crew-Botschaft und Story-Andeutung
   'botschaft.klein': '{held} hat dir heute etwas gesagt',
   'botschaft.ok': 'OK',
@@ -69,6 +142,11 @@ export const TEXTE = {
   'story.frei': 'Teil {frei} von {gesamt} frei',
   'story.weiter': 'nach dem Tages-Check geht es weiter',
   'story.fertig': 'Woche erzählt',
+  // Story-Popup (Version 40); Knöpfe je Stil überschreibbar (stile.js → texte)
+  'story.teilVon': 'TEIL {nr} VON {gesamt}',
+  'story.folgt': 'Fortsetzung folgt …',
+  'story.knopf': 'Zurück zum Abenteuer',
+  'story.knopfEnde': 'Woche abschließen',
 
   // Einwilligung zur Datenübertragung (Version 28)
   'daten.eyebrow': 'TESTPHASE · DATENSCHUTZ',

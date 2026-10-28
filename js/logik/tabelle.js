@@ -25,7 +25,7 @@ export const assetUrl = id => '/_blob/' + id;
 export function artVon(schluessel) {
   const k = String(schluessel || '');
   if (k.startsWith('boss-')) return 'boss';
-  if (k === 'szene' || k === 'karte' || k.startsWith('bezirk-') || k.startsWith('banner-')) return 'szene';
+  if (k === 'szene' || k === 'karte' || k.startsWith('bezirk-') || k.startsWith('banner-') || k.startsWith('story-')) return 'szene';
   return 'held';
 }
 

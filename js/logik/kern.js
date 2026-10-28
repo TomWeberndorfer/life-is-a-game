@@ -334,8 +334,20 @@ export function tagesCheck(stand, heute, antwort) {
   if (antwort === null) delete s.tage[k];
   else s.tage[k] = antwort;
 
+  const ereignisse = siegPruefen(s, heute);
+  const nachher = auswertung(s, heute);
+  const delta = nachher.xp - vorher.xp;
+  if (delta !== 0) ereignisse.unshift({ typ: 'xp', xp: delta });
+  if (nachher.level > vorher.level) ereignisse.push({ typ: 'levelup', level: nachher.level, titel: nachher.titel });
+  ereignisse.push({ typ: 'besuch', antwort });
+  return { stand: s, ereignisse, vorher, nachher };
+}
+
+// Sieg in der Runde von heute vergeben, wenn das Ziel erreicht ist (ändert s direkt, liefert Ereignisse).
+// Ein Sieg bleibt, auch wenn später rückgängig gemacht wird (keine Strafe, keine doppelte Vergabe).
+function siegPruefen(s, heute) {
+  const k = tagKey(heute);
   const ereignisse = [];
-  // Ein Sieg bleibt, auch wenn später rückgängig gemacht wird (keine Strafe, keine doppelte Vergabe).
   const r = rundeVonTag(s, k);
   if (!r.sieg && r.anwendungen >= s.quest.anzahl) {
     s.siege = [...s.siege, { tag: k, gegner: r.gegner }].sort((a, b) => (a.tag < b.tag ? -1 : 1));
@@ -346,12 +358,39 @@ export function tagesCheck(stand, heute, antwort) {
       ereignisse.push({ typ: 'stil_frei' });
     }
   }
+  return ereignisse;
+}
+
+// ---------- Quest bearbeiten (Version 38) ----------
+// Ziel-Text und Anzahl je Runde ändern. Die neue Anzahl gilt sofort, auch für die laufende Runde
+// (Entscheidung 28.10.2026, Variante „sofort“). Ist das neue Ziel damit schon erreicht, gibt es den Sieg sofort.
+// Tage, Siege und Mikroquests bleiben unverändert. Später: Teilziele mit Arten (siehe todo.md).
+export const ZIEL_MAX = 120, ANZAHL_MIN = 1, ANZAHL_MAX = 7;
+export function questPruefen(eingabe) {
+  const fehler = {};
+  const ziel = typeof (eingabe && eingabe.ziel) === 'string' ? eingabe.ziel.trim() : '';
+  if (!ziel) fehler.ziel = 'Bitte gib ein Ziel ein.';
+  else if (ziel.length > ZIEL_MAX) fehler.ziel = `Höchstens ${ZIEL_MAX} Zeichen.`;
+  const anzahl = Number(eingabe && eingabe.anzahl);
+  if (!Number.isInteger(anzahl) || anzahl < ANZAHL_MIN || anzahl > ANZAHL_MAX) fehler.anzahl = `Bitte eine Zahl von ${ANZAHL_MIN} bis ${ANZAHL_MAX} wählen.`;
+  return { ok: !Object.keys(fehler).length, fehler, werte: { ziel, anzahl } };
+}
+
+export function questBearbeiten(stand, eingabe, heute) {
+  if (!stand || !stand.quest) throw new Error('Es gibt noch keine Quest.');
+  const p = questPruefen(eingabe);
+  if (!p.ok) throw new Error(Object.values(p.fehler).join(' '));
+  const vorher = auswertung(stand, heute);
+  const s = kopie(stand);
+  const geaendert = [];
+  if (s.quest.ziel !== p.werte.ziel) { s.quest.ziel = p.werte.ziel; geaendert.push('ziel'); }
+  if (s.quest.anzahl !== p.werte.anzahl) { s.quest.anzahl = p.werte.anzahl; geaendert.push('anzahl'); }
+  const ereignisse = geaendert.includes('anzahl') ? siegPruefen(s, heute) : [];
   const nachher = auswertung(s, heute);
   const delta = nachher.xp - vorher.xp;
   if (delta !== 0) ereignisse.unshift({ typ: 'xp', xp: delta });
   if (nachher.level > vorher.level) ereignisse.push({ typ: 'levelup', level: nachher.level, titel: nachher.titel });
-  ereignisse.push({ typ: 'besuch', antwort });
-  return { stand: s, ereignisse, vorher, nachher };
+  return { stand: s, geaendert, ereignisse, vorher, nachher };
 }
 
 // ---------- Stil ----------

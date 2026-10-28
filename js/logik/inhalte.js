@@ -70,6 +70,19 @@ export function botschaft(stand, heute, vorlage, tabelle, botschaften, nameVon) 
   return { anlass: an, text: fuelle(eintrag.texte[i], werteFuer(stand, heute, vorlage, tabelle, nameVon)) };
 }
 
+// Text eines Story-Teils (Version 47). `text` ist ein String (eine Fassung) oder { ja, nein }:
+// ja = nach „Ja, geschafft“, nein = nach „Heute nicht gebraucht“. Beide erzählen dieselben Tatsachen.
+// Rückfall: fehlt die Fassung zur Antwort (oder ist der Tag noch offen), gilt `ja`, sonst die erste vorhandene.
+export function storyText(teil, antwort) {
+  const t = teil && teil.text;
+  if (typeof t === 'string') return t;
+  if (!t || typeof t !== 'object') return '';
+  const passt = v => typeof v === 'string' && v.trim();
+  if (passt(t[antwort])) return t[antwort];
+  if (passt(t.ja)) return t.ja;
+  return Object.values(t).find(passt) || '';
+}
+
 // Story der laufenden Woche: Woche 1 je Gegner, danach die allgemeine Woche.
 // Je Tag mit Tages-Check in dieser Woche wird ein Teil frei (höchstens 7).
 export function storyWoche(stand, heute, vorlage, tabelle, stories, nameVon) {
@@ -78,12 +91,14 @@ export function storyWoche(stand, heute, vorlage, tabelle, stories, nameVon) {
   const geschichte = (a.ersteRundeGegner && stories[a.gegner || vorlage.gegner]) || stories._allgemein;
   const w = werteFuer(stand, heute, vorlage, tabelle, nameVon);
   const frei = Math.min(geschichte.teile.length, a.eintraegeWoche);
+  // Teil i wird vom i-ten Eintrag der Runde frei; dessen Antwort wählt die Fassung (Version 47).
+  const tageRunde = Object.keys(stand.tage || {}).filter(t => t >= a.rundeVon && t <= a.heute).sort();
   const gelesen = Math.min(frei, (stand.story && stand.story.gelesen[a.woche]) || 0);
   return {
     woche: a.woche,
     wocheNr: a.wocheNr,
     titel: fuelle(geschichte.titel, w),
-    teile: geschichte.teile.map((t, i) => ({ nr: i + 1, titel: fuelle(t.titel, w), text: fuelle(t.text, w), frei: i < frei })),
+    teile: geschichte.teile.map((t, i) => ({ nr: i + 1, titel: fuelle(t.titel, w), text: fuelle(storyText(t, stand.tage[tageRunde[i]]), w), frei: i < frei })),
     frei,
     gelesen,
     neu: frei > gelesen
@@ -102,6 +117,9 @@ export function mikroHeute(stand, heute, bereich, pools, anzahl, rueckfall) {
   return sortiert.map(({ id, text }) => ({ id, text, erledigt: erledigt.includes(id) }));
 }
 
+// Erlaubte Fassungen eines Story-Teils; `rueckfall` kommt mit Phase D.
+export const FASSUNGEN = ['ja', 'nein'];
+
 // Prüft die Texte auf unbekannte Platzhalter; liefert Fehlertexte.
 export function pruefeTexte(botschaften, stories) {
   const erlaubt = new Set(['verbuendeter', 'faehigkeit', 'ziel', 'n', 'anzahl', 'rest', 'gegner', 'Gegner', 'er', 'Er', 'ihn']);
@@ -110,7 +128,18 @@ export function pruefeTexte(botschaften, stories) {
   for (const b of botschaften) b.texte.forEach((x, i) => pruefe(`${b.anlass}[${i}]`, x));
   for (const [id, s] of Object.entries(stories)) {
     if (s.teile.length !== 7) fehler.push(`${id}: ${s.teile.length} statt 7 Teile`);
-    s.teile.forEach((t, i) => { pruefe(`${id}[${i}]`, t.titel); pruefe(`${id}[${i}]`, t.text); });
+    s.teile.forEach((t, i) => {
+      const wo = `${id}[${i}]`;
+      pruefe(wo, t.titel);
+      if (t.vorschau !== undefined) pruefe(`${wo}.vorschau`, t.vorschau);
+      if (typeof t.text === 'string') { pruefe(wo, t.text); return; }
+      if (!t.text || typeof t.text !== 'object') { fehler.push(`${wo}: kein Text`); return; }
+      if (typeof t.text.ja !== 'string' || !t.text.ja.trim()) fehler.push(`${wo}: Fassung „ja“ fehlt`);
+      for (const [k, v] of Object.entries(t.text)) {
+        if (!FASSUNGEN.includes(k)) fehler.push(`${wo}: unbekannte Fassung „${k}“`);
+        pruefe(`${wo}.${k}`, v);
+      }
+    });
   }
   return fehler;
 }

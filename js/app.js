@@ -5,11 +5,16 @@ import { STILE, STIL_REIHENFOLGE, STIL_WAEHLBAR, STIL_ARCHIV_VORSCHAU, istWaehlb
 import { DOMAIN_RUECKFALL, LEBENSBEREICHE } from './daten/lebensbereiche.js';
 import { SILHOUETTEN } from './daten/stadt.js';
 import { stadtAnsicht, stadtSichtbar, STATUS } from './logik/stadt.js';
-import { hoechsteStufe, istFrei } from './logik/freischaltung.js';
+import { hoechsteStufe, istFrei, pruefeFreischaltung } from './logik/freischaltung.js';
+import { TABS, MAX_TABS, FUNKTIONEN, ZAEHLER as FREI_ZAEHLER } from './daten/freischaltung.js';
 import * as W from './logik/weg.js';
 import { TEXTE } from './daten/texte.js';
 import { text as textAus, pruefeTexte } from './logik/texte.js';
 import { entwicklung } from './logik/entwicklung.js';
+import { logbuchEintraege, logbuchAnsicht, pruefeLogbuchArten } from './logik/logbuch.js';
+import { LOGBUCH_ARTEN, LOGBUCH_FILTER, LOGBUCH_TAGE_JE_SEITE } from './daten/logbuch-arten.js';
+import { momenteNachCheck, weltenwahlFaellig, pruefeMomente } from './logik/momente.js';
+import { MOMENTE } from './daten/momente.js';
 import { erstelleSpeicher } from './speicher.js';
 import { initAnalytics, trackEvent, bewerte, letzteBewertungTag, merke, merkmal, feedback as sendeFeedback, hatFeedback, aktiveTage, analyticsStatus, beiAenderung, verbinde, dbSender, datenCode, formSender } from './analytics.js';
 import * as M from './logik/kennzahlen.js';
@@ -23,8 +28,11 @@ import * as H from './logik/helden.js';
 import { BOTSCHAFTEN, STORIES, MIKRO, MIKRO_JE_TAG, MIKRO_RUECKFALL } from './daten/inhalte.js';
 import * as TB from './logik/tabelle.js';
 import { pflegeHtml, formPos } from './ansicht/pflege.js';
+import { START_ABSCHNITTE, HELDENKOPF, BONUS } from './daten/startseite.js';
+import { BEWEGUNG } from './daten/bewegung.js';
+import { ordneAbschnitte, heldenKopf, tagesfrage, naechsterOffener, bonusAnsicht } from './logik/startseite.js';
 
-export const VERSION = { nr: 36, datum: '27.10.2026 · 16:10' };
+export const VERSION = { nr: 47, datum: '28.10.2026 · 13:35' };
 
 const istTest = location.hash === '#test';
 const istAdmin = location.hash === '#admin';
@@ -50,6 +58,22 @@ function entscheideDaten(stand) {
 
 const app = document.getElementById('app');
 const bewegungAus = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Bewegung (Version 46): Werte aus daten/bewegung.js als CSS-Variablen; ungültige Zahl → Standard.
+const zahl = (v, std, min, max) => (Number.isFinite(v) && v >= min && v <= max ? v : std);
+const BW = {
+  versatz: zahl(BEWEGUNG?.auftritt?.versatzMs, 40, 0, 300),
+  dauer: zahl(BEWEGUNG?.auftritt?.dauerMs, 380, 0, 1500),
+  maxKarten: Math.round(zahl(BEWEGUNG?.auftritt?.maxKarten, 8, 0, 30)),
+  auftritt: !bewegungAus && BEWEGUNG?.auftritt?.aus !== true,
+  zoom: zahl(BEWEGUNG?.atmosphaere?.zoomS, 20, 0, 120)
+};
+{
+  const r = document.documentElement.style;
+  r.setProperty('--bw-versatz', BW.versatz + 'ms');
+  r.setProperty('--bw-dauer', BW.dauer + 'ms');
+  r.setProperty('--bw-zoom', BW.zoom ? BW.zoom + 's' : '0s');
+  if (bewegungAus) document.documentElement.dataset.bewegung = 'aus';
+}
 
 // ---------- Zustand ----------
 
@@ -86,6 +110,10 @@ if (tabFehler.length) console.warn('Vorlagen-Tabelle:', tabFehler);
 const ui = {
   screen: istAdmin ? 'admin' : stand.onboarding.fertig ? 'start' : 'ob1',
   blatt: null,        // Detailblatt: 'crew' | 'boss' | 'faehigkeit' | 'premium'
+  heldenWahl: false,  // Popup „Helden wechseln“ (Version 43)
+  bonusMehr: false,   // alle Bonus-Aufgaben zeigen (Version 45), nur in dieser Sitzung
+  einmal: new Set(),  // Einmal-Effekte für das nächste Zeichnen (Version 46): 'check', 'treffer', 'bonus'
+  xpVon: null,        // XP-Balken vor dem Check in % (Version 46), damit er sichtbar wächst
   schlange: [],       // weitere Einblendungen (Sieg, Level-up, Bewertungen)
   danach: null,       // Bildschirm nach der letzten Einblendung
   fb: {},
@@ -105,7 +133,8 @@ const ui = {
   resetFrage: false,
   analyseSchritt: 0,
   wackeln: false,
-  xpFlug: null
+  xpFlug: null,
+  lb: { held: 'alle', gruppe: 'alle', tage: LOGBUCH_TAGE_JE_SEITE } // Logbuch-Filter (Version 41), nur in dieser Sitzung
 };
 
 function speichere() {
@@ -168,7 +197,7 @@ function bildPlaetze() {
   for (const st of Object.values(STILE)) Object.keys(st.bilder || {}).forEach(k => s.add(k));
   for (const m of Object.values(EIGENE_BILDER)) Object.keys(m).forEach(k => s.add(k));
   Object.keys(TABELLE.helden || {}).forEach(h => { s.add(h); s.add('banner-' + h); });
-  Object.keys(TABELLE.gegner || {}).forEach(g => s.add('boss-' + g));
+  Object.keys(TABELLE.gegner || {}).forEach(g => { s.add('boss-' + g); s.add('story-' + g); }); // story-: optional (Version 40), sonst Bossbild
   return [...s].sort();
 }
 const hatDatei = (stilId, platz) => !!((EIGENE_BILDER[stilId] || {})[platz] || (STILE[stilId] && (STILE[stilId].bilder[platz] || (platz === 'karte' && STILE[stilId].karte))));
@@ -205,9 +234,14 @@ function bildFuer(stilId, platz, art = 'held', form = 'breit') {
   return { src: ph, ph, pos: TB.STANDARD_POS, quelle: 'platzhalter', eingebaut: null };
 }
 const bild = (platz, text, art = 'held', form = 'breit') => bildFuer(stand.stil.aktiv, platz, art, form);
+// Bild für das Story-Popup (Version 40): eigenes Story-Bild des Gegners → Bossbild (mit Platzhalter des Stils) → keins.
+function storyBildPlatz(gid) {
+  if (!gid) return null;
+  return bild('story-' + gid, '', 'szene').quelle !== 'platzhalter' ? 'story-' + gid : 'boss-' + gid;
+}
 
 // Darstellung je CSS-Klasse; Bildstellen mit anderer Form geben `form` beim Aufruf von img() mit.
-const FORM_JE_KLASSE = { rund: 'rund', 'rund-klein': 'rund', 'crew-bild': 'rund', 'mikro-held': 'rund', 'held-kurz-bild': 'quadrat' };
+const FORM_JE_KLASSE = { rund: 'rund', 'rund-klein': 'rund', 'kopf-bild': 'rund', 'stapel-bild': 'rund', 'wahl-bild': 'rund', 'weiter-bild': 'rund', 'mikro-held': 'rund' };
 const formVon = cls => String(cls).split(/\s+/).map(c => FORM_JE_KLASSE[c]).find(Boolean) || 'breit';
 
 function img(platz, text, art, cls = '', alt = '', form = formVon(cls)) {
@@ -220,6 +254,7 @@ const ICON = {
   menschen: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 5.5 5"/>',
   ziel: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
   muenzen: '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/>',
+  welle: '<path d="M3 10c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/><path d="M3 15c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/>',
   sonne: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',
   teller: '<ellipse cx="12" cy="15" rx="9" ry="3.5"/><ellipse cx="12" cy="14.4" rx="5" ry="1.6"/><circle cx="10" cy="11" r="1.6"/><circle cx="13.6" cy="10.4" r="1.4"/>',
   schuh: '<path d="M3 16h18v3H3zM4 16l1-7h5l2 4 7 1.5V16"/>',
@@ -229,6 +264,9 @@ const ICON = {
   liste: '<path d="M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/>',
   zahnrad: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   zurueck: '<path d="M15 5l-7 7 7 7"/>',
+  runter: '<path d="M6 9l6 6 6-6"/>',
+  pfeilRechts: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  stift: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   check: '<path d="M5 12l5 5L20 7"/>',
   stern: '<path d="M12 3l2.4 5 5.6.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.6-.8z"/>',
   kompass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
@@ -258,33 +296,36 @@ function hinweisBox() {
 
 // ---------- Bildschirme ----------
 // ---------- Untere Leiste ----------
-// Tabs als Konfiguration: weitere Tabs (z. B. Logbuch, Wheel) = neue Zeile. Leiste erscheint erst ab 2 sichtbaren Tabs.
-// Version 26: `sichtbar` (in der Leiste gezeigt) und `aktiv` (antippbar) getrennt. Gesperrte Tabs zeigen ein Schloss
-// und beim Antippen `sperrText`, statt zu fehlen → Nutzer sieht von Anfang an, was kommt (Progressive Disclosure bleibt).
-// Version 27: Freischaltung als Regel-Daten (`frei`, siehe logik/freischaltung.js). Höchstens 5 Tabs (Handybreite).
-// `bald: true` = Bereich ist noch nicht gebaut; frei geschaltet zeigt er den Platzhalter-Bildschirm „bald“.
-const TABS = [
-  { screen: 'start', label: () => T('tab.start'), icon: 'haus' },
-  { screen: 'stadt', label: () => wort('stadt'), icon: 'burg', frei: { art: 'sieg' }, sperrText: () => T('tab.stadtGesperrt', { stadt: wort('stadt') }) },
-  { screen: 'logbuch', label: () => T('tab.logbuch'), icon: 'buch', frei: { art: 'stufe', ab: 3 }, bald: true },
-  { screen: 'karte', label: () => T('tab.karte'), icon: 'karte', frei: { art: 'stufe', ab: 4 }, bald: true },
-  { screen: 'gruppe', label: () => T('tab.gruppe'), icon: 'menschen', frei: { art: 'stufe', ab: 4 }, bald: true }
-];
-const MAX_TABS = 5;
+// Tabs und Freischaltung als Daten: daten/freischaltung.js (Version 37, vorher fest hier).
+// Version 26: gesperrte Tabs zeigen ein Schloss und beim Antippen einen Hinweis, statt zu fehlen (Progressive Disclosure).
+// `sichtbar` (optional, Funktion) blendet einen Tab ganz aus; `bald: true` zeigt frei geschaltet den Platzhalter.
+const tabLabel = t => (t.label && typeof t.label.wort === 'string' ? wort(t.label.wort) : T(t.label && t.label.text));
 const tabSichtbar = t => !t.sichtbar || t.sichtbar();
-const freiKontext = () => ({ stufe: hoechsteStufe(spiel, jetzt(), m => console.warn(m)), siege: H.gesamtSiege(spiel) });
-const tabAktiv = t => istFrei(t.frei, freiKontext(), m => console.warn(m));
-const sperrTextVon = t => t.sperrText ? t.sperrText()
-  : t.frei && t.frei.art === 'stufe' ? T('tab.stufeGesperrt', { bereich: t.label(), stufe: wort('stufe'), nr: t.frei.ab })
+const freiKontext = () => ({
+  stufe: hoechsteStufe(spiel, jetzt(), m => console.warn(m)),
+  siege: H.gesamtSiege(spiel),
+  zaehler: { siege: H.gesamtSiege(spiel) } // rueckfaelle: kommt mit Sieg/Rückfall (Phase D), bis dahin 0
+});
+const regelFrei = r => istFrei(r, freiKontext(), m => console.warn(m), FREI_ZAEHLER);
+const tabAktiv = t => regelFrei(t.frei);
+// Abfrage für Funktionen außerhalb der Leiste (Notfallkarte, Wochenrunden, Wheel …). Unbekannte Funktion = gesperrt.
+const funktionFrei = id => {
+  const f = FUNKTIONEN[id];
+  if (!f) { console.warn(`Unbekannte Funktion: ${id}`); return false; }
+  return regelFrei(f.frei);
+};
+const sperrTextVon = t => t.sperrText ? T(t.sperrText, { stadt: wort('stadt'), bereich: tabLabel(t) })
+  : t.frei && t.frei.art === 'stufe' ? T('tab.stufeGesperrt', { bereich: tabLabel(t), stufe: wort('stufe'), nr: t.frei.ab })
   : T('tab.gesperrt');
-if (TABS.length > MAX_TABS) console.warn(`Untere Leiste: ${TABS.length} Tabs, Platz für ${MAX_TABS}.`);
+pruefeFreischaltung({ tabs: TABS, funktionen: FUNKTIONEN, maxTabs: MAX_TABS, zaehler: FREI_ZAEHLER })
+  .forEach(m => console.warn('Freischaltung:', m));
 function tabLeiste() {
   if (!stand.onboarding.fertig || !TABS.some(t => t.screen === ui.screen)) return '';
   const sichtbar = TABS.filter(tabSichtbar).slice(0, MAX_TABS);
   if (sichtbar.length < 2) return '';
   return `<nav class="tabs" aria-label="Bereiche">${sichtbar.map(t => {
     const an = ui.screen === t.screen, frei = tabAktiv(t);
-    return `<button class="tab ${an ? 'an' : ''} ${frei ? '' : 'gesperrt'}" data-a="tab" data-id="${t.screen}" ${an ? 'aria-current="page"' : ''} ${frei ? '' : 'aria-disabled="true"'}><span class="tab-ic">${icon(t.icon)}${frei ? '' : icon('schloss', 'ic tab-schloss')}</span><span class="tab-nm">${esc(t.label())}</span></button>`;
+    return `<button class="tab ${an ? 'an' : ''} ${frei ? '' : 'gesperrt'}" data-a="tab" data-id="${t.screen}" ${an ? 'aria-current="page"' : ''} ${frei ? '' : 'aria-disabled="true"'}><span class="tab-ic">${icon(t.icon)}${frei ? '' : icon('schloss', 'ic tab-schloss')}</span><span class="tab-nm">${esc(tabLabel(t))}</span></button>`;
   }).join('')}</nav>`;
 }
 
@@ -294,10 +335,78 @@ function baldScreen(t) {
       <div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span>${einstellungenKnopf()}</div>
       <div class="inhalt mitte">
         <span class="medaille">${icon(t.icon, 'ic gross')}</span>
-        <h1>${esc(T('bald.titel', { bereich: t.label() }))}</h1>
+        <h1>${esc(T('bald.titel', { bereich: tabLabel(t) }))}</h1>
         <p class="lead">${esc(T('bald.text'))}</p>
       </div>
     </section>`;
+}
+
+// ---------- Weltenwahl als eigener Moment (Version 42) ----------
+pruefeMomente(MOMENTE).forEach(m => console.warn('Momente:', m));
+// Bis zur Wahl: ruhige Karte auf der Startseite. An einem späteren Tag öffnet sich die Weltenwahl einmal von selbst.
+function weltenKarte() {
+  if (!stand.stil.frei || stand.stil.angeboten) return '';
+  return `<button class="karte welten-karte tippbar" data-a="stilwahl">
+      <span class="stern-klein" aria-hidden="true">${icon('stern')}</span>
+      <span class="spalte"><span class="eyebrow akzent">${esc(T('welten.eyebrow'))}</span><span class="nm">${esc(T('welten.titel'))}</span><span class="klein">${esc(T('welten.text'))}</span></span>
+    </button>`;
+}
+let weltenGezeigt = false; // höchstens einmal je Sitzung von selbst
+function pruefeWeltenwahl() {
+  if (weltenGezeigt || ui.feier || ui.screen !== 'start' || !stand.onboarding.fertig) return;
+  let faellig = false;
+  try { faellig = weltenwahlFaellig(spiel, K.tagKey(jetzt()), MOMENTE); } catch (e) { console.warn('Weltenwahl:', e.message); }
+  if (!faellig) return;
+  weltenGezeigt = true;
+  trackEvent('world_choice_offered', {});
+  ui.stilAuswahl = stand.stil.aktiv;
+  geheZu('stilwahl');
+}
+
+// ---------- Logbuch (Version 41) ----------
+// Reine Ansicht über den Spielstand (logik/logbuch.js), Arten und Filter als Daten (daten/logbuch-arten.js).
+pruefeLogbuchArten(LOGBUCH_ARTEN, { texte: TEXTE, filterIds: LOGBUCH_FILTER.map(f => f.id) }).forEach(m => console.warn('Logbuch:', m));
+const MIKRO_TEXTE = Object.fromEntries(Object.values(MIKRO).flat().filter(x => Array.isArray(x)).map(([id, t]) => [id, t]));
+const lbWarn = m => console.warn(m);
+const vorlageVonHeld = hid => { const h = H.heldVon(spiel, hid); return h && TABELLE.vorlagen.find(z => z.id === h.quest.vorlageId); };
+const gegnerName = id => (TABELLE.gegner[id] && TABELLE.gegner[id].name) || wort('gegner');
+function lbTagTitel(tag) {
+  const heute = K.tagKey(jetzt());
+  if (tag === heute) return T('lb.heute');
+  const g = K.ausTagKey(heute); g.setDate(g.getDate() - 1);
+  return tag === K.tagKey(g) ? T('lb.gestern') : kurzDatum(tag);
+}
+// Titel und optionale zweite Zeile eines Eintrags (Texte aus dem Register, Wörter aus dem Stil)
+const gross = t => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+function lbText(e) {
+  const d = e.daten || {};
+  switch (e.art) {
+    case 'anwendung': {
+      const v = vorlageVonHeld(e.heroId); const f = v && TABELLE.faehigkeiten[v.faehigkeit];
+      return { titel: T('lb.anwendung', { Verb: gross(f ? f.verb : wort('faehigkeit')) }), detail: f ? T('lb.anwendungDetail', { faehigkeit: f.name }) : '' };
+    }
+    case 'nicht': return { titel: T('lb.nicht'), detail: T('lb.nichtDetail') };
+    case 'mikro': return { titel: d.text ? T('lb.mikro', { text: d.text }) : T('lb.mikroOhneText'), detail: '' };
+    case 'sieg': return { titel: T('lb.sieg', { gegner: gegnerName(d.gegner), sieg: wort('sieg') }), detail: '' };
+    case 'kapitel': return { titel: T('lb.kapitel', { kapitel: wort('kapitel'), nr: d.nr, gegner: gegnerName(d.gegner) }), detail: '' };
+    case 'start': return { titel: T('lb.start', { ziel: d.ziel || '' }), detail: '' };
+    default: return { titel: T(LOGBUCH_ARTEN[e.art].text, d), detail: '' };
+  }
+}
+function logbuchDaten() {
+  try { return logbuchAnsicht(logbuchEintraege(spiel, jetzt(), { arten: LOGBUCH_ARTEN, mikroTexte: MIKRO_TEXTE, warn: lbWarn }), LOGBUCH_ARTEN, ui.lb, LOGBUCH_TAGE_JE_SEITE); }
+  catch (e) { console.warn('Logbuch:', e.message); return null; }
+}
+const lbChip = (aktion, id, label, an) => `<button class="lb-chip ${an ? 'an' : ''}" data-a="${aktion}" data-id="${esc(id)}" aria-pressed="${an}">${label}</button>`;
+function lbZeile(e, mehrereHelden) {
+  const art = LOGBUCH_ARTEN[e.art];
+  const t = lbText(e);
+  const bildTeil = mehrereHelden ? img(e.heroId, nameVon(e.heroId), 'held', 'rund-klein', '') : '';
+  return `<li class="lb-eintrag lb-g-${esc(art.gruppe)} art-${esc(e.art)}">
+      <span class="lb-ic" aria-hidden="true">${icon(art.icon)}</span>
+      <span class="lb-text">${esc(t.titel)}${t.detail || mehrereHelden ? `<small>${bildTeil}${esc([mehrereHelden ? nameVon(e.heroId) : '', t.detail].filter(Boolean).join(' · '))}</small>` : ''}</span>
+      ${e.xp ? `<span class="lb-xp">${esc(T('lb.xp', { xp: e.xp }))}</span>` : ''}
+    </li>`;
 }
 
 // Bezirksbild: eigenes Bild → Datei des Stils → gezeichnete Silhouette (kein Leihen aus anderen Stilen)
@@ -479,6 +588,36 @@ const SCREENS = {
     </section>`;
   },
 
+  logbuch() {
+    const tab = TABS.find(t => t.screen === 'logbuch');
+    const v = logbuchDaten();
+    if (v && v.korrigiert.length) ui.lb = { ...ui.lb, ...v.filter }; // unbekannter Filter → „Alles“
+    const mehrere = spiel.helden.length > 1;
+    const kopfHtml = `<div class="start-kopf"><span class="datum">${esc(kurzDatum(K.tagKey(jetzt())))}</span>${einstellungenKnopf()}</div>`;
+    if (!v) return `<section class="screen logbuch">${kopfHtml}<div class="inhalt"><h1>${esc(tab ? tabLabel(tab) : 'Logbuch')}</h1><p class="lead">${esc(T('lb.leer'))}</p></div></section>`;
+    return `<section class="screen logbuch">
+      ${kopfHtml}
+      <div class="inhalt start-inhalt">
+        <div><span class="eyebrow">${esc(T('lb.eyebrow'))}</span>
+        <h1>${esc(tab ? tabLabel(tab) : 'Logbuch')}</h1>
+        <p class="klein">${esc(T('lb.intro'))}</p>
+        ${v.seit ? `<p class="klein lb-seit">${esc(T('lb.seit', { datum: kurzDatum(v.seit), n: v.gesamt }))}</p>` : ''}</div>
+        <div class="lb-filter" role="group" aria-label="${esc(T('lb.filterArt'))}">
+          ${LOGBUCH_FILTER.map(f => lbChip('lb-gruppe', f.id, esc(T(f.text)), v.filter.gruppe === f.id)).join('')}
+        </div>
+        ${mehrere ? `<div class="lb-filter" role="group" aria-label="${esc(T('lb.filterHeld'))}">
+          ${lbChip('lb-held', 'alle', esc(T('lb.alleHelden')), v.filter.held === 'alle')}
+          ${spiel.helden.map(h => lbChip('lb-held', h.heroId, `${img(h.heroId, nameVon(h.heroId), 'held', 'rund-klein', '')}${esc(nameVon(h.heroId))}`, v.filter.held === h.heroId)).join('')}
+        </div>` : ''}
+        ${v.tage.length ? v.tage.map(t => `<section class="lb-tag" aria-label="${esc(lbTagTitel(t.tag))}">
+            <h2 class="lb-tag-kopf"><span>${esc(lbTagTitel(t.tag))}</span>${t.xp ? `<span class="lb-xp">${esc(T('lb.xp', { xp: t.xp }))}</span>` : ''}</h2>
+            <ul class="lb-liste">${t.eintraege.map(e => lbZeile(e, mehrere && v.filter.held === 'alle')).join('')}</ul>
+          </section>`).join('') : `<p class="klein mitte-text">${esc(T('lb.leer'))}</p>`}
+        ${v.mehr ? `<button class="btn lb-mehr" data-a="lb-mehr">${esc(T('lb.mehr'))}</button>` : ''}
+      </div>
+    </section>`;
+  },
+
   stadt() {
     if (!stadtSichtbar(spiel)) { ui.screen = 'start'; return SCREENS.start(); }
     let bezirke;
@@ -647,57 +786,46 @@ const SCREENS = {
     const g = TABELLE.gegner[v.gegner];
     const a = K.auswertung(stand, jetzt());
     const datum = jetzt().toLocaleDateString('de-AT', { weekday: 'long', day: 'numeric', month: 'short' });
-    const antw = a.heuteAntwort;
+    const ctx = { v, f, g, a };
+    // Version 43: Reihenfolge aus daten/startseite.js; ein kaputter Abschnitt bricht nicht die ganze Seite.
+    const teile = START_IDS.map(id => {
+      try { return START_TEILE[id](ctx); }
+      catch (e) { console.warn(`Startseite: Abschnitt ${id}:`, e.message); return ''; }
+    }).join('');
     return `<section class="screen start">
       <div class="start-kopf"><span class="datum">${esc(datum)}</span>${einstellungenKnopf()}</div>
-      <div class="inhalt start-inhalt">
-        ${hinweisBox()}
-        ${EW.istOffen(einw) ? einwKarte(false) : ''}
-        ${ui.fbDanke ? '<div class="hinweis gut-rand" role="status"><span>Danke für dein Feedback!</span><button class="link" data-a="danke-weg">OK</button></div>' : ''}
-        ${crewLeiste()}
-        ${angebotKarte()}
-        ${crewKarte()}
-        <div class="karte haupt">
-          <span class="eyebrow akzent">${spiel.helden.length > 1 ? `IM RAMPENLICHT · ${esc(nameVon(v.held).toUpperCase())}` : `MEINE ${esc(wort('quest').toUpperCase())}`}</span>
-          <span class="questtitel">${esc(stand.quest.ziel)}</span>
-          ${wegHtml(a, v, g)}
-          ${lebenZeile(v)}
-        </div>
-        <div class="paar">
-          <button class="karte figur tippbar" data-a="blatt" data-id="crew" aria-label="${esc(nameVon(v.held))} ansehen">
-            ${img(v.held, nameVon(v.held), 'held', 'figur-bild', nameVon(v.held))}
-            <div class="figur-text"><span class="eyebrow gut-text">${esc(wort('verbuendeter').toUpperCase())}</span><span class="nm">${esc(nameVon(v.held))}</span><span class="klein">${esc(wort('stufe'))} ${a.level} · ${a.imLevel} / ${a.proLevel} XP</span>
-            <div class="balken xp" aria-hidden="true"><i style="width:${Math.round(100 * a.imLevel / a.proLevel)}%"></i></div></div>
-            ${ui.xpFlug ? `<span class="xpflug" aria-hidden="true">${ui.xpFlug > 0 ? '+' : ''}${ui.xpFlug} XP</span>` : ''}
-          </button>
-          <button data-a="blatt" data-id="boss" aria-label="${esc(g.name)} ansehen" class="karte figur tippbar ${ui.wackeln ? 'wackelt' : ''} ${a.bossKraft === 0 ? 'besiegt' : ''}">
-            ${img('boss-' + v.gegner, g.name, 'boss', 'figur-bild', g.name)}
-            <div class="figur-text"><span class="eyebrow akzent">${esc(wort('gegner').toUpperCase())}</span><span class="nm">${esc(g.kurz)}</span>
-            <div class="segmente" role="img" aria-label="Kraft ${a.anzahl - a.treffer} von ${a.anzahl}">${Array.from({ length: a.anzahl }, (_, i) => `<i class="${i < a.anzahl - a.treffer ? 'voll' : ''}"></i>`).join('')}</div>
-            <span class="klein">${a.gegnerAnzahl > 1 ? esc(T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr })) : a.siege ? `${a.siege}× ${esc(wort('sieg'))}` : 'noch unbesiegt'}${a.rundeTag < 0 ? ` · ${esc(T('gegner.abMorgen'))}` : ''}</span></div>
-          </button>
-        </div>
-        <button class="karte zeile-karte tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(f.name)} ansehen">
-          <span class="medaille klein-m">${icon(f.icon)}</span>
-          <div class="spalte"><span class="eyebrow">AKTUELLE ${esc(wort('faehigkeit').toUpperCase())}</span><span class="nm">${esc(f.name)}</span><span class="klein">${esc(f.kurz)}</span></div>
-        </button>
-        <div class="karte aufgabe">
-          <span class="eyebrow akzent">NÄCHSTE AUFGABE</span>
-          <span class="nm gross-nm">${esc(f.name)} ${a.anzahl === 1 ? 'einmal' : a.anzahl + '×'} anwenden</span>
-          <div class="siegel-zeile" role="img" aria-label="${a.wocheZaehler} von ${a.anzahl} diese Woche">
-            ${Array.from({ length: a.anzahl }, (_, i) => `<span class="siegel ${i < a.treffer ? 'voll' : ''}">${i < a.treffer ? icon('check') : ''}</span>`).join('')}
-            <span class="klein rechts">${a.wocheZaehler} von ${a.anzahl}${a.wocheZaehler > a.anzahl ? ' · Extra!' : ''}</span>
-          </div>
-          <span class="eyebrow">TAGES-CHECK</span>
-          ${antw ? `<div class="erledigt" role="status">${icon('check')}<span>${antw === 'ja' ? `Heute ${esc(f.verb)}. Stark!` : 'Heute nicht gebraucht. Auch gut.'}</span><button class="link" data-a="check" data-id="">Ändern</button></div>`
-            : `<div class="zwei"><button class="btn voll" data-a="check" data-id="ja">Heute ${esc(f.verb)}</button><button class="btn" data-a="check" data-id="nein">Heute nicht gebraucht</button></div>`}
-        </div>
-        ${weitereHelden()}
-        ${storyKarte()}
-        ${mikroKarte()}
-        ${extraKarten()}
-      </div>
+      <div class="inhalt start-inhalt">${teile}</div>
       <div class="start-fuss">${stand.stil.frei ? `<button class="link" data-a="stilwahl">${icon('stern')} Neue Welten freigeschaltet · Stil wählen</button>` : 'Weitere Bereiche öffnen sich nach dem ersten Sieg.'}<span class="version">Version ${VERSION.nr} · ${VERSION.datum}</span></div>
+    </section>`;
+  },
+
+  // Quest bearbeiten (Version 38): Ziel-Text und Anzahl je Runde, gilt sofort.
+  quest_bearbeiten() {
+    if (!stand.quest || !ui.qe) { ui.screen = 'start'; return SCREENS.start(); }
+    const v = aktuelleVorlage();
+    const f = TABELLE.faehigkeiten[v.faehigkeit];
+    const g = TABELLE.gegner[v.gegner];
+    const a = K.auswertung(stand, jetzt());
+    const q = ui.qe;
+    const anz = Number(q.anzahl);
+    const sofortSieg = !a.siegHeute && anz < a.anzahl && a.wocheZaehler >= anz;
+    return `<section class="screen">
+      <div class="start-kopf"><button class="link" data-a="qe-abbrechen">${icon('zurueck')} ${esc(T('qe.abbrechen'))}</button></div>
+      <div class="inhalt">
+        <span class="eyebrow akzent">${esc(nameVon(v.held).toUpperCase())}</span>
+        <h1>${esc(T('qe.titel', { quest: wort('quest') }))}</h1>
+        <label class="feld"><span>${esc(T('qe.ziel'))}</span><input id="qe-ziel" maxlength="${K.ZIEL_MAX}" value="${esc(q.ziel)}" autocomplete="off" ${q.fehler.ziel ? 'aria-invalid="true" aria-describedby="qe-ziel-f"' : ''}></label>
+        ${q.fehler.ziel ? `<p class="fehler" id="qe-ziel-f" role="alert">${esc(q.fehler.ziel)}</p>` : ''}
+        <div class="feld"><span id="qe-anz-l">${esc(T('qe.anzahl'))}</span>
+          <div class="wahl qe-anzahl" role="group" aria-labelledby="qe-anz-l">${Array.from({ length: K.ANZAHL_MAX - K.ANZAHL_MIN + 1 }, (_, i) => i + K.ANZAHL_MIN).map(n => `<button class="opt kurz ${anz === n ? 'sel' : ''}" aria-pressed="${anz === n}" data-a="qe-anzahl" data-id="${n}">${n}</button>`).join('')}</div>
+        </div>
+        ${q.fehler.anzahl ? `<p class="fehler" role="alert">${esc(q.fehler.anzahl)}</p>` : ''}
+        <p class="klein">${esc(T('qe.anzahlHilfe', { faehigkeit: f.name, anzahl: anz || '?' }))}</p>
+        <p class="klein">${esc(T('qe.sofort', { geschafft: a.wocheZaehler }))}</p>
+        ${sofortSieg ? `<div class="notiz" role="status">${icon('stern')}<p>${esc(T('qe.siegHinweis', { gegner: g.name, sieg: wort('sieg') }))}</p></div>` : ''}
+        <p class="klein">${esc(T('qe.festHinweis', { faehigkeit: wort('faehigkeit') }))}</p>
+      </div>
+      <div class="fuss"><button class="cta" data-a="qe-speichern">${esc(T('qe.speichern'))}</button></div>
     </section>`;
   },
 
@@ -1019,13 +1147,24 @@ function feierHtml() {
     </div>`;
   }
   if (f.art === 'story') {
+    // Version 40: Story-Popup als Kapitelmoment: Bild, „Teil n von 7“, offenes Ende, Knopf aus dem Stil-Vokabular.
     const st = story();
+    const teil = st.teile.find(t => t.nr === f.nr && t.frei);
+    if (!teil) { console.warn('Story-Popup: Teil nicht frei', f.nr); return ''; } // Rückfall: nichts zeigen statt leerer Karte
+    const letzter = f.nr >= st.teile.length;
+    const gid = TABELLE.gegner[v.gegner] ? v.gegner : null;
+    const platz = storyBildPlatz(gid);
     return `<div class="feier" role="dialog" aria-modal="true" aria-labelledby="feier-t">
-      <div class="feier-karte story-blatt erscheint">
-        <span class="eyebrow akzent">${esc(st.titel.toUpperCase())} · NEUER TEIL</span>
-        <h2 id="feier-t" class="sr-titel">Teil ${f.nr}</h2>
-        ${storyAnsicht(f.nr)}
-        <button class="cta" data-a="feier-weiter">${f.nr < st.teile.length ? 'Bis morgen' : 'Weiter'}</button>
+      <div class="feier-karte story-blatt story-moment erscheint">
+        ${platz ? `<div class="story-bild" aria-hidden="true">${img(platz, gid ? TABELLE.gegner[gid].name : '', platz.startsWith('boss-') ? 'boss' : 'szene', 'cover')}<span class="story-bild-verlauf"></span></div>` : ''}
+        <div class="story-text">
+          <span class="eyebrow akzent">${esc(st.titel.toUpperCase())}</span>
+          <span class="chip story-chip">${esc(T('story.teilVon', { nr: f.nr, gesamt: st.teile.length }))}</span>
+          <h2 id="feier-t">${esc(teil.titel)}</h2>
+          <p class="story-absatz">${esc(teil.text)}</p>
+          ${letzter ? '' : `<p class="story-folgt">${esc(T('story.folgt'))}</p>`}
+        </div>
+        <button class="cta" data-a="feier-weiter">${esc(T(letzter ? 'story.knopfEnde' : 'story.knopf'))}</button>
       </div>
     </div>`;
   }
@@ -1039,6 +1178,7 @@ function feierHtml() {
         <div class="feier-bild">${img('boss-' + gid, gs.name, 'boss', 'cover grau')}</div>
         <span class="chip gut">SIEG · +${K.XP.sieg} XP</span>
         <h2 id="feier-t">${esc(gs.name)} ist ${esc(wort('sieg'))}!</h2>
+        ${f.level ? `<p class="sieg-stufe">${icon('stern')}<b>${esc(T('sieg.stufe', { held: nameVon(v.held), stufe: wort('stufe'), nr: f.level, titel: f.titel }))}</b></p>` : ''}
         <p>Du hast „${esc(TABELLE.faehigkeiten[v.faehigkeit].name)}“ ${v.quest.anzahl === 1 ? 'eingesetzt' : `${v.quest.anzahl}-mal eingesetzt`}. ${esc(weiter)}</p>
         <button class="cta" data-a="feier-weiter">Weiter</button>
       </div>
@@ -1220,34 +1360,119 @@ const mikroListe = () => heldenAnsichten().flatMap(({ id, a, v }) =>
   I.mikroHeute(a, jetzt(), mikroBereich(v), MIKRO, mikroJeHeld(), MIKRO_RUECKFALL).map(m => ({ ...m, held: id })));
 const story = () => I.storyWoche(stand, jetzt(), aktuelleVorlage(), TABELLE, STORIES, nameVon);
 
-// Crew-Leiste: alle Helden, je mit eigener Stufe und Tagesstatus. Ohne XP der Crew.
-function crewLeiste() {
-  if (spiel.helden.length < 2) return '';
-  return `<div class="crew-leiste"><span class="eyebrow">${esc(wort('crew').toUpperCase())} · ${spiel.helden.length} HELDEN</span>
-    <div class="crew-reihe">${heldenAnsichten().map(({ id, a }) => {
-      const x = K.auswertung(a, jetzt());
-      const status = x.heuteAntwort ? '✓ heute' : '● offen';
-      return `<button class="crew-held ${id === spiel.fokus ? 'an' : ''}" data-a="fokus" data-id="${esc(id)}" aria-pressed="${id === spiel.fokus}" aria-label="${esc(nameVon(id))} ins Rampenlicht">${img(id, nameVon(id), 'held', 'crew-bild')}<b>${esc(nameVon(id))}</b><span class="${x.heuteAntwort ? 'gut-text' : 'akzent-text'}">${esc(wort('stufe'))} ${x.level} · ${status}</span></button>`;
-    }).join('')}</div></div>`;
+// Heldenkopf (Version 43): aktiver Held groß, daneben „Helden wechseln“ mit Mini-Porträts und Zahl offener Checks.
+// Ersetzt Crew-Leiste und „Weitere Helden“. Feste Reihenfolge der Crew (kein Umsortieren), Logik in logik/startseite.js.
+const bereichName = domainId => (LEBENSBEREICHE.find(d => d.id === domainId) || {}).name || '';
+function heldenKopfDaten() {
+  const ansichten = heldenAnsichten().map(h => ({ ...h, x: K.auswertung(h.a, jetzt()) }));
+  const k = heldenKopf(ansichten.map(h => ({ id: h.id, erledigt: !!h.x.heuteAntwort })), spiel.fokus, HELDENKOPF.stapelMax);
+  return { k, ansichten };
 }
 
-// Weitere Helden kompakt, mit Schnell-Check (holt den Helden ins Rampenlicht).
-function weitereHelden() {
-  const andere = heldenAnsichten().filter(h => h.id !== spiel.fokus);
-  if (!andere.length) return '';
-  return `<span class="eyebrow">WEITERE HELDEN</span>${andere.map(({ id, a, v }) => {
-    const x = K.auswertung(a, jetzt());
-    const g = TABELLE.gegner[v.gegner];
-    const f = TABELLE.faehigkeiten[v.faehigkeit];
-    const zeile = `${g.kurz} · ${f.name} ${x.wocheZaehler} von ${x.anzahl}`;
-    return `<div class="karte held-kurz">
-      <button class="held-kurz-info" data-a="fokus" data-id="${esc(id)}" aria-label="${esc(nameVon(id))} ins Rampenlicht">${img(id, nameVon(id), 'held', 'held-kurz-bild')}
-        <span class="spalte"><span class="nm">${esc(nameVon(id))} · ${esc(a.quest.ziel)}</span><span class="klein">${esc(zeile)}</span></span></button>
-      ${x.heuteAntwort ? `<span class="rund-ic gut" role="img" aria-label="Heute erledigt">${icon('check')}</span>`
-        : `<button class="schnell" data-a="schnell" data-id="${esc(id)}" aria-label="${esc(nameVon(id))}: heute ${esc(f.verb)}">${icon('check')}</button>`}
-    </div>`;
-  }).join('')}`;
+function heldenkopfHtml() {
+  const { k, ansichten } = heldenKopfDaten();
+  const h = ansichten.find(x => x.id === k.aktiv);
+  if (!h) return '';
+  const name = nameVon(h.id);
+  const bereich = bereichName(h.domainId);
+  const knopf = k.mitWechsel ? `<button class="wechsel-knopf" data-a="helden-wahl" aria-haspopup="dialog" aria-expanded="${!!ui.heldenWahl}" aria-label="${esc(T('kopf.wechseln'))}${k.offen ? esc(', ' + T('kopf.offen', { n: k.offen })) : ''}">
+      <span class="stapel" aria-hidden="true">${k.stapel.map(id => img(id, nameVon(id), 'held', 'stapel-bild')).join('')}</span>
+      ${k.offen ? `<span class="offen-zahl" aria-hidden="true">${k.offen}</span>` : ''}${icon('runter')}</button>` : '';
+  // Version 45: Porträt öffnet die Heldenseite (Detailblatt „crew“), XP-Balken aus der früheren Verbündeten-Karte.
+  const x = h.x;
+  const xpProzent = x.proLevel > 0 ? Math.round(100 * x.imLevel / x.proLevel) : 0;
+  return `<div class="heldenkopf">
+    <button class="kopf-portraet" data-a="blatt" data-id="crew" aria-label="${esc(T('kopf.ansehen', { held: name }))}">${img(h.id, name, 'held', 'kopf-bild', '')}<span class="kopf-info" aria-hidden="true">i</span></button>
+    <div class="kopf-text"><span class="eyebrow">${esc(T('kopf.aktiv'))}</span><span class="kopf-name">${esc(name)}</span><span class="klein">${esc([bereich, `${wort('stufe')} ${x.level}`].filter(Boolean).join(' · '))}</span>
+      <div class="balken xp kopf-xp" role="img" aria-label="${esc(`${x.imLevel} von ${x.proLevel} XP bis ${wort('stufe')} ${x.level + 1}`)}"><i style="width:${xpProzent}%"></i></div></div>
+    ${knopf}
+    ${ui.xpFlug ? `<span class="xpflug kopf-flug" aria-hidden="true">${ui.xpFlug > 0 ? '+' : ''}${ui.xpFlug} XP</span>` : ''}</div>`;
 }
+
+// „Weiter zu …“ (Version 45): nach dem Check des aktiven Helden der nächste mit offenem Check (feste Reihenfolge).
+function weiterZuHtml() {
+  if (spiel.helden.length < 2) return '';
+  const { k, ansichten } = heldenKopfDaten();
+  const id = naechsterOffener(ansichten.map(h => ({ id: h.id, erledigt: !!h.x.heuteAntwort })), k.aktiv);
+  if (!id) return `<p class="tat-alle${ui.einmal.has('check') ? ' neu' : ''}" role="status">${esc(T('tat.alleErledigt'))}</p>`;
+  const name = nameVon(id);
+  return `<button class="weiter-zu${ui.einmal.has('check') ? ' neu' : ''}" data-a="fokus" data-id="${esc(id)}">${img(id, name, 'held', 'weiter-bild', '')}<span class="spalte"><span class="klein">${esc(T('tat.naechster'))}</span><span class="nm">${esc(T('tat.weiter', { held: name }))}</span></span>${icon('pfeilRechts')}</button>`;
+}
+
+// Popup „Helden wechseln“ als Blatt von unten (gleiches Muster wie die Detailblätter, Daumen-Reichweite am Handy).
+function heldenWahlHtml() {
+  if (!ui.heldenWahl || ui.screen !== 'start') return '';
+  const { k, ansichten } = heldenKopfDaten();
+  if (!k.mitWechsel) { ui.heldenWahl = false; return ''; }
+  const zeilen = ansichten.map(({ id, domainId, v, x }) => {
+    const aktiv = id === k.aktiv;
+    const name = nameVon(id);
+    const status = aktiv ? T('kopf.statusAktiv') : x.heuteAntwort ? T('kopf.statusErledigt') : T('kopf.statusOffen');
+    const f = TABELLE.faehigkeiten[v.faehigkeit];
+    const schnell = !aktiv && !x.heuteAntwort && f
+      ? `<button class="schnell" data-a="schnell" data-id="${esc(id)}" aria-label="${esc(name)}: heute ${esc(f.verb)}">${icon('check')}</button>` : '';
+    return `<div class="wahl-zeile${aktiv ? ' an' : ''}">
+      <button class="wahl-info" data-a="fokus" data-id="${esc(id)}" ${aktiv ? 'aria-current="true"' : ''}>${img(id, name, 'held', 'wahl-bild')}
+        <span class="spalte"><span class="nm">${esc(name)}</span><span class="klein">${esc([bereichName(domainId), `${wort('stufe')} ${x.level}`].filter(Boolean).join(' · '))}</span></span>
+        <span class="wahl-status ${aktiv ? 'akzent-text' : x.heuteAntwort ? 'gut-text' : 'offen-text'}">${esc(status)}</span></button>${schnell}</div>`;
+  }).join('');
+  return `<div class="feier unten" role="dialog" aria-modal="true" aria-labelledby="wahl-t">
+    <button class="hintergrund" data-a="helden-wahl-zu" aria-label="Schließen" tabindex="-1"></button>
+    <div class="blatt erscheint"><div class="blatt-inhalt"><h2 id="wahl-t">${esc(T('kopf.wahlTitel', { crew: wort('crew') }))}</h2>${zeilen}<button class="cta" data-a="helden-wahl-zu">Schließen</button></div></div>
+  </div>`;
+}
+
+// Abschnitte der Startseite (Version 43). Reihenfolge und Ein/Aus: daten/startseite.js.
+const START_TEILE = {
+  hinweise: () => `${hinweisBox()}${EW.istOffen(einw) ? einwKarte(false) : ''}${ui.fbDanke ? '<div class="hinweis gut-rand" role="status"><span>Danke für dein Feedback!</span><button class="link" data-a="danke-weg">OK</button></div>' : ''}`,
+  heldenkopf: () => heldenkopfHtml(),
+  angebot: () => angebotKarte(),
+  botschaft: () => crewKarte(),
+  quest: ({ v, g, a }) => `<div class="karte haupt">
+      <span class="eyebrow akzent">MEINE ${esc(wort('quest').toUpperCase())}</span>
+      <div class="quest-zeile"><span class="questtitel">${esc(stand.quest.ziel)}</span>${funktionFrei('quests_bearbeiten') ? `<button class="link qe-knopf" data-a="quest-bearbeiten" aria-label="${esc(T('qe.titel', { quest: wort('quest') }))}">${icon('stift')}${esc(T('qe.knopf'))}</button>` : ''}</div>
+      ${wegHtml(a, v, g)}
+      ${lebenZeile(v)}
+    </div>`,
+  // Version 44: Heutige Heldentat (ersetzt „Nächste Aufgabe“ und die Fähigkeits-Karte). Check-Logik unverändert (check()).
+  // Version 44/45: Heutige Heldentat. Check-Logik unverändert (check()). Wochenstand zeigt seit 45 die Duell-Karte.
+  heldentat: ({ v, f, a }) => {
+    const antw = a.heuteAntwort;
+    const frage = tagesfrage(v, f, T('tat.frage', { faehigkeit: f.name }));
+    return `<div class="karte heldentat${antw ? ' fertig' : ''}">
+      <span class="eyebrow tat-eyebrow">${esc(T('tat.eyebrow'))}</span>
+      <button class="tat-name tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(f.name)} ansehen">${esc(f.name)}</button>
+      <p class="tat-plan">${esc(f.wenn)} <b>${esc(T('tat.dann'))}</b> ${esc(f.kurz)}</p>
+      ${antw ? `<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}" role="status">${icon('check')}<span>${antw === 'ja' ? `Heute ${esc(f.verb)}. Stark!` : 'Heute nicht gebraucht. Auch gut.'}</span><button class="link" data-a="check" data-id="">Ändern</button></div>${weiterZuHtml()}`
+        : `<p class="tat-frage">${esc(frage)}</p>
+      <div class="zwei"><button class="btn voll" data-a="check" data-id="ja">${esc(T('tat.ja'))}</button><button class="btn tat-nein" data-a="check" data-id="nein">${esc(T('tat.nein'))}</button></div>`}
+    </div>`;
+  },
+  // Version 45: eine Duell-Karte statt Verbündeter + Gegner. Tipp öffnet die Gegnerseite.
+  duell: ({ v, g, a }) => {
+    const held = nameVon(v.held);
+    const kraft = a.anzahl - a.treffer;
+    const unter = a.gegnerAnzahl > 1 ? T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr }) : a.siege ? `${a.siege}× ${wort('sieg')}` : 'noch unbesiegt';
+    return `<button class="karte duell tippbar ${ui.wackeln ? 'wackelt' : ''} ${a.bossKraft === 0 ? 'besiegt' : ''}" data-a="blatt" data-id="boss" aria-label="${esc(g.name)} ansehen">
+      <span class="duell-bildrahmen">${img('boss-' + v.gegner, g.name, 'boss', 'duell-bild', '')}
+        <span class="duell-titel">${esc(held)} <span class="duell-vs">${esc(T('duell.vs'))}</span> ${esc(g.kurz)}</span></span>
+      <span class="duell-text">
+        <span class="duell-zeile"><span>${esc(T('duell.kraft', { gegner: g.kurz }))}</span><span>${kraft} / ${a.anzahl}</span></span>
+        <span class="segmente" role="img" aria-label="Kraft ${kraft} von ${a.anzahl}">${Array.from({ length: a.anzahl }, (_, i) => `<i class="${i < kraft ? 'voll' : ui.einmal.has('treffer') && i === kraft ? 'bricht' : ''}"></i>`).join('')}</span>
+        <span class="klein">${esc(T('tat.woche', { n: a.wocheZaehler, anzahl: a.anzahl }))}${a.wocheZaehler > a.anzahl ? ' · Extra!' : ''} · ${esc(unter)}${a.rundeTag < 0 ? ` · ${esc(T('gegner.abMorgen'))}` : ''}</span>
+      </span>
+    </button>`;
+  },
+  bonus: () => mikroKarte(),
+  story: () => storyKarte(),
+  welten: () => weltenKarte(),
+  extra: () => extraKarten()
+};
+const START_IDS = (() => {
+  const { ids, fehler } = ordneAbschnitte(START_ABSCHNITTE, Object.keys(START_TEILE));
+  if (fehler.length) console.warn(fehler.join('\n'));
+  return ids.length ? ids : Object.keys(START_TEILE); // kaputte Liste → alle Abschnitte in eingebauter Reihenfolge
+})();
 
 function angebotKarte() {
   if (!H.zielAngebot(spiel)) return '';
@@ -1308,9 +1533,13 @@ function mikroKarte() {
   const liste = mikroListe();
   if (!liste.length) return '';
   const fertig = liste.filter(m => m.erledigt).length;
+  // Version 45: nur die ersten BONUS.sichtbar zeigen, Rest hinter „+ N weitere“ (feste Reihenfolge, nichts springt).
+  const b = bonusAnsicht(liste, BONUS.sichtbar, ui.bonusMehr);
+  const umschalten = b.umschaltbar ? `<button class="link bonus-mehr" data-a="bonus-mehr" aria-expanded="${!!ui.bonusMehr}">${esc(ui.bonusMehr ? T('bonus.weniger') : T('bonus.mehr', { n: b.weitere }))}</button>` : '';
   return `<div class="karte spalte mikro">
-    <div class="zeile"><span class="eyebrow">KLEINE TAGESAUFGABEN</span><span class="mini rechts-oben">${fertig} von ${liste.length} · je +${K.XP.mikro} XP</span></div>
-    ${liste.map(m => `<button class="mikro-zeile ${m.erledigt ? 'fertig' : ''}" data-a="mikro" data-id="${esc(m.held + '|' + m.id)}" aria-pressed="${m.erledigt}"><span class="haken-kreis">${m.erledigt ? icon('check') : ''}</span><span class="mikro-text">${esc(m.text)}</span>${spiel.helden.length > 1 ? img(m.held, nameVon(m.held), 'held', 'mikro-held', nameVon(m.held)) : ''}</button>`).join('')}
+    <div class="zeile"><span class="eyebrow">${esc(T('bonus.titel'))}</span><span class="mini rechts-oben">${fertig} von ${liste.length} · je +${K.XP.mikro} XP</span></div>
+    ${b.sichtbar.map((m, i) => `<button class="mikro-zeile ${m.erledigt ? 'fertig' : ''}${ui.einmal.has('bonus') && i >= BONUS.sichtbar ? ' neu' : ''}" style="--i:${Math.max(0, i - BONUS.sichtbar)}" data-a="mikro" data-id="${esc(m.held + '|' + m.id)}" aria-pressed="${m.erledigt}"><span class="haken-kreis">${m.erledigt ? icon('check') : ''}</span><span class="mikro-text">${esc(m.text)}</span>${spiel.helden.length > 1 ? img(m.held, nameVon(m.held), 'held', 'mikro-held', nameVon(m.held)) : ''}</button>`).join('')}
+    ${umschalten}
   </div>`;
 }
 
@@ -1386,22 +1615,54 @@ function render() {
     if (nochmalRendern) { nochmalRendern = false; render(); }
   }
 }
+let letzterFokus = null;
 function renderJetzt() {
   document.documentElement.dataset.stil = stand.stil.aktiv;
+  // Version 46: Auftritt nur bei neuem Bildschirm oder Heldenwechsel, nie bei jedem Neuzeichnen
+  const auftritt = BW.auftritt && (letzterScreen !== ui.screen || letzterFokus !== spiel.fokus);
+  letzterFokus = spiel.fokus;
   // Tab-Bildschirme nur, solange der Tab frei ist (z. B. nach Zeitsprung im Testprofil); noch nicht gebaute Tabs → „bald“.
   const tab = TABS.find(t => t.screen === ui.screen);
   if (tab && !tabAktiv(tab)) ui.screen = 'start';
   const fn = tab && tab.bald && tabAktiv(tab) ? () => baldScreen(tab) : (SCREENS[ui.screen] || SCREENS.start);
-  app.innerHTML = testleiste() + fn() + tabLeiste() + blattHtml() + feierHtml();
+  app.innerHTML = testleiste() + fn() + tabLeiste() + blattHtml() + heldenWahlHtml() + feierHtml();
   if (letzterScreen !== ui.screen) {
     app.querySelector('.screen')?.scrollTo?.(0, 0);
     const h = app.querySelector('.feier h2, .screen h1');
     if (h && letzterScreen !== null) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     letzterScreen = ui.screen;
   }
-  const key = ui.feier ? ui.feier.art + (ui.feier.bewertung || '') : ui.blatt;
-  if (key && key !== letztesOverlay) app.querySelector('.feier .cta, .feier .sc')?.focus({ preventScroll: true });
+  bewegungNachZeichnen(auftritt);
+  const key = ui.feier ? ui.feier.art + (ui.feier.bewertung || '') : ui.blatt || (ui.heldenWahl ? 'heldenwahl' : null);
+  if (key && key !== letztesOverlay) app.querySelector(key === 'heldenwahl' ? '.wahl-zeile.an .wahl-info' : '.feier .cta, .feier .sc')?.focus({ preventScroll: true });
+  if (!key && letztesOverlay === 'heldenwahl') app.querySelector('.wechsel-knopf')?.focus({ preventScroll: true });
   letztesOverlay = key || null;
+}
+
+// Bewegung nach dem Zeichnen (Version 46). Reine Darstellung; Fehler hier dürfen nie das Spiel stören.
+function bewegungNachZeichnen(auftritt) {
+  try {
+    if (auftritt && ui.screen === 'start') {
+      app.querySelectorAll('.start-inhalt > *').forEach((el, i) => {
+        el.style.setProperty('--i', String(Math.min(i, BW.maxKarten)));
+        el.classList.add('auftritt');
+      });
+      app.querySelector('.kopf-bild')?.classList.add('auftritt-ring');
+    }
+    const balken = app.querySelector('.kopf-xp i');
+    if (!bewegungAus && ui.einmal.has('check') && balken && Number.isFinite(ui.xpVon)) {
+      const ziel = balken.style.width;
+      if (parseFloat(ziel) > ui.xpVon) { // bei Level-up (Balken springt zurück) kein Wachsen von alt nach neu
+        balken.style.transition = 'none';
+        balken.style.width = ui.xpVon + '%';
+        void balken.offsetWidth; // Startbreite übernehmen
+        balken.style.transition = '';
+        balken.style.width = ziel;
+      }
+    }
+  } catch (e) { console.warn('Bewegung:', e.message); }
+  ui.einmal.clear();
+  ui.xpVon = null;
 }
 
 // Fehlende Bilder → Platzhalter des Stils → Initialen (kein Leihen aus anderen Stilen)
@@ -1419,6 +1680,7 @@ function geheZu(screen) {
     trackEvent('screen_enter', { screen });
   }
   ui.screen = screen;
+  ui.heldenWahl = false;
   ui.resetFrage = false;
   if (screen === 'ob4') starteAnalyse();
   render();
@@ -1529,41 +1791,71 @@ function zeigeNaechstes() {
 
 function check(antwort) {
   let r;
+  let xpVon = null;
+  try { const v = K.auswertung(stand, jetzt()); xpVon = v.proLevel > 0 ? Math.round(100 * v.imLevel / v.proLevel) : null; } catch (e) { /* nur Darstellung */ }
   try { r = K.tagesCheck(stand, jetzt(), antwort); }
   catch (e) { hinweis = e.message; render(); return; }
+  // Version 46: Rückmeldungen nur beim nächsten Zeichnen (Haken zeichnet sich, Segment bricht, XP wächst)
+  if (antwort) {
+    ui.einmal.add('check');
+    ui.xpVon = xpVon;
+    if (r.nachher && r.vorher && r.nachher.treffer > r.vorher.treffer) ui.einmal.add('treffer');
+  }
   setzeStand(r.stand);
   speichere();
-  const xp = r.ereignisse.find(e => e.typ === 'xp');
-  const sieg = r.ereignisse.find(e => e.typ === 'sieg');
-  const lvl = r.ereignisse.find(e => e.typ === 'levelup');
-  const frei = r.ereignisse.some(e => e.typ === 'stil_frei');
   trackEvent('quest_checkin', { antwort });
+  zeigeEreignisse(r, antwort);
+}
+
+// Belohnung, Sieg, Level-up und Bewertungsfragen nach einer Änderung am Stand (Tages-Check, Quest bearbeiten).
+function zeigeEreignisse(r, antwort) {
+  const xp = r.ereignisse.find(e => e.typ === 'xp');
   if (xp && xp.xp > 0) {
     ui.xpFlug = xp.xp;
     ui.wackeln = !bewegungAus;
     try { navigator.vibrate && navigator.vibrate(20); } catch (e) { /* optional */ }
     setTimeout(() => { ui.xpFlug = null; ui.wackeln = false; if (ui.screen === 'start' && !ui.feier) render(); }, 1300);
   }
-  const neu = [];
+  // Version 42: Reihenfolge und Anzahl der Einblendungen als Regeln (daten/momente.js, logik/momente.js)
+  const sieg = r.ereignisse.find(e => e.typ === 'sieg');
+  if (sieg) trackEvent('quest_completed', { woche: sieg.woche, gegner: sieg.gegner });
+  if (sieg && sieg.neuerGegner) trackEvent('boss_revealed', { gegner: sieg.naechster, kapitel: sieg.kapitel });
   const st = story();
-  if (st.neu) neu.push({ art: 'story', nr: st.frei });
-  if (sieg) {
-    trackEvent('quest_completed', { woche: sieg.woche, gegner: sieg.gegner });
-    neu.push({ art: 'sieg', gegner: sieg.gegner, neuerGegner: sieg.neuerGegner });
-    if (sieg.neuerGegner) neu.push({ art: 'lauf', von: sieg.gegner, nach: sieg.naechster });
-    if (sieg.neuerGegner) { neu.push({ art: 'gegner', gegner: sieg.naechster, kapitel: sieg.kapitel }); trackEvent('boss_revealed', { gegner: sieg.naechster, kapitel: sieg.kapitel }); }
-    if (lvl) neu.push({ art: 'levelup', level: lvl.level, titel: lvl.titel });
-    neu.push(...frage('hero_score'));
-    if (frei) { neu.push(...frage('story_curiosity_score')); ui.danach = 'stilwahl'; }
-  } else {
-    if (lvl) neu.push({ art: 'levelup', level: lvl.level, titel: lvl.titel });
-    if (antwort === 'ja' && r.vorher.treffer === 0 && r.nachher.treffer === 1) neu.push(...frage('boss_score'));
-  }
+  const { momente: neu, weltenwahlSofort } = momenteNachCheck(
+    { ereignisse: r.ereignisse, story: { neu: st.neu, nr: st.frei }, antwort, trefferVorher: r.vorher.treffer, trefferNachher: r.nachher.treffer },
+    MOMENTE, darfFragen);
+  if (weltenwahlSofort) ui.danach = 'stilwahl';
   if (neu.length) {
     ui.schlange.push(...neu);
     if (!ui.feier) setTimeout(() => { if (!ui.feier) zeigeNaechstes(); }, bewegungAus ? 0 : 700);
   }
   render();
+}
+
+// Quest bearbeiten (Version 38)
+function questBearbeitenOeffnen() {
+  if (!stand.quest || !funktionFrei('quests_bearbeiten')) return;
+  ui.qe = { ziel: stand.quest.ziel, anzahl: stand.quest.anzahl, fehler: {} };
+  trackEvent('quest_edit_opened', {});
+  geheZu('quest_bearbeiten');
+}
+function questBearbeitenSpeichern() {
+  const q = ui.qe;
+  if (!q) return geheZu('start');
+  const p = K.questPruefen(q);
+  if (!p.ok) { q.fehler = p.fehler; render(); app.querySelector('[aria-invalid="true"]')?.focus(); return; }
+  let r;
+  try { r = K.questBearbeiten(stand, p.werte, jetzt()); }
+  catch (e) { q.fehler = { ziel: e.message }; render(); return; }
+  ui.qe = null;
+  if (r.geaendert.length) {
+    setzeStand(r.stand);
+    speichere();
+    trackEvent('quest_edited', { felder: r.geaendert.join(','), anzahl: r.stand.quest.anzahl });
+    hinweis = T('qe.gespeichert');
+  }
+  geheZu('start');
+  if (r.ereignisse.length) zeigeEreignisse(r, null);
 }
 
 const ZAEHLER = { crew: 'crew_besuche', boss: 'boss_besuche', faehigkeit: 'skill_besuche' };
@@ -1710,6 +2002,17 @@ app.addEventListener('click', e => {
       render(); break;
     }
     case 'hinweis-weg': hinweis = null; render(); break;
+    case 'lb-gruppe':
+      if (id === 'alle' || LOGBUCH_FILTER.some(f => f.id === id)) { ui.lb = { ...ui.lb, gruppe: id, tage: LOGBUCH_TAGE_JE_SEITE }; trackEvent('logbook_filter', {}); }
+      render(); break;
+    case 'lb-held':
+      if (id === 'alle' || H.heldVon(spiel, id)) { ui.lb = { ...ui.lb, held: id, tage: LOGBUCH_TAGE_JE_SEITE }; trackEvent('logbook_filter', {}); }
+      render(); break;
+    case 'lb-mehr': ui.lb = { ...ui.lb, tage: ui.lb.tage + LOGBUCH_TAGE_JE_SEITE }; trackEvent('logbook_more', {}); render(); break;
+    case 'quest-bearbeiten': questBearbeitenOeffnen(); break;
+    case 'qe-anzahl': if (ui.qe) { ui.qe.anzahl = Number(id); ui.qe.fehler = { ...ui.qe.fehler, anzahl: undefined }; render(); } break;
+    case 'qe-speichern': questBearbeitenSpeichern(); break;
+    case 'qe-abbrechen': ui.qe = null; geheZu('start'); break;
     case 'danke-weg': ui.fbDanke = false; render(); break;
     case 'reset':
       if (!ui.resetFrage) { ui.resetFrage = true; render(); break; }
@@ -1721,8 +2024,26 @@ app.addEventListener('click', e => {
       geheZu('ob1');
       break;
     case 'mikro': mikro(id); break;
-    case 'fokus': ui.botschaftOffen = false; if (id !== spiel.fokus) { setzeSpiel(H.fokusSetzen(spiel, id)); speichere(); trackEvent('hero_focus', { held: id }); } render(); app.querySelector('.screen')?.scrollTo?.(0, 0); break;
-    case 'schnell': setzeSpiel(H.fokusSetzen(spiel, id)); trackEvent('hero_focus', { held: id, quelle: 'schnell' }); check('ja'); break;
+    case 'fokus': {
+      const ausWahl = ui.heldenWahl;
+      ui.heldenWahl = false; ui.botschaftOffen = false;
+      if (id !== spiel.fokus) {
+        try { setzeSpiel(H.fokusSetzen(spiel, id)); speichere(); trackEvent('hero_focus', { held: id, quelle: ausWahl ? 'wahl' : 'karte' }); }
+        catch (err) { hinweis = T('kopf.heldFehlt'); console.warn('Fokus:', err.message); }
+      }
+      render(); app.querySelector('.screen')?.scrollTo?.(0, 0); break;
+    }
+    case 'schnell':
+      ui.heldenWahl = false;
+      try { setzeSpiel(H.fokusSetzen(spiel, id)); }
+      catch (err) { hinweis = T('kopf.heldFehlt'); console.warn('Schnell-Check:', err.message); render(); break; }
+      trackEvent('hero_focus', { held: id, quelle: 'schnell' }); check('ja'); break;
+    case 'helden-wahl':
+      ui.heldenWahl = !ui.heldenWahl;
+      if (ui.heldenWahl) trackEvent('hero_switcher_opened', {});
+      render(); break;
+    case 'helden-wahl-zu': ui.heldenWahl = false; render(); break;
+    case 'bonus-mehr': ui.bonusMehr = !ui.bonusMehr; if (ui.bonusMehr) ui.einmal.add('bonus'); render(); break;
     case 'neues-abenteuer':
       Object.assign(ui, { neu: true, bereich: null, problem: null, ziel: null, freitext: '', obStart: Date.now() });
       trackEvent('new_adventure_started', { helden: spiel.helden.length });
@@ -1732,7 +2053,8 @@ app.addEventListener('click', e => {
     case 'tag': {
       const n = Number(id);
       tagVersatz = n === 0 ? 0 : tagVersatz + n;
-      render(); break;
+      weltenGezeigt = false; // Zeitsprung im Testprofil = wie ein neuer Besuch
+      render(); pruefeWeltenwahl(); break;
     }
   }
 });
@@ -1790,6 +2112,16 @@ app.addEventListener('input', e => {
     }
     return;
   }
+  if (e.target.id === 'qe-ziel' && ui.qe) {
+    ui.qe.ziel = e.target.value.slice(0, K.ZIEL_MAX);
+    // Fehlermeldung beim Tippen entfernen, ohne neu zu zeichnen (Fokus bleibt im Feld)
+    if (ui.qe.fehler.ziel && ui.qe.ziel.trim()) {
+      ui.qe.fehler = { ...ui.qe.fehler, ziel: undefined };
+      app.querySelector('#qe-ziel-f')?.remove();
+      e.target.removeAttribute('aria-invalid'); e.target.removeAttribute('aria-describedby');
+    }
+    return;
+  }
   if (e.target.id && e.target.id.startsWith('fb-')) {
     ui.fb[e.target.id.slice(3)] = e.target.value.slice(0, 600);
     return;
@@ -1802,9 +2134,11 @@ app.addEventListener('input', e => {
 });
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target && e.target.id === 'qe-ziel') { e.preventDefault(); questBearbeitenSpeichern(); return; }
   if (e.key !== 'Escape') return;
   if (ui.feier) { if (ui.feier.art === 'frage') bewerte(ui.feier.bewertung, null); zeigeNaechstes(); }
   else if (ui.blatt) schliesseBlatt();
+  else if (ui.heldenWahl) { ui.heldenWahl = false; render(); }
 });
 
 // ---------- Start ----------
@@ -1819,6 +2153,7 @@ if (!istAdmin && !stand.onboarding.fertig && ui.bereich) {
 }
 trackEvent('screen_enter', { screen: ui.screen });
 render();
+pruefeWeltenwahl();
 
 // Seiten-Datenbank verbinden (nur auf claude.ai). Ohne Datenbank bleibt alles im Browser.
 beiAenderung(() => { if (ui.screen === 'einstellungen') render(); });
