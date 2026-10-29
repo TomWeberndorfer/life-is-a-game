@@ -1,7 +1,7 @@
 // Stil-Register. Feste IDs (nie ändern; wenn doch, alte ID unter `alt`).
 // Ein Stil ändert nur Darstellung: Farben ([data-stil=<id>] in index.html), Wörter, Namen, Bilder.
 // Wörter: crew = alle Helden zusammen (ohne eigene XP), verbuendeter = ein einzelner Held an deiner Seite.
-// Optional je Stil: texte: { 'schluessel': '…' } überschreibt Texte aus daten/texte.js; bezirke: { health: '…' } benennt Bezirke.
+// Optional je Stil: texte: { 'schluessel': '…' } überschreibt Texte aus daten/texte.js (z. B. tab.logbuch = Name des Logbuchs je Stil, Version 56); bezirke: { health: '…' } benennt Bezirke.
 // Fehlt ein Wort (z. B. kapitel) oder ein Bezirksname, gilt Fantasy bzw. der Name des Lebensbereichs.
 // stadt/bezirk/stadtname: Heldenstadt (nur Darstellung). Bezirksbilder: Bildplatz `bezirk-<domainId>`, sonst gezeichnete Silhouette.
 // Regel: Kein Stil leiht Bilder eines anderen. Fehlt ein Bild, zeigt die App den Platzhalter des Stils.
@@ -19,7 +19,7 @@ export const STILE = {
     name: 'Fantasy', alt: [], waehlbar: true,
     karte: 'bilder/fantasy/szene.jpg',
     wort: { crew: 'Gefährten', verbuendeter: 'Verbündeter', gegner: 'Gegner', quest: 'Hauptquest', woche: 'Quest der Woche', faehigkeit: 'Fähigkeit', stufe: 'Stufe', sieg: 'besiegt', stadt: 'Stadt', bezirk: 'Bezirk', stadtname: 'Talwacht', kapitel: 'Kapitel' },
-    texte: { 'story.knopf': 'Zurück ins Lager' },
+    texte: { 'story.knopf': 'Zurück ins Lager', 'tab.logbuch': 'Chronik' },
     namen: {},
     bilder: {
       szene: 'bilder/fantasy/szene.jpg',
@@ -58,7 +58,7 @@ export const STILE = {
     name: 'Sci-Fi', alt: [], waehlbar: true,
     karte: 'bilder/scifi/karte.jpg',
     wort: { crew: 'Crew', verbuendeter: 'Copilot', gegner: 'Störsignal', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Protokoll', stufe: 'Rang', sieg: 'neutralisiert', stadt: 'Station', bezirk: 'Sektor', stadtname: 'Station Aurora' },
-    texte: { 'story.knopf': 'Zurück auf die Brücke' },
+    texte: { 'story.knopf': 'Zurück auf die Brücke', 'tab.logbuch': 'Bordbuch' },
     namen: { trogadon: 'Kommandant Trog-7', khara: 'Funkerin Kha-4', fisker: 'Scout Fisk-3', uldini: 'Administrator Uld-1', goldwin: 'Quartiermeister Gold-5', ahren: 'Offizier Ahr-2', jelninolan: 'Bordärztin Jel-9', 'der-erste': 'Pilot Prim-0' },
     bilder: {
       trogadon: 'bilder/scifi/trogadon.jpg', khara: 'bilder/scifi/khara.jpg', fisker: 'bilder/scifi/fisker.jpg',
@@ -90,7 +90,7 @@ export const STILE = {
     name: 'Mythologie', alt: [], waehlbar: false,
     karte: 'bilder/myth/szene.jpg',
     wort: { crew: 'Bund', verbuendeter: 'Gefährte', gegner: 'Prüfung', quest: 'Heldenfahrt', woche: 'Prüfung der Woche', faehigkeit: 'Gabe', stufe: 'Rang', sieg: 'bestanden', stadt: 'Polis', bezirk: 'Viertel', stadtname: 'Neu-Ithaka' },
-    texte: { 'story.knopf': 'Zurück ans Feuer' },
+    texte: { 'story.knopf': 'Zurück ans Feuer', 'tab.logbuch': 'Saga' },
     namen: { trogadon: 'Trogaides', khara: 'Charis', fisker: 'Fiskeus', uldini: 'Uldinos', goldwin: 'Ploutos', ahren: 'Ahrenos', jelninolan: 'Eleia', 'der-erste': 'Protos' },
     bilder: { szene: 'bilder/myth/szene.jpg' },
     pos: {}
@@ -99,7 +99,7 @@ export const STILE = {
     name: 'Cozy', alt: [], waehlbar: false,
     karte: 'bilder/cozy/szene.jpg',
     wort: { crew: 'Nachbarschaft', verbuendeter: 'Nachbar', gegner: 'Sturm', quest: 'Ernteziel', woche: 'Aufgabe der Woche', faehigkeit: 'Werkzeug', stufe: 'Stufe', sieg: 'vorübergezogen', stadt: 'Dorf', bezirk: 'Hof', stadtname: 'Sonnenhang' },
-    texte: { 'story.knopf': 'Zurück ins Dorf' },
+    texte: { 'story.knopf': 'Zurück ins Dorf', 'tab.logbuch': 'Tagebuch' },
     namen: { trogadon: 'Trogi', khara: 'Kari', fisker: 'Fiski', uldini: 'Uldi', goldwin: 'Goldi', ahren: 'Ahri', jelninolan: 'Jelli', 'der-erste': 'Primo' },
     bilder: { szene: 'bilder/cozy/szene.jpg',
       // Kopien aus vorhandenen Bildern desselben Stils (Version 16), einzeln ersetzbar
@@ -126,7 +126,7 @@ export const STILE = {
     name: 'Monsterjäger', alt: [], waehlbar: false,
     karte: 'bilder/monster/szene.jpg',
     wort: { crew: 'Team', verbuendeter: 'Partner', gegner: 'Monster', quest: 'Hauptauftrag', woche: 'Auftrag der Woche', faehigkeit: 'Attacke', stufe: 'Level', sieg: 'gefangen', stadt: 'Basis', bezirk: 'Zone', stadtname: 'Basislager' },
-    texte: { 'story.knopf': 'Zurück zur Basis' },
+    texte: { 'story.knopf': 'Zurück zur Basis', 'tab.logbuch': 'Jagdbuch' },
     namen: {},
     bilder: {
       szene: 'bilder/monster/szene.jpg',
@@ -150,7 +150,7 @@ export const STILE = {
     name: 'Miami Nights', alt: [], waehlbar: true,
     karte: 'bilder/strasse/szene.jpg',
     wort: { crew: 'Crew', verbuendeter: 'Partner', gegner: 'Rivale', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Move', stufe: 'Rang', sieg: 'erledigt', stadt: 'City', bezirk: 'Block', stadtname: 'Neon City' },
-    texte: { 'story.knopf': 'Zurück auf die Straße' },
+    texte: { 'story.knopf': 'Zurück auf die Straße', 'tab.logbuch': 'Notizbuch' },
     namen: { trogadon: 'Tank Trogg', khara: 'Lady Kay', fisker: 'Captain Fisk', uldini: 'Mr. Uld', goldwin: 'Der Quartiermeister', 'der-erste': 'Brick', ahren: 'Party-Ari', jelninolan: 'Doc Jell' },
     bilder: {
       szene: 'bilder/strasse/szene.jpg',

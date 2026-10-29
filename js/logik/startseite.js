@@ -114,7 +114,8 @@ export function wechselBanner(vorher, nachher, heldenIds, an = true) {
 // ---------- Neuigkeiten-Punkte an den Tabs (Version 51) ----------
 const BIS = ['erledigt', 'gesehen'];
 // Prüft das Register gegen die bekannten Quellen und Tabs. Liefert lesbare Fehler, wirft nie.
-export function pruefeNeuigkeiten(register, quellenIds, tabIds) {
+// Version 59: optional { abschnitte, glanzStile } prüft auch abschnitt, vorziehen, glanz und rang.
+export function pruefeNeuigkeiten(register, quellenIds, tabIds, { abschnitte = null, glanzStile = null } = {}) {
   if (!Array.isArray(register)) return ['Neuigkeiten: Register ist keine Liste'];
   const f = [];
   const ids = new Set();
@@ -124,8 +125,22 @@ export function pruefeNeuigkeiten(register, quellenIds, tabIds) {
     if (ids.has(z.id)) f.push(`${wo}: doppelt`);
     ids.add(z.id);
     if (!(quellenIds || []).includes(z.id)) f.push(`${wo}: keine Quelle`);
-    if (!(tabIds || []).includes(z.tab)) f.push(`${wo}: unbekannter Tab „${z.tab}“`);
-    if (!BIS.includes(z.bis)) f.push(`${wo}: bis muss ${BIS.join(' oder ')} sein`);
+    if (z.tab !== null && z.tab !== undefined || !('abschnitt' in z)) { // ohne Tab nur erlaubt, wenn es auf der Startseite wirkt
+      if (!(tabIds || []).includes(z.tab)) f.push(`${wo}: unbekannter Tab „${z.tab}“`);
+      if (!BIS.includes(z.bis)) f.push(`${wo}: bis muss ${BIS.join(' oder ')} sein`);
+    }
+    const ab = abschnitte ? new Set(abschnitte) : null;
+    if ('abschnitt' in z && ab && !ab.has(z.abschnitt)) f.push(`${wo}: unbekannter Abschnitt „${z.abschnitt}“`);
+    if (z.vorziehen !== undefined) {
+      if (typeof z.abschnitt !== 'string') f.push(`${wo}: vorziehen ohne abschnitt`);
+      else if (z.vorziehen === z.abschnitt) f.push(`${wo}: vorziehen hinter sich selbst`);
+      else if (ab && !ab.has(z.vorziehen)) f.push(`${wo}: vorziehen hinter unbekannten Abschnitt „${z.vorziehen}“`);
+    }
+    if (z.glanz !== undefined) {
+      if (typeof z.abschnitt !== 'string') f.push(`${wo}: glanz ohne abschnitt`);
+      else if (glanzStile && !glanzStile.includes(z.glanz)) f.push(`${wo}: unbekannter Glanz „${z.glanz}“`);
+    }
+    if ('abschnitt' in z && !Number.isFinite(z.rang)) f.push(`${wo}: rang fehlt`);
   });
   return f;
 }
@@ -177,4 +192,72 @@ export function klappZustand(liste, mitKurz, gespeichert) {
 export function klappUmschalten(gespeichert, id, klein) {
   const alt = Array.isArray(gespeichert) ? gespeichert.filter(x => typeof x === 'string' && x !== id) : [];
   return klein ? [...alt, id] : alt;
+}
+
+// Abschnitt vorziehen (Version 57, „Siegel weiter oben“). Ein Abschnitt mit `vorziehen: { nach: '<id>' }` rückt direkt
+// hinter den genannten Abschnitt, solange sein Signal wahr ist (z. B. Story: ein Siegel wartet). Sonst bleibt er an seinem Platz.
+// ids      geordnete IDs aus ordneAbschnitte()
+// liste    START_ABSCHNITTE (für die vorziehen-Angaben)
+// signale  { id: true/false } aus app.js; fehlt ein Signal → nicht vorziehen
+// Mehrere vorgezogene Abschnitte hinter demselben Ziel behalten ihre Reihenfolge aus der Liste.
+// Kaputte Angaben (Ziel unbekannt, aus, gleich sich selbst) → Abschnitt bleibt, Fehler wird gemeldet. Wirft nie.
+export function vorziehen(ids, liste, signale) {
+  const fehler = [];
+  if (!Array.isArray(ids)) return { ids: [], fehler: ['Startseite: vorziehen ohne Abschnittsliste'] };
+  let neu = [...ids];
+  const hinter = {}; // Ziel → Zahl schon eingefügter Abschnitte (Reihenfolge stabil)
+  for (const z of Array.isArray(liste) ? liste : []) {
+    if (!z || typeof z !== 'object' || z.vorziehen === undefined) continue;
+    const id = z.id;
+    const nach = z.vorziehen && typeof z.vorziehen === 'object' ? z.vorziehen.nach : undefined;
+    if (typeof nach !== 'string' || !nach || nach === id) { fehler.push(`Startseite: „${id}“ hat ein ungültiges vorziehen`); continue; }
+    if (!neu.includes(id)) continue; // ausgeschaltet oder unbekannt (meldet schon ordneAbschnitte)
+    if (!neu.includes(nach)) { fehler.push(`Startseite: „${id}“ soll hinter „${nach}“, den es nicht gibt`); continue; }
+    if (!(signale && signale[id] === true)) continue;
+    neu = neu.filter(x => x !== id);
+    const pos = neu.indexOf(nach) + 1 + (hinter[nach] || 0);
+    neu.splice(pos, 0, id);
+    hinter[nach] = (hinter[nach] || 0) + 1;
+  }
+  return { ids: neu, fehler };
+}
+
+// Glanz beim ersten Erscheinen (Version 57): Siegel glüht, Held wippt. Nur einmal je neuer Sache (Kennung),
+// nicht bei jedem Öffnen. gespeichert = { art: kennung } (je Gerät), aktuell = { art: kennung | null }.
+// Liefert { arten: [...] fällig, neu: zu speichernder Stand, geaendert }. Müll im Speicher wird bereinigt.
+export function glanzFaellig(gespeichert, aktuell) {
+  const alt = gespeichert && typeof gespeichert === 'object' && !Array.isArray(gespeichert) ? gespeichert : {};
+  const neu = {};
+  for (const [k, v] of Object.entries(alt)) if (typeof v === 'string' && /^[a-z]{1,20}$/.test(k)) neu[k] = v;
+  const arten = [];
+  for (const [art, kennung] of Object.entries(aktuell && typeof aktuell === 'object' ? aktuell : {})) {
+    if (typeof kennung !== 'string' || !kennung || !/^[a-z]{1,20}$/.test(art)) continue;
+    if (neu[art] !== kennung) { arten.push(art); neu[art] = kennung; }
+  }
+  const geaendert = arten.length > 0 || Object.keys(neu).length !== Object.keys(alt).length;
+  return { arten, neu, geaendert };
+}
+
+// Neuigkeiten auf der Startseite (Version 59): wer rückt vor, wer glänzt? Eine Quelle: daten/neuigkeiten.js.
+// quellen wie bei tabPunkte(). Regel: höchstens EINE Neuigkeit rückt vor (kleinster rang mit `vorziehen`);
+// alle aktiven mit `glanz` glänzen an ihrem (ggf. neuen) Platz. Gleicher rang → Reihenfolge im Register.
+// Ergebnis: { vor: { abschnitt, nach } | null, glanz: [{ id, abschnitt, stil, kennung }] }. Kennung = Rohwert der
+// Quelle (ohne id), damit gespeicherte Glanz-Kennungen aus Version 57 gültig bleiben. Wirft nie.
+export function neuAufStart(register, quellen) {
+  const aktiv = [];
+  (Array.isArray(register) ? register : []).forEach((z, i) => {
+    if (!z || typeof z.id !== 'string' || typeof z.abschnitt !== 'string' || !z.abschnitt) return;
+    const q = quellen && quellen[z.id];
+    if (typeof q !== 'function') return;
+    let roh = null;
+    try { roh = q(); } catch (e) { roh = null; }
+    if (typeof roh !== 'string' || !roh) return;
+    aktiv.push({ z, roh, i, rang: Number.isFinite(z.rang) ? z.rang : Infinity });
+  });
+  aktiv.sort((a, b) => a.rang - b.rang || a.i - b.i);
+  const v = aktiv.find(x => typeof x.z.vorziehen === 'string' && x.z.vorziehen && x.z.vorziehen !== x.z.abschnitt);
+  return {
+    vor: v ? { abschnitt: v.z.abschnitt, nach: v.z.vorziehen } : null,
+    glanz: aktiv.filter(x => typeof x.z.glanz === 'string' && x.z.glanz).map(x => ({ id: x.z.id, abschnitt: x.z.abschnitt, stil: x.z.glanz, kennung: x.roh }))
+  };
 }

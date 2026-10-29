@@ -468,7 +468,6 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .erfolg-bild figcaption { position: absolute; left: 12px; right: 12px; bottom: 10px; display: flex; flex-direction: column; gap: 2px; color: #FBF3DE; }
 .erfolg-bild figcaption .eyebrow { color: #E8C46A; }
 .erfolg-text { font: 700 18px/1.3 var(--fh); }
-.erfolg-klein-knopf { position: absolute; top: 8px; right: 8px; min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1.5px solid #FBF3DE; background: rgba(10,8,5,.55); color: #FBF3DE; font: 700 13px var(--fb); cursor: pointer; }
 .erfolg-mini { width: 30px; height: 30px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--gut); box-sizing: border-box; }
 @keyframes erfolg-auf { 0% { opacity: 0; transform: scale(.92); } 60% { opacity: 1; transform: scale(1.02); } 100% { transform: none; } }
 .wechsel-banner, .wechsel-banner.auftritt { position: absolute; z-index: 6; top: 8px; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); height: 96px; border-radius: var(--r); overflow: hidden; background: var(--nacht); border: 2px solid var(--ac); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; animation: wechsel-banner var(--dauer, 2600ms) ease-in-out both; }
@@ -488,7 +487,6 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .tab-neu { position: absolute; top: -3px; right: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ac); border: 2px solid var(--panel); }
 .neu-tab .tab-nm { color: var(--ac); }
 .premium-rahmen { position: relative; }
-.premium-kleiner { position: absolute; top: 2px; right: 6px; min-height: 36px; font-size: 14px; color: var(--mute); }
 .premium-rahmen .karte.premium { padding-right: 70px; }
 .premium-klein { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); }
 .premium-zeile { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--mute); font: 600 15px var(--fb); cursor: pointer; text-align: left; }
@@ -497,7 +495,6 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .premium-klein .link { font-size: 14px; color: var(--mute); white-space: nowrap; }
 /* Einklappbare Abschnitte (Version 52) */
 .klapp-rahmen { position: relative; display: flex; flex-direction: column; }
-.klapp-knopf { align-self: flex-end; min-height: 36px; margin-top: -4px; font-size: 14px; color: var(--mute); }
 .klapp-zeile { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; }
 .klapp-zeile .spalte { flex: 1; gap: 2px; }
 .klapp-mehr { flex: none; font: italic 500 14px var(--fi); color: var(--mute); text-decoration: underline; }
@@ -505,6 +502,36 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .story-ruhig .spalte { flex: 1; gap: 2px; }
 .story-ruhig > .ic { width: 26px; height: 26px; flex: none; color: var(--ac); }
 .test-fehler { border-color: #B0205F; border-width: 2px; }
+/* Version 58: ein „Kleiner“-Knopf für alle verkleinerbaren Karten (Hauptquest, Premium, Heldenmoment):
+   kleine Pille oben rechts IN der Karte. auf-bild = über einem Foto (dunkel, durchscheinend). */
+.klein-knopf { position: absolute; top: 8px; right: 8px; z-index: 2; min-height: 32px; padding: 0 12px; border-radius: 16px; border: 1.5px solid var(--line); background: var(--panel); color: var(--mute); font: 700 13px var(--fb); cursor: pointer; }
+.klein-knopf::after { content: ' ▴'; font-size: 11px; }
+.klein-knopf.auf-bild { border-color: #FBF3DE; background: rgba(10,8,5,.55); color: #FBF3DE; }
+.klein-knopf:active { transform: translateY(1px); }
+.klapp-rahmen .karte { padding-right: 16px; }
+.klapp-rahmen .quest-zeile { margin-top: 6px; }
+/* Neues Abenteuer (Version 58): wie Siegel und Botschaft hervorgehoben, Glanz einmal je Angebot */
+.karte.angebot { border-style: solid; border-width: 3px; border-color: var(--ac); box-shadow: 0 3px 0 var(--ac-dunkel), 0 0 0 4px rgba(233,196,106,.28); }
+.angebot-kopf { display: flex; align-items: center; gap: 10px; }
+.glanz-stern .stern-klein { animation: glanz-siegel 1.1s ease-in-out 3; }
+.karte.angebot, .karte.welten-karte { border-style: solid; border-width: 3px; border-color: var(--ac); box-shadow: 0 3px 0 var(--ac-dunkel), 0 0 0 4px rgba(233,196,106,.28); }
+/* Neuer Gegner (Version 59): Duell-Karte rüttelt zweimal kurz, einmal je Gegner */
+.glanz-kampf { animation: wackel .5s ease 2; }
+:root[data-bewegung="aus"] .glanz-stern .stern-klein, :root[data-bewegung="aus"] .glanz-kampf { animation: none; }
+/* Version 57: Neues hervorheben ohne Rot. Siegel golden (Neugier statt Pflicht), ungelesene Botschaft als Sprechblase.
+   Bewegung nur beim ersten Erscheinen (Klassen glanz-*, gesetzt von glanzNachZeichnen), nie dauernd. */
+.story-neu { border-width: 3px; box-shadow: 0 3px 0 var(--ac-dunkel), 0 0 0 4px rgba(233,196,106,.28); }
+.story-neu .siegel-mark { width: 52px; height: 52px; background: radial-gradient(circle at 35% 30%, #F8E39B 0%, #E2B44C 55%, #A97A1E 100%); color: #3A2508; box-shadow: 0 0 0 3px rgba(233,196,106,.4), inset 0 -2px 0 rgba(0,0,0,.18); }
+.story-karte.story-neu .siegel-mark .ic { color: #3A2508; width: 28px; height: 28px; }
+.glanz-siegel .siegel-mark { animation: glanz-siegel 1.1s ease-in-out 3; }
+@keyframes glanz-siegel { 0%, 100% { transform: none; box-shadow: 0 0 0 3px rgba(233,196,106,.4); } 50% { transform: scale(1.1) rotate(-6deg); box-shadow: 0 0 0 6px rgba(233,196,106,.25), 0 0 22px 8px rgba(233,196,106,.75); } }
+.botschaft-klein.botschaft-neu { gap: 10px; min-height: 52px; padding: 6px 12px 6px 6px; border: 2px solid var(--ac); border-radius: 6px 24px 24px 24px; background: var(--sel); color: var(--ink); font: 600 15px/1.3 var(--fb); box-shadow: 0 2px 0 var(--ac-dunkel); align-self: stretch; text-align: left; }
+.botschaft-klein.botschaft-neu span:not(.neu) { flex: 1; }
+.botschaft-klein.botschaft-neu .rund-klein { width: 42px; height: 42px; border: 2px solid var(--ac); box-sizing: border-box; }
+.botschaft-klein.botschaft-neu .neu { flex: none; font: 700 11px var(--fh); text-transform: uppercase; }
+.glanz-wippen .rund-klein, .glanz-wippen > .rund { animation: glanz-wippen .9s ease-in-out 2; transform-origin: 50% 90%; }
+@keyframes glanz-wippen { 0%, 100% { transform: none; } 20% { transform: translateY(-4px) rotate(-8deg); } 45% { transform: translateY(0) rotate(6deg); } 70% { transform: translateY(-2px) rotate(-3deg); } }
+:root[data-bewegung="aus"] .glanz-siegel .siegel-mark, :root[data-bewegung="aus"] .glanz-wippen .rund-klein, :root[data-bewegung="aus"] .glanz-wippen > .rund { animation: none; }
 .sr-titel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .start-fuss .version { display: block; margin-top: 6px; font: 600 12px var(--fb); font-style: normal; letter-spacing: .04em; color: var(--mute); opacity: .8; }
@@ -683,6 +710,9 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .lb-text small { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mute); }
 .lb-text small .rund-klein { width: 18px; height: 18px; }
 .lb-xp { flex: none; font: 700 12px var(--fh); letter-spacing: .04em; color: var(--gut-text); }
+.lb-filter-kopf { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.lb-filter-knopf .ic { width: 16px; height: 16px; }
+.lb-filter-feld { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
 .lb-mehr { align-self: center; margin: 4px 0 16px; }
 
 @media (prefers-reduced-motion: reduce) {

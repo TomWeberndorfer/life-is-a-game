@@ -36,6 +36,9 @@ export const TEXTE = {
   'lb.heute': 'Heute',
   'lb.gestern': 'Gestern',
   'lb.filterArt': 'Art',
+  'lb.filterKnopf': 'Filtern',
+  'lb.filterAktiv': 'Filter: {filter}',
+  'lb.filterWeg': 'Alles zeigen',
   'lb.filterHeld': 'Held',
   'lb.filter.alle': 'Alles',
   'lb.filter.erledigt': 'Erledigt',
@@ -156,6 +159,8 @@ export const TEXTE = {
   // Crew-Botschaft und Story-Andeutung
   'botschaft.klein': '{held} hat dir heute etwas gesagt',
   'botschaft.ok': 'OK',
+  'botschaft.neu': 'neu',
+  'botschaft.ungelesen': '{held} hat dir heute etwas gesagt',
   'story.morgenTeil': 'Morgen: Teil {nr} · {titel}',
   'story.morgenNeu': 'Morgen: neue Geschichte „{titel}“',
   'story.frei': 'Teil {frei} von {gesamt} frei',

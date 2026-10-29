@@ -5,6 +5,7 @@
 // klappbar: true = Karte lässt sich mit „Kleiner“ auf eine Zeile einklappen (Version 52, Wahl je Gerät).
 //   Braucht eine Kurzzeile in app.js (START_KURZ); ohne sie bleibt die Karte offen und es gibt eine Warnung.
 //   Die Heldentat bleibt bewusst nicht klappbar: sie ist die Hauptaktion (Entscheidung 28.10.2026).
+// Vorziehen und Glanz bei Neuigkeiten stehen seit Version 59 nur noch in daten/neuigkeiten.js (eine Quelle).
 // Unbekannte oder doppelte IDs werden übersprungen und in der Konsole gemeldet (logik/startseite.js).
 //
 // Ziel (Mockup): Held → Quest → Heldentat → Duell → Bonus → Story. Die Abschnitte heißen schon so;
@@ -19,7 +20,7 @@ export const START_ABSCHNITTE = [
   { id: 'heldentat' },  // Heutige Heldentat: Fähigkeit, Wenn-dann, Tagesfrage, Ja / Nicht gebraucht (Version 44)
   { id: 'duell' },      // Duell-Karte: Held vs Gegner mit Lebensbalken (Version 45)
   { id: 'bonus' },      // kleine Tagesaufgaben
-  { id: 'story' },
+  { id: 'story' },      // mit Siegel direkt unter die Heldentat (daten/neuigkeiten.js)
   { id: 'welten' },
   { id: 'extra' }       // Feedback-Bitte, Premium
 ];

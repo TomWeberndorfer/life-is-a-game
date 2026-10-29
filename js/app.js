@@ -29,11 +29,12 @@ import { BOTSCHAFTEN, STORIES, MIKRO, MIKRO_JE_TAG, MIKRO_RUECKFALL } from './da
 import * as TB from './logik/tabelle.js';
 import { pflegeHtml, formPos } from './ansicht/pflege.js';
 import { START_ABSCHNITTE, HELDENKOPF, BONUS, START_MOMENTE } from './daten/startseite.js';
+import { vorziehen, glanzFaellig, neuAufStart } from './logik/startseite.js';
 import { NEUIGKEITEN } from './daten/neuigkeiten.js';
 import { BEWEGUNG } from './daten/bewegung.js';
 import { ordneAbschnitte, heldenKopf, tagesfrage, naechsterOffener, bonusAnsicht, startMomente, erfolgGroesse, wechselBanner, tabPunkte, pruefeNeuigkeiten, klappZustand, klappUmschalten } from './logik/startseite.js';
 
-export const VERSION = { nr: 55, datum: '28.10.2026 · 15:15' };
+export const VERSION = { nr: 59, datum: '29.10.2026 · 11:15' };
 
 const istTest = location.hash === '#test';
 const istAdmin = location.hash === '#admin';
@@ -138,7 +139,7 @@ const ui = {
   analyseSchritt: 0,
   wackeln: false,
   xpFlug: null,
-  lb: { held: 'alle', gruppe: 'alle', tage: LOGBUCH_TAGE_JE_SEITE } // Logbuch-Filter (Version 41), nur in dieser Sitzung
+  lb: { held: 'alle', gruppe: 'alle', tage: LOGBUCH_TAGE_JE_SEITE, offen: false } // Logbuch-Filter (Version 41), nur in dieser Sitzung; offen = Filter ausgeklappt (Version 56)
 };
 
 function speichere() {
@@ -266,6 +267,7 @@ const ICON = {
   mond: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
   glas: '<path d="M7 4h10l-1 16H8zM7 9h10"/>',
   kalender: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  filter: '<path d="M4 5h16l-6 7v6l-4 2v-8z"/>',
   liste: '<path d="M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/>',
   zahnrad: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   zurueck: '<path d="M15 5l-7 7 7 7"/>',
@@ -341,9 +343,15 @@ const NEU_QUELLEN = {
     return b.text && b.anlass !== 'erster_tag' ? `${spiel.fokus}:${tag}` : null;
   },
   gegner: () => { const a = K.auswertung(stand, jetzt()); return a.neuerGegner && (a.siegHeute || a.rundeTag <= 0) ? `${spiel.fokus}:${a.gegner}` : null; },
-  welten: () => (stand.stil.frei && !stand.stil.angeboten ? 'offen' : null)
+  welten: () => (stand.stil.frei && !stand.stil.angeboten ? 'offen' : null),
+  // Version 59: „Neues Abenteuer?“ (kein Tab-Punkt, nur Glanz). Kennung = Zahl der Helden: nach einem neuen Helden ist
+  // das nächste Angebot eine neue Sache.
+  angebot: () => (H.zielAngebot(spiel) ? String(spiel.helden.length) : null)
 };
-pruefeNeuigkeiten(NEUIGKEITEN, Object.keys(NEU_QUELLEN), TABS.map(t => t.screen)).forEach(m => console.warn(m));
+pruefeNeuigkeiten(NEUIGKEITEN, Object.keys(NEU_QUELLEN), TABS.map(t => t.screen), {
+  abschnitte: (Array.isArray(START_ABSCHNITTE) ? START_ABSCHNITTE : []).map(z => z && z.id),
+  glanzStile: Object.keys((BEWEGUNG && BEWEGUNG.glanz) || {})
+}).forEach(m => console.warn(m));
 const neuSitzung = new Set(); // Kennungen, die auf ihrem Tab schon offen waren (bis: 'gesehen')
 function neuPunkte() {
   if (!stand.quest) return [];
@@ -443,6 +451,28 @@ function lbZeile(e, mehrereHelden) {
       <span class="lb-text">${esc(t.titel)}${t.detail || mehrereHelden ? `<small>${bildTeil}${esc([mehrereHelden ? nameVon(e.heroId) : '', t.detail].filter(Boolean).join(' · '))}</small>` : ''}</span>
       ${e.xp ? `<span class="lb-xp">${esc(T('lb.xp', { xp: e.xp }))}</span>` : ''}
     </li>`;
+}
+
+// Filter eingeklappt (Version 56): Standard „Alles“, die Chips erst auf Tipp. Ein aktiver Filter steht im Knopf
+// und bleibt sichtbar, auch eingeklappt (sonst wirkt das Logbuch leer, ohne dass man den Grund sieht).
+function lbFilterHtml(v, mehrere) {
+  const gruppe = LOGBUCH_FILTER.find(f => f.id === v.filter.gruppe);
+  const aktiv = [v.filter.gruppe !== 'alle' && gruppe ? T(gruppe.text) : '', mehrere && v.filter.held !== 'alle' ? nameVon(v.filter.held) : ''].filter(Boolean);
+  const offen = !!ui.lb.offen;
+  const knopf = `<div class="lb-filter-kopf">
+      <button class="lb-chip lb-filter-knopf ${aktiv.length ? 'an' : ''}" data-a="lb-filter-klapp" aria-expanded="${offen}" aria-controls="lb-filter-feld">${icon('filter')}${esc(aktiv.length ? T('lb.filterAktiv', { filter: aktiv.join(' · ') }) : T('lb.filterKnopf'))}</button>
+      ${aktiv.length ? `<button class="link lb-filter-weg" data-a="lb-filter-weg">${esc(T('lb.filterWeg'))}</button>` : ''}
+    </div>`;
+  if (!offen) return knopf;
+  return `${knopf}<div id="lb-filter-feld" class="lb-filter-feld">
+      <div class="lb-filter" role="group" aria-label="${esc(T('lb.filterArt'))}">
+        ${LOGBUCH_FILTER.map(f => lbChip('lb-gruppe', f.id, esc(T(f.text)), v.filter.gruppe === f.id)).join('')}
+      </div>
+      ${mehrere ? `<div class="lb-filter" role="group" aria-label="${esc(T('lb.filterHeld'))}">
+        ${lbChip('lb-held', 'alle', esc(T('lb.alleHelden')), v.filter.held === 'alle')}
+        ${spiel.helden.map(h => lbChip('lb-held', h.heroId, `${img(h.heroId, nameVon(h.heroId), 'held', 'rund-klein', '')}${esc(nameVon(h.heroId))}`, v.filter.held === h.heroId)).join('')}
+      </div>` : ''}
+    </div>`;
 }
 
 // Bezirksbild: eigenes Bild → Datei des Stils → gezeichnete Silhouette (kein Leihen aus anderen Stilen)
@@ -638,13 +668,7 @@ const SCREENS = {
         <h1>${esc(tab ? tabLabel(tab) : 'Logbuch')}</h1>
         <p class="klein">${esc(T('lb.intro'))}</p>
         ${v.seit ? `<p class="klein lb-seit">${esc(T('lb.seit', { datum: kurzDatum(v.seit), n: v.gesamt }))}</p>` : ''}</div>
-        <div class="lb-filter" role="group" aria-label="${esc(T('lb.filterArt'))}">
-          ${LOGBUCH_FILTER.map(f => lbChip('lb-gruppe', f.id, esc(T(f.text)), v.filter.gruppe === f.id)).join('')}
-        </div>
-        ${mehrere ? `<div class="lb-filter" role="group" aria-label="${esc(T('lb.filterHeld'))}">
-          ${lbChip('lb-held', 'alle', esc(T('lb.alleHelden')), v.filter.held === 'alle')}
-          ${spiel.helden.map(h => lbChip('lb-held', h.heroId, `${img(h.heroId, nameVon(h.heroId), 'held', 'rund-klein', '')}${esc(nameVon(h.heroId))}`, v.filter.held === h.heroId)).join('')}
-        </div>` : ''}
+        ${lbFilterHtml(v, mehrere)}
         ${v.tage.length ? v.tage.map(t => `<section class="lb-tag" aria-label="${esc(lbTagTitel(t.tag))}">
             <h2 class="lb-tag-kopf"><span>${esc(lbTagTitel(t.tag))}</span>${t.xp ? `<span class="lb-xp">${esc(T('lb.xp', { xp: t.xp }))}</span>` : ''}</h2>
             <ul class="lb-liste">${t.eintraege.map(e => lbZeile(e, mehrere && v.filter.held === 'alle')).join('')}</ul>
@@ -825,8 +849,12 @@ const SCREENS = {
     const ctx = { v, f, g, a };
     // Version 43: Reihenfolge aus daten/startseite.js; ein kaputter Abschnitt bricht nicht die ganze Seite.
     const k = klapp();
-    const teile = START_IDS.map(id => {
-      try { return mitKlappe(id, START_TEILE[id](ctx), ctx, k); }
+    // Version 59: Neuigkeiten aus EINER Quelle (daten/neuigkeiten.js): höchstens eine rückt vor, alle glänzen einmal.
+    const neu = neuAufStart(NEUIGKEITEN, NEU_QUELLEN);
+    startGlanz = neu.glanz;
+    const reihe = neu.vor ? vorziehen(START_IDS, [{ id: neu.vor.abschnitt, vorziehen: { nach: neu.vor.nach } }], { [neu.vor.abschnitt]: true }) : { ids: START_IDS };
+    const teile = reihe.ids.map(id => {
+      try { return markiere(mitKlappe(id, START_TEILE[id](ctx), ctx, k), id); }
       catch (e) {
         console.warn(`Startseite: Abschnitt ${id}:`, e.message);
         // Version 55: im Testprofil sichtbar machen (sonst fällt ein fehlender Abschnitt nicht auf, siehe Version 54)
@@ -1431,7 +1459,7 @@ function erfolgHtml(antw) {
   const name = nameVon(id);
   return `<figure class="erfolg-bild${ui.einmal.has('check') ? ' neu' : ''}">${img('banner-' + id, name, 'szene', 'cover', '')}<span class="erfolg-verlauf" aria-hidden="true"></span>
     <figcaption><span class="eyebrow">${esc(T('erfolg.eyebrow'))}</span><span class="erfolg-text">${esc(T('erfolg.text', { held: name }))}</span></figcaption>
-    <button class="erfolg-klein-knopf" data-a="erfolg-klein">${esc(T('erfolg.klein'))}</button></figure>`;
+    <button class="klein-knopf auf-bild" data-a="erfolg-klein">${esc(T('erfolg.klein'))}</button></figure>`;
 }
 
 // Wechsel-Banner (Version 49): kurz Bild und Name beim bewussten Heldenwechsel; verschwindet nach SM.wechsel.dauerMs.
@@ -1554,7 +1582,7 @@ klappZustand(START_ABSCHNITTE, Object.keys(START_KURZ), []).fehler.forEach(m => 
 function mitKlappe(id, html, ctx, k) {
   if (!k.klappbar.includes(id) || !html) return html;
   if (k.klein.includes(id)) return `<button class="karte klapp-zeile tippbar" data-a="klapp-auf" data-id="${esc(id)}" aria-expanded="false"><span class="spalte">${START_KURZ[id](ctx)}</span><span class="klapp-mehr">${esc(T('klapp.mehr'))}</span></button>`;
-  return `<div class="klapp-rahmen">${html}<button class="link klapp-knopf" data-a="klapp-zu" data-id="${esc(id)}" aria-expanded="true">${esc(T('klapp.kleiner'))}</button></div>`;
+  return `<div class="klapp-rahmen">${html}<button class="klein-knopf" data-a="klapp-zu" data-id="${esc(id)}" aria-expanded="true">${esc(T('klapp.kleiner'))}</button></div>`;
 }
 
 const START_IDS = (() => {
@@ -1562,10 +1590,18 @@ const START_IDS = (() => {
   if (fehler.length) console.warn(fehler.join('\n'));
   return ids.length ? ids : Object.keys(START_TEILE); // kaputte Liste → alle Abschnitte in eingebauter Reihenfolge
 })();
+// Version 59: äußerstes Element eines Abschnitts markieren (data-abschnitt), damit Glanz & Co. ihn finden,
+// ohne dass jede Karte selbst Attribute setzen muss. Leerer Abschnitt bleibt leer.
+function markiere(html, id) {
+  if (typeof html !== 'string' || !html.trim()) return html;
+  return html.replace(/^(\s*<[a-zA-Z][\w-]*)/, `$1 data-abschnitt="${esc(id)}"`);
+}
 
 function angebotKarte() {
   if (!H.zielAngebot(spiel)) return '';
-  return `<div class="karte spalte angebot"><span class="eyebrow akzent">NEUES ABENTEUER</span>
+  // Version 58: hervorgehoben wie Siegel und Botschaft (goldener Stern, Glanz einmal je Angebot; Kennung = Zahl der Helden,
+  // denn nach einem neuen Helden ist das nächste Angebot eine neue Sache)
+  return `<div class="karte spalte angebot"><span class="angebot-kopf"><span class="stern-klein" aria-hidden="true">${icon('stern')}</span><span class="eyebrow akzent">NEUES ABENTEUER</span></span>
     <span class="nm gross-nm">Willst du ein neues Abenteuer beginnen?</span>
     <p class="klein">Ein weiterer Held für einen anderen Lebensbereich. Du kannst bis zu ${H.MAX_HELDEN} Helden gleichzeitig begleiten.</p>
     <div class="zwei"><button class="btn voll" data-a="neues-abenteuer">Ja, neues Ziel</button><button class="btn" data-a="angebot-spaeter">Später</button></div></div>`;
@@ -1582,8 +1618,11 @@ function crewKarte() {
   // Am ersten Tag nicht zeigen: das Onboarding hat Verbündeten und Gegner gerade erst vorgestellt.
   if (!b.text || b.anlass === 'erster_tag') return '';
   const tag = K.tagKey(jetzt());
-  const klein = !ui.botschaftOffen && (H.istGelesen(spiel, spiel.fokus, tag) || K.auswertung(stand, jetzt()).heuteAntwort);
-  if (klein) return `<button class="botschaft-klein" data-a="botschaft-auf">${img(v.held, nameVon(v.held), 'held', 'rund-klein')}<span>${esc(T('botschaft.klein', { held: nameVon(v.held) }))}</span></button>`;
+  const gelesen = H.istGelesen(spiel, spiel.fokus, tag);
+  const klein = !ui.botschaftOffen && (gelesen || K.auswertung(stand, jetzt()).heuteAntwort);
+  // Version 57: ungelesen → hervorgehoben (größeres Porträt, Akzentrahmen, „neu“); gelesen → ruhig wie bisher. Wippen: daten/neuigkeiten.js
+  if (klein && gelesen) return `<button class="botschaft-klein" data-a="botschaft-auf">${img(v.held, nameVon(v.held), 'held', 'rund-klein')}<span>${esc(T('botschaft.klein', { held: nameVon(v.held) }))}</span></button>`;
+  if (klein) return `<button class="botschaft-klein botschaft-neu" data-a="botschaft-auf">${img(v.held, nameVon(v.held), 'held', 'rund-klein')}<span>${esc(T('botschaft.ungelesen', { held: nameVon(v.held) }))}</span><span class="neu">${esc(T('botschaft.neu'))}</span></button>`;
   if (merkmal('crew_msg_tag') !== tag) { merke('crew_msg_tag', tag); trackEvent('crew_message_seen', { anlass: b.anlass }); }
   return `<div class="botschaft">${img(v.held, nameVon(v.held), 'held', 'rund gut-rand-b')}<p class="blase"><b>${esc(nameVon(v.held))}</b>${esc(b.text)}<button class="link botschaft-ok" data-a="botschaft-zu">${esc(T('botschaft.ok'))}</button></p></div>`;
 }
@@ -1707,7 +1746,7 @@ function extraKarten() {
     // Version 50: verkleinerbar (Wahl je Gerät in den Analytics-Merkmalen, kein Spielstand)
     teile.push(merkmal('premium_klein') === true
       ? `<div class="premium-klein"><button class="premium-zeile" data-a="premium"><span class="stern-mini" aria-hidden="true">${icon('stern')}</span><span>${esc(PREMIUM.titel)} · ${esc(PREMIUM.preis)}</span></button><button class="link" data-a="premium-gross">${esc(T('premium.groesser'))}</button></div>`
-      : `<div class="premium-rahmen"><button class="karte premium tippbar" data-a="premium"><span class="stern-klein" aria-hidden="true">${icon('stern')}</span><span class="spalte"><span class="nm">${esc(PREMIUM.titel)}</span><span class="klein">${PREMIUM.punkte.map(esc).join(' · ')}</span><span class="preis">${esc(PREMIUM.preis)}</span></span></button><button class="premium-kleiner link" data-a="premium-klein">${esc(T('premium.kleiner'))}</button></div>`);
+      : `<div class="premium-rahmen"><button class="karte premium tippbar" data-a="premium"><span class="stern-klein" aria-hidden="true">${icon('stern')}</span><span class="spalte"><span class="nm">${esc(PREMIUM.titel)}</span><span class="klein">${PREMIUM.punkte.map(esc).join(' · ')}</span><span class="preis">${esc(PREMIUM.preis)}</span></span></button><button class="klein-knopf" data-a="premium-klein">${esc(T('premium.kleiner'))}</button></div>`);
   }
   return teile.join('');
 }
@@ -1758,6 +1797,29 @@ function renderJetzt() {
   letztesOverlay = key || null;
 }
 
+// Glanz (Version 57, seit 59 aus daten/neuigkeiten.js): nur beim ersten Erscheinen einer neuen Sache, je Gerät gemerkt
+// (Merkmal `glanz`: Neuigkeit → Kennung). Stil → Klasse aus daten/bewegung.js. Bei „Bewegung reduzieren“ wird nichts
+// bewegt, aber trotzdem gemerkt (sonst käme die Bewegung nach dem Umschalten nachträglich).
+const GLANZ = BEWEGUNG && BEWEGUNG.glanz && typeof BEWEGUNG.glanz === 'object' ? BEWEGUNG.glanz : {};
+let startGlanz = []; // von SCREENS.start gesetzt: [{ id, abschnitt, stil, kennung }]
+function glanzNachZeichnen() {
+  if (ui.screen !== 'start' || !startGlanz.length) return;
+  const aktuell = {};
+  const ziel = {};
+  for (const g of startGlanz) {
+    const el = app.querySelector(`.start-inhalt [data-abschnitt="${g.abschnitt}"]`);
+    if (!el) continue; // Abschnitt zeigt gerade nichts (z. B. ausgeschaltet) → nicht als gesehen merken
+    aktuell[g.id] = g.kennung;
+    ziel[g.id] = { el, stil: g.stil };
+  }
+  const r = glanzFaellig(merkmal('glanz'), aktuell);
+  if (!bewegungAus) for (const id of r.arten) {
+    const klasse = GLANZ[ziel[id].stil];
+    if (typeof klasse === 'string') ziel[id].el.classList.add(klasse); // unbekannter Stil: beim Start gemeldet
+  }
+  if (r.geaendert) merke('glanz', r.neu);
+}
+
 // Bewegung nach dem Zeichnen (Version 46). Reine Darstellung; Fehler hier dürfen nie das Spiel stören.
 function bewegungNachZeichnen(auftritt) {
   try {
@@ -1768,6 +1830,7 @@ function bewegungNachZeichnen(auftritt) {
       });
       app.querySelector('.kopf-bild')?.classList.add('auftritt-ring');
     }
+    glanzNachZeichnen();
     const balken = app.querySelector('.kopf-xp i');
     if (!bewegungAus && ui.einmal.has('check') && balken && Number.isFinite(ui.xpVon)) {
       const ziel = balken.style.width;
@@ -2137,6 +2200,8 @@ app.addEventListener('click', e => {
     case 'lb-held':
       if (id === 'alle' || H.heldVon(spiel, id)) { ui.lb = { ...ui.lb, held: id, tage: LOGBUCH_TAGE_JE_SEITE }; trackEvent('logbook_filter', {}); }
       render(); break;
+    case 'lb-filter-klapp': ui.lb = { ...ui.lb, offen: !ui.lb.offen }; render(); break;
+    case 'lb-filter-weg': ui.lb = { ...ui.lb, held: 'alle', gruppe: 'alle', tage: LOGBUCH_TAGE_JE_SEITE }; trackEvent('logbook_filter', {}); render(); break;
     case 'lb-mehr': ui.lb = { ...ui.lb, tage: ui.lb.tage + LOGBUCH_TAGE_JE_SEITE }; trackEvent('logbook_more', {}); render(); break;
     case 'quest-bearbeiten': questBearbeitenOeffnen(); break;
     case 'qe-anzahl': if (ui.qe) { ui.qe.anzahl = Number(id); ui.qe.fehler = { ...ui.qe.fehler, anzahl: undefined }; render(); } break;
