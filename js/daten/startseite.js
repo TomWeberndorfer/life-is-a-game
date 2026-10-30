@@ -22,8 +22,14 @@ export const START_ABSCHNITTE = [
   { id: 'bonus' },      // kleine Tagesaufgaben
   { id: 'story' },      // mit Siegel direkt unter die Heldentat (daten/neuigkeiten.js)
   { id: 'welten' },
-  { id: 'extra' }       // Feedback-Bitte, Premium
+  { id: 'extra' },      // Feedback-Bitte
+  { id: 'premium', klappbar: true } // Premium-Angebot (eigener Abschnitt und allgemein klappbar seit Version 63)
 ];
+
+// Weg der Bosskette auf der Hauptquest-Karte (30.10.2026): wie viele geschaffte Stationen (besiegte Gegner, am Anfang
+// der Start) links sichtbar bleiben und wie viele kommende Gegner als Silhouette erscheinen; danach immer Nebel.
+// Erlaubt: ganze Zahlen 0–6 (sonst Standard 1/1). Bei mehr besiegten Gegnern rutscht der älteste links aus dem Bild.
+export const WEG_FENSTER = { zurueck: 2, voraus: 1 };
 
 // Heldenkopf: wie viele Mini-Porträts der Knopf „Helden wechseln“ höchstens stapelt.
 export const HELDENKOPF = { stapelMax: 3 };

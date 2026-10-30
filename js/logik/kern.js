@@ -102,7 +102,8 @@ export function runden(stand, heuteK) {
     const gegner = k[idx];
     let anwendungen = 0;
     for (const t of ja) if (t >= von && t <= bis) anwendungen++;
-    const r = { nr, key: rundeKey(nr), von, bis, sieg, gegner, gegnerIdx: idx, neuerGegner: nr > 1 && gegner !== gegnerVorher, anwendungen };
+    // siegeVorher (30.10.2026): Siege vor dieser Runde, bestimmt das Rundenziel der Einstiegsrampe (rundenZiel)
+    const r = { nr, key: rundeKey(nr), von, bis, sieg, gegner, gegnerIdx: idx, neuerGegner: nr > 1 && gegner !== gegnerVorher, anwendungen, siegeVorher: siege };
     liste.push(r);
     if (von > heuteK) return { runden: liste, aktuell: r };
     if (bis >= heuteK && !sieg) return { runden: liste, aktuell: r };
@@ -111,6 +112,38 @@ export function runden(stand, heuteK) {
     von = plus(bis, 1);
   }
   throw new Error('runden: zu viele Runden');
+}
+
+// ---------- Einstiegsrampe (30.10.2026) ----------
+// Gegner werden schwerer, bis das eigene Ziel erreicht ist: der erste braucht `start` Anwendungen, jeder weitere
+// `schritt` mehr, höchstens quest.anzahl (das Ziel). Danach bleibt es beim Ziel (mehr nur freiwillig, siehe Backlog).
+// Die Regel wird beim Anlegen der Quest aus daten/rampe.js übernommen (quest.rampe) und gilt fest für diese Quest.
+// Ohne quest.rampe (Quests vor dieser Version, Entscheidung 30.10.2026) gilt in jeder Runde quest.anzahl wie bisher.
+export const RAMPE_GRENZEN = Object.freeze({ startMax: 7, schrittMax: 6 });
+// Gültige Rampe oder null (aus). Wirft nie.
+export function bereinigeRampe(roh) {
+  if (!roh || typeof roh !== 'object' || Array.isArray(roh)) return null;
+  const { start, schritt } = roh;
+  if (!Number.isInteger(start) || start < 1 || start > RAMPE_GRENZEN.startMax) return null;
+  if (!Number.isInteger(schritt) || schritt < 1 || schritt > RAMPE_GRENZEN.schrittMax) return null;
+  return { start, schritt };
+}
+// Lesbare Fehler einer Rampen-Einstellung (null = Rampe aus ist gültig).
+export function pruefeRampe(roh) {
+  if (roh === null) return [];
+  if (!roh || typeof roh !== 'object' || Array.isArray(roh)) return ['Rampe muss ein Objekt { start, schritt } oder null sein'];
+  const f = [];
+  if (!Number.isInteger(roh.start) || roh.start < 1 || roh.start > RAMPE_GRENZEN.startMax) f.push(`start muss eine ganze Zahl von 1 bis ${RAMPE_GRENZEN.startMax} sein`);
+  if (!Number.isInteger(roh.schritt) || roh.schritt < 1 || roh.schritt > RAMPE_GRENZEN.schrittMax) f.push(`schritt muss eine ganze Zahl von 1 bis ${RAMPE_GRENZEN.schrittMax} sein`);
+  return f;
+}
+// Anwendungen, die eine Runde braucht, nach siegeVorher Siegen. Ohne gültige Quest-Anzahl: 3 (wie migriere).
+export function rundenZiel(quest, siegeVorher) {
+  const ziel = quest && Number.isInteger(quest.anzahl) && quest.anzahl >= 1 ? quest.anzahl : 3;
+  const r = bereinigeRampe(quest && quest.rampe);
+  if (!r) return ziel;
+  const n = Number.isInteger(siegeVorher) && siegeVorher > 0 ? siegeVorher : 0;
+  return Math.max(1, Math.min(ziel, r.start + n * r.schritt));
 }
 
 // Runde, zu der ein Tag gehört (für den Tages-Check).
@@ -183,6 +216,8 @@ export function migriere(roh, profilId, stilIds = ['fantasy']) {
       start: ausTagKey(q.start) ? q.start : null,
       kette: Array.isArray(q.kette) ? q.kette.filter(x => typeof x === 'string' && GEGNER_ID.test(x)).slice(0, 50) : []
     };
+    const rampe = bereinigeRampe(q.rampe); // fehlt bei Quests vor der Einstiegsrampe → bleibt ohne (feste Anzahl)
+    if (rampe) s.quest.rampe = rampe;
   }
   if (s.onboarding.fertig && !s.quest) s.onboarding.fertig = false;
 
@@ -247,7 +282,8 @@ export function gegnerKette(vorlage) {
   return k.filter(x => typeof x === 'string' && GEGNER_ID.test(x));
 }
 
-export function questAnlegen(stand, vorlage, zielText, heute) {
+// rampe (30.10.2026): Einstiegsrampe aus daten/rampe.js; null/ungültig = feste Anzahl in jeder Runde.
+export function questAnlegen(stand, vorlage, zielText, heute, rampe = null) {
   if (!vorlage) throw new Error('Keine Vorlage für diese Auswahl gefunden.');
   const s = kopie(stand);
   const anzahl = Number.isInteger(vorlage.quest && vorlage.quest.anzahl) ? vorlage.quest.anzahl : 3;
@@ -258,6 +294,8 @@ export function questAnlegen(stand, vorlage, zielText, heute) {
     start: tagKey(heute),
     kette: gegnerKette(vorlage)
   };
+  const r = bereinigeRampe(rampe);
+  if (r) s.quest.rampe = r;
   s.onboarding.fertig = true;
   return s;
 }
@@ -278,7 +316,9 @@ export function levelAus(xp) {
 export function auswertung(stand, heute) {
   const heuteK = tagKey(heute);
   const { runden: alle, aktuell: r } = runden(stand, heuteK);
-  const anzahl = stand.quest ? stand.quest.anzahl : 3;
+  // Einstiegsrampe: anzahl = Ziel dieser Runde; zielAnzahl = eigenes Ziel (quest.anzahl)
+  const anzahl = stand.quest ? rundenZiel(stand.quest, r.siegeVorher) : 3;
+  const zielAnzahl = stand.quest ? stand.quest.anzahl : 3;
   const jaTage = Object.keys(stand.tage).filter(k => stand.tage[k] === 'ja');
   const wocheZaehler = r.anwendungen;
   const treffer = Math.min(wocheZaehler, anzahl);
@@ -303,6 +343,10 @@ export function auswertung(stand, heute) {
     siegHeute: (stand.siege || []).some(x => x.tag === heuteK),
     vorigeGewonnen: !!(vorige && vorige.sieg),
     anzahl,
+    zielAnzahl,
+    rampe: !!(stand.quest && bereinigeRampe(stand.quest.rampe)),
+    siegeVorher: r.siegeVorher,
+    vorigeAnzahl: vorige && stand.quest ? rundenZiel(stand.quest, vorige.siegeVorher) : null,
     wocheZaehler,
     treffer,
     bossKraft: anzahl ? (anzahl - treffer) / anzahl : 1,
@@ -349,10 +393,12 @@ function siegPruefen(s, heute) {
   const k = tagKey(heute);
   const ereignisse = [];
   const r = rundeVonTag(s, k);
-  if (!r.sieg && r.anwendungen >= s.quest.anzahl) {
+  const ziel = rundenZiel(s.quest, r.siegeVorher);
+  if (!r.sieg && r.anwendungen >= ziel) {
     s.siege = [...s.siege, { tag: k, gegner: r.gegner }].sort((a, b) => (a.tag < b.tag ? -1 : 1));
     const danach = auswertung(s, heute);
-    ereignisse.push({ typ: 'sieg', woche: r.key, gegner: r.gegner, naechster: danach.gegner, neuerGegner: danach.neuerGegner, kapitel: danach.gegnerNr });
+    // anzahl: was dieser Sieg gebraucht hat; naechsteAnzahl: Ziel der nächsten Runde (Einstiegsrampe)
+    ereignisse.push({ typ: 'sieg', woche: r.key, gegner: r.gegner, naechster: danach.gegner, neuerGegner: danach.neuerGegner, kapitel: danach.gegnerNr, anzahl: ziel, naechsteAnzahl: danach.anzahl });
     if (!s.stil.frei) {
       s.stil.frei = true;
       ereignisse.push({ typ: 'stil_frei' });
@@ -362,7 +408,7 @@ function siegPruefen(s, heute) {
 }
 
 // ---------- Quest bearbeiten (Version 38) ----------
-// Ziel-Text und Anzahl je Runde ändern. Die neue Anzahl gilt sofort, auch für die laufende Runde
+// Ziel-Text und Anzahl je Runde ändern (mit Einstiegsrampe: das eigene Ziel, die Rampe steigt höchstens bis dorthin). Die neue Anzahl gilt sofort, auch für die laufende Runde
 // (Entscheidung 28.10.2026, Variante „sofort“). Ist das neue Ziel damit schon erreicht, gibt es den Sieg sofort.
 // Tage, Siege und Mikroquests bleiben unverändert. Später: Teilziele mit Arten (siehe todo.md).
 export const ZIEL_MAX = 120, ANZAHL_MIN = 1, ANZAHL_MAX = 7;

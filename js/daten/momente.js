@@ -11,16 +11,28 @@
 // storyNachCheck  'karte' = neuer Story-Teil nie als Popup, sondern als versiegelter Teil auf der Story-Karte (Version 48,
 //                 Entscheidung Startseite: „Story nur, wenn neu“); 'popup' = wie bis Version 47 (dann gilt storyBeiSieg)
 // weltenwahl      'naechsterBesuch' = Weltenwahl erst an einem späteren Tag als eigener Moment, 'sofort' = direkt nach dem Sieg
+// Version 68 (Entscheidung 30.10.2026: ein Höhepunkt je Tages-Check, Rest über die Tage verteilt):
+// kapitelwechsel  'naechsterBesuch' = Weg und neuer Gegner erst, wenn die neue Runde begonnen hat (nächstes Öffnen),
+//                 'sofort' = direkt nach dem Sieg (bis Version 66)
+// fragenNurRuhig  true = Bewertungsfrage nur, wenn heute sonst kein Höhepunkt war (Sieg, Kapitel, Stufe, Story)
+// kapitelStichtag Siege vor diesem Tag hatten Weg und neuen Gegner schon am Siegtag (bis Version 68) → nicht noch einmal
+// pauseMs         Puffer nach der Rückmeldung (Version 68): Einblendungen kommen nach dem Ablauf „tagesCheck“
+//                 (daten/bewegung.js) plus diesem Wert
+// bewertungen     Anlässe: ersterTreffer (erster Treffer einer Runde), nachSieg (zweiter Treffer nach gewonnener Runde), sieg
 
 export const MOMENTE = {
   reihenfolge: ['sieg', 'lauf', 'gegner', 'levelup', 'story', 'frage'],
   maxBewertungen: 1,
   bewertungen: {
-    sieg: ['hero_score', 'story_curiosity_score'],
+    nachSieg: ['hero_score', 'story_curiosity_score'],
     ersterTreffer: ['boss_score']
   },
   storyNachCheck: 'karte',
   storyBeiSieg: 'spaeter',
   levelupBeiSieg: 'zeile',
-  weltenwahl: 'naechsterBesuch'
+  weltenwahl: 'naechsterBesuch',
+  kapitelwechsel: 'naechsterBesuch',
+  kapitelStichtag: '2026-10-30',
+  fragenNurRuhig: true,
+  pauseMs: 300
 };

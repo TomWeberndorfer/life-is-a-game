@@ -3,10 +3,21 @@
 // Wörter: crew = alle Helden zusammen (ohne eigene XP), verbuendeter = ein einzelner Held an deiner Seite.
 // Optional je Stil: texte: { 'schluessel': '…' } überschreibt Texte aus daten/texte.js (z. B. tab.logbuch = Name des Logbuchs je Stil, Version 56); bezirke: { health: '…' } benennt Bezirke.
 // Fehlt ein Wort (z. B. kapitel) oder ein Bezirksname, gilt Fantasy bzw. der Name des Lebensbereichs.
+// marke (optional, Version 61): kleine Marke über der Heldentat-Karte (Sci-Fi „MISSION // HEUTE“); fehlt sie, keine.
 // stadt/bezirk/stadtname: Heldenstadt (nur Darstellung). Bezirksbilder: Bildplatz `bezirk-<domainId>`, sonst gezeichnete Silhouette.
-// Regel: Kein Stil leiht Bilder eines anderen. Fehlt ein Bild, zeigt die App den Platzhalter des Stils.
+// Regel: Kein Stil leiht Bilder eines anderen. Fehlt ein Bild, gilt die Rückfallkette (BILD_RUECKFALL, nur innerhalb
+// desselben Stils), danach der Platzhalter des Stils.
 // Archiviert (nur im alten Prototyp): midnight (Mitternachtsgold/Aufgabenplaner), modern, zombie.
 // In der Weltenwahl als gesperrte Kachel nur noch: zombie (Version 53).
+
+// Rückfallkette für Bildplätze (Version 62): fehlt einem Platz ein eigenes Bild, gilt der nächste Platz DESSELBEN Stils.
+// Beispiel: bezirk-partner → banner-khara → khara → Platzhalter. Eigenes Bild (Tabelle oder Datei) hat immer Vorrang,
+// ein neues Bild für einen Platz wirkt also sofort, ohne Code. Logik: logik/bilder.js. Neue Regel = neue Zeile.
+// `ueber`: Zuordnung, die die App bereitstellt (bereichHeld = Lebensbereich → Standard-Held aus lebensbereiche.js).
+export const BILD_RUECKFALL = [
+  { von: 'banner-', nach: '' },
+  { von: 'bezirk-', nach: 'banner-', ueber: 'bereichHeld' }
+];
 
 export const STIL_REIHENFOLGE = ['fantasy', 'scifi', 'myth', 'cozy', 'monster', 'strasse'];
 
@@ -30,22 +41,10 @@ export const STILE = {
       'boss-zuckerkobold': 'bilder/fantasy/boss-naschling.jpg',
       'boss-gaehnor': 'bilder/fantasy/boss-gaehnor.jpg',
       'boss-hetzra': 'bilder/fantasy/boss-hetzra.jpg',
-      // Kopien aus vorhandenen Bildern desselben Stils (Version 16), einzeln ersetzbar
+      // Eigene Dateien je Platz; fehlende Banner/Bezirke nutzen die Rückfallkette (Version 62)
       'bezirk-health': 'bilder/fantasy/bezirk-health.jpg',
       'bezirk-mindset': 'bilder/fantasy/bezirk-mindset.jpg',
-      'bezirk-partner': 'bilder/fantasy/bezirk-partner.jpg',
       'bezirk-family': 'bilder/fantasy/bezirk-family.jpg',
-      'bezirk-friends': 'bilder/fantasy/bezirk-friends.jpg',
-      'bezirk-career': 'bilder/fantasy/bezirk-career.jpg',
-      'bezirk-finance': 'bilder/fantasy/bezirk-finance.jpg',
-      'bezirk-adventure': 'bilder/fantasy/bezirk-adventure.jpg',
-      'bezirk-growth': 'bilder/fantasy/bezirk-growth.jpg',
-      'banner-khara': 'bilder/fantasy/banner-khara.jpg',
-      'banner-fisker': 'bilder/fantasy/banner-fisker.jpg',
-      'banner-uldini': 'bilder/fantasy/banner-uldini.jpg',
-      'banner-goldwin': 'bilder/fantasy/banner-goldwin.jpg',
-      'banner-der-erste': 'bilder/fantasy/banner-der-erste.jpg',
-      'banner-ahren': 'bilder/fantasy/banner-ahren.jpg',
       'boss-heisshunger': 'bilder/fantasy/boss-heisshunger.jpg',
       'boss-kaufrausch': 'bilder/fantasy/boss-kaufrausch.jpg',
       'boss-trott': 'bilder/fantasy/boss-trott.jpg',
@@ -56,31 +55,20 @@ export const STILE = {
   },
   scifi: {
     name: 'Sci-Fi', alt: [], waehlbar: true,
-    karte: 'bilder/scifi/karte.jpg',
-    wort: { crew: 'Crew', verbuendeter: 'Copilot', gegner: 'Störsignal', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Protokoll', stufe: 'Rang', sieg: 'neutralisiert', stadt: 'Station', bezirk: 'Sektor', stadtname: 'Station Aurora' },
+    karte: 'bilder/scifi/szene.jpg',
+    wort: { marke: 'MISSION // HEUTE', crew: 'Crew', verbuendeter: 'Copilot', gegner: 'Störsignal', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Protokoll', stufe: 'Rang', sieg: 'neutralisiert', stadt: 'Station', bezirk: 'Sektor', stadtname: 'Station Aurora' },
     texte: { 'story.knopf': 'Zurück auf die Brücke', 'tab.logbuch': 'Bordbuch' },
     namen: { trogadon: 'Kommandant Trog-7', khara: 'Funkerin Kha-4', fisker: 'Scout Fisk-3', uldini: 'Administrator Uld-1', goldwin: 'Quartiermeister Gold-5', ahren: 'Offizier Ahr-2', jelninolan: 'Bordärztin Jel-9', 'der-erste': 'Pilot Prim-0' },
     bilder: {
       trogadon: 'bilder/scifi/trogadon.jpg', khara: 'bilder/scifi/khara.jpg', fisker: 'bilder/scifi/fisker.jpg',
       uldini: 'bilder/scifi/uldini.jpg', goldwin: 'bilder/scifi/goldwin.jpg', 'der-erste': 'bilder/scifi/der-erste.jpg',
       ahren: 'bilder/scifi/ahren.jpg',
-      // Kopien aus vorhandenen Bildern desselben Stils (Version 16), einzeln ersetzbar
-      'bezirk-health': 'bilder/scifi/bezirk-health.jpg',
+      // Eigene Dateien je Platz; fehlende Banner/Bezirke nutzen die Rückfallkette (Version 62)
       'bezirk-mindset': 'bilder/scifi/bezirk-mindset.jpg',
-      'bezirk-partner': 'bilder/scifi/bezirk-partner.jpg',
       'bezirk-family': 'bilder/scifi/bezirk-family.jpg',
-      'bezirk-friends': 'bilder/scifi/bezirk-friends.jpg',
-      'bezirk-career': 'bilder/scifi/bezirk-career.jpg',
-      'bezirk-finance': 'bilder/scifi/bezirk-finance.jpg',
-      'bezirk-adventure': 'bilder/scifi/bezirk-adventure.jpg',
-      'bezirk-growth': 'bilder/scifi/bezirk-growth.jpg',
       'banner-trogadon': 'bilder/scifi/banner-trogadon.jpg',
-      'banner-khara': 'bilder/scifi/banner-khara.jpg',
       'banner-fisker': 'bilder/scifi/banner-fisker.jpg',
       'banner-uldini': 'bilder/scifi/banner-uldini.jpg',
-      'banner-goldwin': 'bilder/scifi/banner-goldwin.jpg',
-      'banner-der-erste': 'bilder/scifi/banner-der-erste.jpg',
-      'banner-ahren': 'bilder/scifi/banner-ahren.jpg',
       'szene': 'bilder/scifi/szene.jpg',
       'boss-kaufrausch': 'bilder/scifi/boss-kaufrausch.jpg'
     },
@@ -102,16 +90,10 @@ export const STILE = {
     texte: { 'story.knopf': 'Zurück ins Dorf', 'tab.logbuch': 'Tagebuch' },
     namen: { trogadon: 'Trogi', khara: 'Kari', fisker: 'Fiski', uldini: 'Uldi', goldwin: 'Goldi', ahren: 'Ahri', jelninolan: 'Jelli', 'der-erste': 'Primo' },
     bilder: { szene: 'bilder/cozy/szene.jpg',
-      // Kopien aus vorhandenen Bildern desselben Stils (Version 16), einzeln ersetzbar
-      'bezirk-health': 'bilder/cozy/bezirk-health.jpg',
+      // Eigene Dateien je Platz; fehlende Banner/Bezirke nutzen die Rückfallkette (Version 62)
       'bezirk-mindset': 'bilder/cozy/bezirk-mindset.jpg',
-      'bezirk-partner': 'bilder/cozy/bezirk-partner.jpg',
       'bezirk-family': 'bilder/cozy/bezirk-family.jpg',
       'bezirk-friends': 'bilder/cozy/bezirk-friends.jpg',
-      'bezirk-career': 'bilder/cozy/bezirk-career.jpg',
-      'bezirk-finance': 'bilder/cozy/bezirk-finance.jpg',
-      'bezirk-adventure': 'bilder/cozy/bezirk-adventure.jpg',
-      'bezirk-growth': 'bilder/cozy/bezirk-growth.jpg',
       'banner-trogadon': 'bilder/cozy/banner-trogadon.jpg',
       'banner-khara': 'bilder/cozy/banner-khara.jpg',
       'banner-fisker': 'bilder/cozy/banner-fisker.jpg',
@@ -131,18 +113,8 @@ export const STILE = {
     bilder: {
       szene: 'bilder/monster/szene.jpg',
       khara: 'bilder/monster/khara.png', fisker: 'bilder/monster/fisker.png', uldini: 'bilder/monster/uldini.png',
-      'der-erste': 'bilder/monster/der-erste.png', ahren: 'bilder/monster/ahren.png',
-      // Kopien aus vorhandenen Bildern desselben Stils (Version 16), einzeln ersetzbar
-      'bezirk-partner': 'bilder/monster/bezirk-partner.png',
-      'bezirk-friends': 'bilder/monster/bezirk-friends.png',
-      'bezirk-career': 'bilder/monster/bezirk-career.png',
-      'bezirk-adventure': 'bilder/monster/bezirk-adventure.png',
-      'bezirk-growth': 'bilder/monster/bezirk-growth.png',
-      'banner-khara': 'bilder/monster/banner-khara.png',
-      'banner-fisker': 'bilder/monster/banner-fisker.png',
-      'banner-uldini': 'bilder/monster/banner-uldini.png',
-      'banner-der-erste': 'bilder/monster/banner-der-erste.png',
-      'banner-ahren': 'bilder/monster/banner-ahren.png'
+      'der-erste': 'bilder/monster/der-erste.png', ahren: 'bilder/monster/ahren.png'
+      // Banner und Bezirke nutzen die Rückfallkette (Version 62)
     },
     pos: {}
   },
@@ -156,21 +128,10 @@ export const STILE = {
       szene: 'bilder/strasse/szene.jpg',
       trogadon: 'bilder/strasse/trogadon.jpg', khara: 'bilder/strasse/khara.jpg', fisker: 'bilder/strasse/fisker.jpg',
       uldini: 'bilder/strasse/uldini.jpg', 'der-erste': 'bilder/strasse/der-erste.jpg', ahren: 'bilder/strasse/ahren.jpg',
-      // Kopien aus vorhandenen Bildern desselben Stils (Version 16), einzeln ersetzbar
-      'bezirk-health': 'bilder/strasse/bezirk-health.jpg',
+      // Eigene Dateien je Platz; fehlende Banner/Bezirke nutzen die Rückfallkette (Version 62)
       'bezirk-mindset': 'bilder/strasse/bezirk-mindset.jpg',
-      'bezirk-partner': 'bilder/strasse/bezirk-partner.jpg',
       'bezirk-family': 'bilder/strasse/bezirk-family.jpg',
-      'bezirk-friends': 'bilder/strasse/bezirk-friends.jpg',
-      'bezirk-career': 'bilder/strasse/bezirk-career.jpg',
-      'bezirk-adventure': 'bilder/strasse/bezirk-adventure.jpg',
-      'bezirk-growth': 'bilder/strasse/bezirk-growth.jpg',
-      'banner-trogadon': 'bilder/strasse/banner-trogadon.jpg',
-      'banner-khara': 'bilder/strasse/banner-khara.jpg',
-      'banner-fisker': 'bilder/strasse/banner-fisker.jpg',
-      'banner-uldini': 'bilder/strasse/banner-uldini.jpg',
-      'banner-der-erste': 'bilder/strasse/banner-der-erste.jpg',
-      'banner-ahren': 'bilder/strasse/banner-ahren.jpg'
+      'bezirk-adventure': 'bilder/strasse/bezirk-adventure.jpg'
     },
     pos: {}
   }

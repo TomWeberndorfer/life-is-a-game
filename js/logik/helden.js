@@ -4,6 +4,7 @@
 // Version 4: Siege als [{ tag, gegner }], Gegner-Kette in der Quest (wird beim Laden aus der Tabelle aufgefrischt).
 // Die bewährte Ein-Helden-Logik in kern.js arbeitet unverändert auf einer „Heldenansicht“.
 import * as K from './kern.js';
+import { bereinigeFreigaben, freigabeSetzen } from './freischaltung.js'; // Version 69 (Kreis-Import nur mit Funktionen, unkritisch)
 
 export const SPIEL_VERSION = 4; // 4: Siege mit Tag, Bosskette je Quest (Version 14)
 export const MAX_HELDEN = 3;
@@ -40,7 +41,7 @@ export function zuordner(tabelle, rueckfall) {
 
 export function neuesSpiel(profilId) {
   const s = K.neuerStand(profilId);
-  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [] };
+  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [], freigaben: {}, freigabeWartet: null };
 }
 
 function heldAusAnsicht(heroId, domainId, a) {
@@ -92,12 +93,13 @@ export function uebernehmen(spiel, heroId, a, z) {
 }
 
 // Neuer Held aus einer Vorlage (heroId und domainId kommen aus der Vorlage).
-export function heldHinzufuegen(spiel, vorlage, zielText, heute, z) {
+// rampe (30.10.2026): Einstiegsrampe für die neue Quest (daten/rampe.js); ohne = feste Anzahl.
+export function heldHinzufuegen(spiel, vorlage, zielText, heute, z, rampe = null) {
   if (!vorlage) throw new Error('Keine Vorlage für diese Auswahl gefunden.');
   if (spiel.helden.length >= MAX_HELDEN) throw new Error(`Du hast schon ${MAX_HELDEN} Helden. Mehr gehen gerade nicht gleichzeitig.`);
   if (heldVon(spiel, vorlage.held)) throw new Error('Dieser Held ist schon in deiner Crew.');
   const leer = ansicht(spiel, null);
-  const a = K.questAnlegen(leer, vorlage, zielText, heute);
+  const a = K.questAnlegen(leer, vorlage, zielText, heute, rampe);
   const s = uebernehmen(spiel, vorlage.held, a, z);
   s.fokus = vorlage.held;
   s.angebot = { abgelehntBei: gesamtSiege(s) }; // angenommen: nächste Frage erst nach dem nächsten Sieg
@@ -127,6 +129,17 @@ export function neuGesehen(spiel, ids) {
   const neu = (Array.isArray(ids) ? ids : [ids]).filter(x => typeof x === 'string' && BEREICH_ID.test(x));
   if (!neu.length) throw new Error('Ungültiger Bereich');
   return { ...kopie(spiel), neuGesehen: bereinigeGesehen([...(spiel.neuGesehen || []), ...neu]) };
+}
+// Höchstens eine Freischaltung pro Tag (Version 69): Tag der Freigabe je ID, gilt auf allen Geräten.
+export function freigabenSetzen(spiel, ids, tag) {
+  return { ...kopie(spiel), freigaben: freigabeSetzen(spiel.freigaben, ids, tag), freigabeWartet: null };
+}
+// Höchstwartezeit (30.10.2026): Tag, an dem eine verdiente Freigabe zum ersten Mal wegen eines Höhepunkts warten musste.
+// Wird beim nächsten Freigeben gelöscht (freigabenSetzen). null = nichts wartet. Ein schon gesetzter Tag bleibt.
+export function freigabeWartetSeit(spiel, tag) {
+  if (!TAG.test(String(tag))) throw new Error('Ungültiger Tag');
+  if (TAG.test(String(spiel.freigabeWartet))) return spiel;
+  return { ...kopie(spiel), freigabeWartet: tag };
 }
 export const istGelesen = (spiel, heroId, tag) => !!spiel.gelesen && spiel.gelesen[heroId] === tag;
 
@@ -185,6 +198,7 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
       s.helden = [heldAusAnsicht(hid, did, kopie(alt))];
       s.fokus = hid;
       s.stil.frei = s.stil.frei || alt.siege.length > 0;
+      s.freigaben = null; // Version 69: Altbestand, app.js gibt beim Start frei, was schon verdient ist
     }
     return s;
   }
@@ -209,5 +223,7 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
   s.gelesen = {};
   if (roh.gelesen && typeof roh.gelesen === 'object') for (const [id, t] of Object.entries(roh.gelesen)) if (heldVon(s, id) && TAG.test(String(t))) s.gelesen[id] = t;
   s.neuGesehen = bereinigeGesehen(roh.neuGesehen);
+  s.freigaben = bereinigeFreigaben(roh.freigaben); // Version 69: null = Stand vor der Taktung (Altbestand)
+  s.freigabeWartet = TAG.test(String(roh.freigabeWartet)) ? roh.freigabeWartet : null; // fehlt bei älteren Ständen = nichts wartet
   return s;
 }

@@ -131,6 +131,7 @@ h1.name { font-size: 30px; font-weight: 800; }
 .ob-kopf.hell .prog i.on { background: #FBF3DC; }
 .screen.dunkel .prog i.on { background: var(--gegner); }
 .schritt { font: 700 12px var(--fh); }
+.ob-abbrechen { flex: none; min-height: 44px; padding: 0 4px; font-size: 15px; }
 
 .ob-bild { position: relative; flex: none; overflow: hidden; }
 .ob-bild.klein { height: 170px; }
@@ -457,8 +458,6 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .teil.nebel .klein { position: relative; font-style: italic; }
 .teil.gebrochen summary { animation: siegel-bricht 520ms cubic-bezier(.2,.8,.3,1) both; }
 .satz { opacity: 0; animation: story-auf .5s ease-out forwards; animation-delay: calc(300ms + var(--i, 0) * 650ms); }
-@media (prefers-reduced-motion: reduce) { .satz { opacity: 1; } }
-:root[data-bewegung="aus"] .satz { opacity: 1; animation: none; }
 @keyframes siegel-bricht { 0% { transform: scale(.94); opacity: .4; filter: blur(2px); } 60% { transform: scale(1.02); opacity: 1; filter: none; } 100% { transform: none; } }
 /* Momente der Startseite (Version 49): großes Heldenbild nach „Ja“, Banner beim Heldenwechsel */
 .erfolg-bild { position: relative; margin: 0; height: 210px; border-radius: var(--r); overflow: hidden; background: var(--nacht); border: 2px solid var(--panel); }
@@ -476,7 +475,6 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .wechsel-text .klein { color: #FBF3DE; opacity: .9; }
 .wechsel-name { font: 800 22px/1.1 var(--fh); }
 @keyframes wechsel-banner { 0% { opacity: 0; transform: translateY(-12px); } 12% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
-@media (prefers-reduced-motion: reduce) { .wechsel-banner, .wechsel-banner.auftritt { opacity: 1; transform: none; } }
 /* Version 50: „Neu für dich“ und verkleinerbares Premium */
 .neu-karte { border-color: var(--ac); gap: 8px; }
 .neu-zeile { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
@@ -486,13 +484,10 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .neu-ok { align-self: flex-start; }
 .tab-neu { position: absolute; top: -3px; right: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ac); border: 2px solid var(--panel); }
 .neu-tab .tab-nm { color: var(--ac); }
-.premium-rahmen { position: relative; }
-.premium-rahmen .karte.premium { padding-right: 70px; }
-.premium-klein { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); }
-.premium-zeile { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--mute); font: 600 15px var(--fb); cursor: pointer; text-align: left; }
 .stern-mini { width: 24px; height: 24px; flex: none; border-radius: 50%; background: #E9C46A; color: #2E2114; display: flex; align-items: center; justify-content: center; }
 .stern-mini .ic { width: 14px; height: 14px; }
-.premium-klein .link { font-size: 14px; color: var(--mute); white-space: nowrap; }
+.spalte-zeile { display: flex; align-items: center; gap: 8px; }
+.klapp-rahmen .karte.premium { padding-right: 90px; }
 /* Einklappbare Abschnitte (Version 52) */
 .klapp-rahmen { position: relative; display: flex; flex-direction: column; }
 .klapp-zeile { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; }
@@ -517,7 +512,6 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .karte.angebot, .karte.welten-karte { border-style: solid; border-width: 3px; border-color: var(--ac); box-shadow: 0 3px 0 var(--ac-dunkel), 0 0 0 4px rgba(233,196,106,.28); }
 /* Neuer Gegner (Version 59): Duell-Karte rüttelt zweimal kurz, einmal je Gegner */
 .glanz-kampf { animation: wackel .5s ease 2; }
-:root[data-bewegung="aus"] .glanz-stern .stern-klein, :root[data-bewegung="aus"] .glanz-kampf { animation: none; }
 /* Version 57: Neues hervorheben ohne Rot. Siegel golden (Neugier statt Pflicht), ungelesene Botschaft als Sprechblase.
    Bewegung nur beim ersten Erscheinen (Klassen glanz-*, gesetzt von glanzNachZeichnen), nie dauernd. */
 .story-neu { border-width: 3px; box-shadow: 0 3px 0 var(--ac-dunkel), 0 0 0 4px rgba(233,196,106,.28); }
@@ -531,7 +525,6 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .botschaft-klein.botschaft-neu .neu { flex: none; font: 700 11px var(--fh); text-transform: uppercase; }
 .glanz-wippen .rund-klein, .glanz-wippen > .rund { animation: glanz-wippen .9s ease-in-out 2; transform-origin: 50% 90%; }
 @keyframes glanz-wippen { 0%, 100% { transform: none; } 20% { transform: translateY(-4px) rotate(-8deg); } 45% { transform: translateY(0) rotate(6deg); } 70% { transform: translateY(-2px) rotate(-3deg); } }
-:root[data-bewegung="aus"] .glanz-siegel .siegel-mark, :root[data-bewegung="aus"] .glanz-wippen .rund-klein, :root[data-bewegung="aus"] .glanz-wippen > .rund { animation: none; }
 .sr-titel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .start-fuss .version { display: block; margin-top: 6px; font: 600 12px var(--fb); font-style: normal; letter-spacing: .04em; color: var(--mute); opacity: .8; }
@@ -560,31 +553,71 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .schnell { width: 48px; height: 48px; flex: none; border-radius: 50%; border: 2px solid var(--ac); background: var(--panel); color: var(--ac); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .schnell .ic { width: 22px; height: 22px; stroke-width: 3; }
 /* Heutige Heldentat (Version 44): Kontrastkarte in den Farben des Stils (Grund = Schrift, Schrift = Grund) */
-.heldentat { background: var(--ink); color: var(--panel); border-color: var(--ac); gap: 12px; padding: 18px 16px; }
-.heldentat .eyebrow.tat-eyebrow { color: var(--panel); opacity: .85; }
-.tat-name { padding: 0; border: 0; background: none; color: var(--panel); font: 800 27px/1.12 var(--fh); text-align: left; cursor: pointer; }
-.tat-plan { margin: 0; padding: 10px 12px; border-radius: var(--r); background: rgba(127,127,127,.18); font: 500 16px/1.4 var(--fb); }
-.tat-plan b { font-family: var(--fh); }
+/* Heutige Heldentat, Version 61: Variante A „Auftragskarte“ (Entscheidung 29.10.2026).
+   Grundgerüst über Variablen (--tat-*), daraus je Welt ein eigener Rahmen. Welten ohne eigenen Rahmen nutzen die Stil-Farben. */
+.heldentat { --tat-bg: var(--card); --tat-ink: var(--ink); --tat-rand: var(--ac); --tat-akzent: var(--ac); --tat-auf-akzent: var(--auf-ac); --tat-akzent-dunkel: var(--ac-dunkel);
+  --tat-wenn: var(--gegner); --tat-dann: var(--gut-text); --tat-feld: var(--tief); --tat-linie: var(--line); --tat-leise: var(--soft);
+  position: relative; background: var(--tat-bg); color: var(--tat-ink); border: 2px solid var(--tat-rand); box-shadow: 0 3px 0 var(--tat-akzent-dunkel); gap: 12px; padding: 18px 16px; }
+.heldentat .eyebrow.tat-eyebrow { color: var(--tat-ink); opacity: .75; }
+.tat-kopf { display: flex; align-items: center; gap: 12px; }
+.tat-kopf .spalte { flex: 1; gap: 2px; }
+.tat-medaille { width: 50px; height: 50px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--tat-feld); border: 2px solid var(--tat-akzent); color: var(--tat-akzent); }
+.tat-medaille .ic { width: 26px; height: 26px; }
+.tat-held { width: 46px; height: 46px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--tat-akzent); box-sizing: border-box; }
+.tat-name { padding: 0; border: 0; background: none; color: var(--tat-ink); font: 800 26px/1.1 var(--fh); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.tat-wd { display: flex; flex-direction: column; gap: 2px; }
+.tat-feld { margin: 0; padding: 9px 12px; border-radius: var(--r); background: var(--tat-feld); border: 1px solid var(--tat-linie); border-left: 4px solid var(--tat-wenn); font: 500 16px/1.35 var(--fb); }
+.tat-feld.dann { border-left-color: var(--tat-dann); }
+.tat-feld b { display: block; font: 800 11px var(--fh); letter-spacing: .14em; color: var(--tat-wenn); margin-bottom: 2px; }
+.tat-feld.dann b { color: var(--tat-dann); }
+.tat-pfeil { align-self: center; color: var(--tat-leise); font-size: 16px; line-height: 1; }
 .tat-frage { margin: 0; font: 700 17px/1.35 var(--fb); }
-.heldentat .btn { min-height: 56px; }
-.heldentat .btn.voll { background: var(--panel); color: var(--ink); border-color: var(--panel); box-shadow: 0 3px 0 var(--ac); }
-.heldentat .btn.tat-nein { background: transparent; color: var(--panel); border-color: var(--panel); box-shadow: none; }
+.tat-knoepfe { display: flex; flex-direction: column; gap: 8px; }
+.heldentat .btn.tat-ja { min-height: 58px; font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--tat-akzent); color: var(--tat-auf-akzent); border-color: var(--tat-akzent-dunkel); box-shadow: 0 3px 0 var(--tat-akzent-dunkel); }
+.heldentat .btn.tat-ja .ic { width: 20px; height: 20px; stroke-width: 3; }
+.heldentat .btn.tat-nein { min-height: 46px; font-size: 14px; background: transparent; color: var(--tat-leise); border: 1.5px solid var(--tat-linie); box-shadow: none; }
 .heldentat .erledigt { background: var(--panel); }
-.tat-woche { display: flex; align-items: center; gap: 6px; font-size: 14px; opacity: .9; }
-.tat-woche i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--panel); box-sizing: border-box; }
-.tat-woche i.voll { background: var(--panel); }
-.tat-woche span { margin-left: 4px; }
+.tat-marke { position: absolute; top: -9px; left: 14px; padding: 0 6px; background: var(--bg); color: var(--tat-akzent); font: 700 10px var(--fh); letter-spacing: .2em; }
+/* Fantasy: Schriftrolle */
+:root[data-stil="fantasy"] .heldentat, :root:not([data-stil]) .heldentat { --tat-bg: linear-gradient(180deg, #F7EACB 0%, #EED9A8 100%); --tat-ink: #2E2114; --tat-rand: #8B6A3A; --tat-akzent: #8B2E1F; --tat-auf-akzent: #F6EACB; --tat-akzent-dunkel: #5E1D13;
+  --tat-wenn: #8B2E1F; --tat-dann: #2F6A3F; --tat-feld: rgba(139,46,31,.06); --tat-linie: #C9A467; --tat-leise: #4E3D28;
+  border-radius: 6px; margin: 8px 0; box-shadow: inset 0 0 0 4px #F7EACB, inset 0 0 0 5px #B48E55, 0 4px 0 #8B6A3A; }
+:root[data-stil="fantasy"] .heldentat::before, :root[data-stil="fantasy"] .heldentat::after { content: ""; position: absolute; left: -6px; right: -6px; height: 12px; background: linear-gradient(180deg, #C9A467, #8B6A3A); border-radius: 6px; pointer-events: none; }
+:root[data-stil="fantasy"] .heldentat::before { top: -8px; }
+:root[data-stil="fantasy"] .heldentat::after { bottom: -8px; }
+:root[data-stil="fantasy"] .tat-medaille { background: radial-gradient(circle at 35% 30%, #F8E39B, #C99A2E 70%, #8E6A1C); color: #3A2508; border: 0; box-shadow: 0 0 0 3px #F7EACB, 0 0 0 4px #A97A1E; }
+:root[data-stil="fantasy"] .tat-feld.dann { background: rgba(63,125,78,.1); }
+/* Sci-Fi: Missionsterminal */
+:root[data-stil="scifi"] .heldentat { --tat-bg: #071523; --tat-ink: #E6F7FF; --tat-rand: #19D3F3; --tat-akzent: #19D3F3; --tat-auf-akzent: #04121C; --tat-akzent-dunkel: #0E8BA3;
+  --tat-wenn: #FF5C7A; --tat-dann: #3DF2A5; --tat-feld: #0F2236; --tat-linie: #1F4560; --tat-leise: #B5D3E3;
+  border-width: 1px; margin-top: 8px; box-shadow: 0 0 18px rgba(25,211,243,.25), inset 0 0 30px rgba(25,211,243,.06);
+  background-image: linear-gradient(rgba(25,211,243,.05) 1px, transparent 1px); background-size: 100% 4px; background-color: #071523; }
+:root[data-stil="scifi"] .heldentat .eyebrow.tat-eyebrow { color: #19D3F3; opacity: 1; }
+:root[data-stil="scifi"] .tat-medaille, :root[data-stil="scifi"] .tat-held { border-radius: 8px; box-shadow: 0 0 10px rgba(25,211,243,.45); }
+:root[data-stil="scifi"] .tat-feld { border-top: 0; border-right: 0; border-bottom: 0; }
+:root[data-stil="scifi"] .heldentat .btn.tat-ja { border: 0; box-shadow: 0 0 16px rgba(25,211,243,.6); }
+/* Miami Nights: Neon */
+:root[data-stil="strasse"] .heldentat { --tat-bg: linear-gradient(160deg, #2A0F45, #14061F); --tat-ink: #FFFFFF; --tat-rand: #FF7A2A; --tat-akzent: #FF7A2A; --tat-auf-akzent: #14061F; --tat-akzent-dunkel: #B34A0E;
+  --tat-wenn: #FF4D6D; --tat-dann: #7DFF9A; --tat-feld: rgba(255,255,255,.05); --tat-linie: #4A2470; --tat-leise: #E6D6F5;
+  box-shadow: 0 0 0 1px #FF4D6D inset, 0 0 22px rgba(255,122,42,.45); }
+:root[data-stil="strasse"] .heldentat .eyebrow.tat-eyebrow { color: #FFD24A; opacity: 1; }
+:root[data-stil="strasse"] .tat-name { text-shadow: 0 0 12px rgba(255,122,42,.8); letter-spacing: .04em; }
+:root[data-stil="strasse"] .tat-medaille { border-radius: 0; background: #14061F; border-color: #FFD24A; color: #FFD24A; box-shadow: 0 0 12px rgba(255,210,74,.6); }
+:root[data-stil="strasse"] .tat-held { border-radius: 0; border-color: #FF4D6D; }
+:root[data-stil="strasse"] .heldentat .btn.tat-ja { border: 0; border-radius: 0; box-shadow: 0 0 18px rgba(255,122,42,.7); }
+:root[data-stil="strasse"] .heldentat .btn.tat-nein { border-radius: 0; }
 /* Version 45: Porträt-Tipp und XP im Heldenkopf, „Weiter zu …“, Bonus-Umschalter */
 .heldenkopf { position: relative; }
 .kopf-portraet { position: relative; flex: none; padding: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; }
 .kopf-info { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; background: var(--panel); border: 2px solid var(--ac); color: var(--ac); font: italic 700 13px/18px Georgia, serif; text-align: center; box-sizing: border-box; }
 .kopf-xp { flex: none; width: 100%; height: 6px; margin-top: 4px; max-width: 180px; }
 .kopf-flug { top: 4px; left: 34px; }
-.weiter-zu { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 6px 14px 6px 6px; border-radius: 28px; border: 2px solid var(--panel); background: transparent; color: var(--panel); text-align: left; cursor: pointer; font: inherit; }
+.xpflug.schwebend { position: absolute; top: 96px; z-index: 8; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.weiter-zu { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 6px 14px 6px 6px; border-radius: 28px; border: 2px solid var(--tat-akzent, var(--ac)); background: transparent; color: var(--tat-ink, var(--ink)); text-align: left; cursor: pointer; font: inherit; }
 .weiter-zu .spalte { flex: 1; min-width: 0; }
-.weiter-zu .klein { color: var(--panel); opacity: .85; }
+.weiter-zu .klein { color: var(--tat-leise, var(--mute)); }
 .weiter-zu .ic { width: 20px; height: 20px; }
-.weiter-bild { width: 44px; height: 44px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--panel); box-sizing: border-box; }
+.weiter-bild { width: 44px; height: 44px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--tat-akzent, var(--ac)); box-sizing: border-box; }
 .tat-alle { margin: 0; font: 600 15px/1.35 var(--fb); }
 .bonus-mehr { align-self: flex-start; min-height: 44px; }
 /* Bewegung (Version 46). Werte aus js/daten/bewegung.js (--bw-*). Nur Auftritt und Rückmeldung, nie Dauerbewegung. */
@@ -606,11 +639,15 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .mikro-zeile.neu { animation: bw-auftritt 300ms cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(var(--i, 0) * 50ms); }
 .duell-bild { animation: bw-zoom var(--bw-zoom, 20s) ease-in-out infinite alternate; transform-origin: 60% 40%; }
 @keyframes bw-zoom { from { transform: scale(1); } to { transform: scale(1.07); } }
-:root[data-bewegung="aus"] .duell-bild { animation: none; }
-@media (prefers-reduced-motion: reduce) {
-  .auftritt, .kopf-bild.auftritt-ring, .erledigt.neu, .erledigt.neu .ic path, .weiter-zu.neu, .tat-alle.neu, .segmente i.bricht, .mikro-zeile.neu, .duell-bild { animation: none !important; stroke-dashoffset: 0 !important; }
-  .heldentat .btn:active { transform: none; }
-}
+/* Boss-Reaktion (Version 68): in der Heldentat unter „Erledigt“. Bewegung: Ablauf „tagesCheck“ in daten/bewegung.js. */
+.boss-reaktion-rahmen { position: relative; flex: none; width: 44px; height: 44px; border-radius: 50%; overflow: hidden; }
+.boss-reaktion { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--tief); border: 1px dashed var(--edge); }
+.boss-reaktion p { margin: 0; font: italic 500 16px/1.4 var(--fi); color: var(--soft); }
+.boss-reaktion.art-phase { border-color: var(--gegner); border-style: solid; }
+.boss-reaktion.art-phase p { color: var(--gegner); }
+.boss-reaktion-siegel { width: 44px; height: 44px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--nacht); color: var(--nacht-ink); border: 2px solid var(--gegner); box-sizing: border-box; font: 800 22px var(--fh); }
+.blase.ohne-bild { border-radius: 16px; }
+.boss-reaktion-bild { width: 44px; height: 44px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--gegner); box-sizing: border-box; }
 .angebot { border-color: var(--ac); border-style: dashed; }
 .opt.belegt { opacity: .55; cursor: not-allowed; box-shadow: none; }
 .opt.belegt small, .opt small { display: block; font: italic 500 14px var(--fi); color: var(--mute); }
@@ -651,18 +688,51 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .schatten { filter: brightness(0) opacity(.75); }
 
 /* Weg der Bosskette und Laufmoment (Version 19) */
-.weg { position: relative; height: 92px; margin: 4px 0 2px; }
+.weg { position: relative; height: 92px; margin: 16px 0 2px; }
 .weg svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .weg-rest { fill: none; stroke: var(--line); stroke-width: 3; stroke-dasharray: 2 7; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .weg-geschafft { fill: none; stroke: var(--ac); stroke-width: 4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .station, .weg-held { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; }
 .station.start { width: 14px; height: 14px; background: var(--edge); }
-.station.aktuell { width: 40px; height: 40px; border: 3px solid var(--gegner); background: var(--nacht); }
+.station.aktuell { width: 44px; height: 44px; border: 3px solid var(--gegner); background: var(--nacht); }
 .station.nebel { width: 34px; height: 34px; border: 2px dashed var(--line); background: radial-gradient(circle, var(--tief) 30%, transparent 75%); }
 .station.besiegt, .station.verborgen { width: 32px; height: 32px; border: 2px solid var(--edge); background: var(--nacht); }
+/* 30.10.2026: Vergangenheit ruhig (kleiner, blasser), Gegenwart stark, Zukunft geheimnisvoll */
+.station.besiegt { width: 28px; height: 28px; opacity: .8; }
 .station-haken { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(0,0,0,.35); }
 .station-haken .ic { width: 18px; height: 18px; stroke-width: 3; }
-.weg-held { width: 36px; height: 36px; border: 3px solid var(--gut); background: var(--panel); z-index: 1; transition: left .6s ease, top .6s ease; }
+/* Karte (30.10.2026): Reise je Held als gewundener Pfad (ansicht/karte.js); Stationen und Heldenfigur wie beim Weg */
+.reise { display: flex; flex-direction: column; gap: 10px; }
+.reise-pfad { position: relative; margin: 4px 0 6px; }
+.reise-pfad svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.reise-orte { list-style: none; margin: 0; padding: 0; }
+.reise-text { position: absolute; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; font-size: 15px; line-height: 1.25; }
+.reise-text b { font: 700 14px/1.2 var(--fh); overflow-wrap: anywhere; }
+.reise-text .klein { font-size: 13px; }
+.reise-text.links { left: 36%; right: 0; text-align: left; }
+.reise-text.rechts { left: 0; right: 36%; text-align: right; }
+.reise-ort.nebel .reise-text, .reise-ort.verborgen .reise-text { color: var(--mute); font-style: italic; }
+.reise-ort.aktuell .reise-text b { color: var(--gegner); }
+.reise-pfad .station.start { width: 16px; height: 16px; }
+.reise-pfad .station.besiegt { width: 36px; height: 36px; opacity: .85; }
+.reise-pfad .station.aktuell { width: 48px; height: 48px; }
+.reise-pfad .station.verborgen { width: 36px; height: 36px; }
+.reise-pfad .station.nebel { width: 38px; height: 38px; }
+/* Karte überarbeitet (30.10.2026): besiegte Orte antippbar → Rückschau; Knopf „Karte öffnen“ unter dem Weg */
+.ort-knopf { cursor: pointer; font: inherit; color: inherit; }
+button.station.ort-knopf { padding: 0; }
+button.station.ort-knopf:focus-visible { outline: 3px solid var(--ac); outline-offset: 2px; }
+button.reise-text.ort-knopf { background: none; border: 0; padding: 4px 0; min-height: 44px; justify-content: center; }
+button.reise-text.links.ort-knopf { align-items: flex-start; }
+button.reise-text.rechts.ort-knopf { align-items: flex-end; }
+.reise-ort.besiegt .reise-text b { text-decoration: underline dotted; text-underline-offset: 3px; }
+.weg-karte { min-height: 40px; font-size: 15px; align-self: flex-start; color: var(--mute); }
+.rs-runde { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 8px; }
+.rs-runde > h3 { margin: 0; font: 700 17px/1.3 var(--fh); }
+.rs-runde details.teil p { font-size: 17px; }
+.weg-held { width: 32px; height: 32px; border: 3px solid var(--gut); background: var(--panel); z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,.25); transition: left .6s ease, top .6s ease; }
+/* Heldenfigur schwebt über dem Pfad; der Punkt markiert die Stelle auf dem Weg */
+.weg-held-fuss { position: absolute; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; background: var(--gut); border: 2px solid var(--panel); z-index: 2; transition: left .6s ease, top .6s ease; }
 .lauf-bahn { position: relative; width: 100%; height: 96px; border-bottom: 3px dashed var(--edge); }
 .lauf-station { position: absolute; bottom: 10px; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; border: 2px solid var(--edge); background: var(--nacht); }
 .lauf-station.links { left: 4%; } .lauf-station.rechts { right: 4%; }
@@ -688,6 +758,9 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 /* Sieg mit Stufe, Karte „Neue Welten“ (Version 42) */
 .sieg-stufe { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; color: var(--ac) !important; }
 .sieg-stufe .ic { width: 20px; height: 20px; }
+.sieg-stern { display: inline-flex; }
+/* Sieg-Einblendung (Version 68): Ablauf „sieg“ in daten/bewegung.js; hier nur der Endzustand (grau). */
+.feier-bild.erloschen { filter: grayscale(.7) brightness(.8); }
 .welten-karte { flex-direction: row; align-items: center; gap: 12px; border-style: dashed; border-color: var(--ac); }
 
 /* Logbuch (Version 41): ruhige Zeitleiste, nur Tage mit Einträgen, „nicht gebraucht“ neutral */
@@ -715,8 +788,31 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .lb-filter-feld { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
 .lb-mehr { align-self: center; margin: 4px 0 16px; }
 
+/* ---------- Bewegung (Version 68, „Bewegung vereinheitlichen“) ----------
+   Katalog: jede Bewegung EINMAL (Dauer, Kurve und Takt in daten/bewegung.js, Werte inline über logik/bewegung.js).
+   „Bewegung reduzieren“: app.js setzt data-bewegung="aus" genau dann, wenn das Betriebssystem es verlangt; die Medienabfrage
+   greift schon vor dem Start. EINE Regel schaltet alles ab – neue Animationen brauchen keinen eigenen Eintrag.
+   Was ohne Animation anders aussehen muss (sonst unsichtbar oder halb gezeichnet), steht darunter als Endzustand. */
+@keyframes bw-treffer { 0%, 100% { transform: none; } 20% { transform: translateX(-6px) rotate(-1.5deg); } 40% { transform: translateX(5px) rotate(1deg); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+@keyframes bw-blitz { 0% { opacity: 0; } 12% { opacity: .5; } 30% { opacity: .1; } 42% { opacity: .3; } 100% { opacity: 0; } }
+/* bw-erloeschen nur mit filter: im selben Ablauf läuft oft bw-treffer (transform), die spätere Animation würde sie sonst überdecken */
+@keyframes bw-erloeschen { from { filter: none; } to { filter: grayscale(.7) brightness(.8); } }
+@keyframes bw-stempel { 0% { opacity: 0; transform: scale(1.8) rotate(-8deg); } 70% { opacity: 1; transform: scale(.94) rotate(1deg); } 100% { opacity: 1; transform: none; } }
+@keyframes bw-funkeln { 0% { transform: scale(.4) rotate(-40deg); opacity: 0; } 60% { transform: scale(1.35) rotate(10deg); opacity: 1; } 100% { transform: none; opacity: 1; } }
+.bw-blitz-ebene { position: absolute; inset: 0; background: var(--gegner); opacity: 0; pointer-events: none; }
+:root[data-bewegung="aus"] *, :root[data-bewegung="aus"] *::before, :root[data-bewegung="aus"] *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+/* Endzustände ohne Bewegung */
+:root[data-bewegung="aus"] .satz, :root[data-bewegung="aus"] .wechsel-banner { opacity: 1; transform: none; }
+:root[data-bewegung="aus"] .erledigt.neu .ic path { stroke-dashoffset: 0; }
+:root[data-bewegung="aus"] .heldentat .btn:active { transform: none; }
+:root[data-bewegung="aus"] .xpflug { display: none; }
+:root[data-bewegung="aus"] .lauf-held { left: 62%; }
+@media (prefers-reduced-motion: reduce) {
+  .satz, .wechsel-banner { opacity: 1; transform: none; }
+  .erledigt.neu .ic path { stroke-dashoffset: 0; }
   .xpflug { display: none; }
   .lauf-held { left: 62%; }
 }

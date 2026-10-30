@@ -29,7 +29,13 @@ export function fuelle(text, w) {
   });
 }
 
-export function werteFuer(stand, heute, vorlage, tabelle, nameVon = id => (tabelle.helden[id] ? tabelle.helden[id].name : id)) {
+// Platzhalter aus den Wörtern des Stils (Version 64): z. B. {stadtname} = Talwacht / Station Aurora / Neon City.
+// Neuer Platzhalter = Wort in stile.js (wort.<name>) + Name hier. app.js liefert die Werte (stilWerte).
+export const STIL_PLATZHALTER = ['stadtname'];
+// Alle Platzhalter, die werteFuer() füllt (eine Liste für Geschichten, Botschaften und Boss-Reaktionen, Version 68).
+export const TEXT_PLATZHALTER = ['verbuendeter', 'faehigkeit', 'ziel', 'n', 'anzahl', 'rest', 'gegner', 'Gegner', 'er', 'Er', 'ihn', ...STIL_PLATZHALTER];
+
+export function werteFuer(stand, heute, vorlage, tabelle, nameVon = id => (tabelle.helden[id] ? tabelle.helden[id].name : id), stilWerte = {}) {
   const a = auswertung(stand, heute);
   const g = gegnerFormen(tabelle.gegner[vorlage.gegner]);
   return {
@@ -37,7 +43,9 @@ export function werteFuer(stand, heute, vorlage, tabelle, nameVon = id => (tabel
     faehigkeit: tabelle.faehigkeiten[vorlage.faehigkeit].name,
     ziel: stand.quest ? stand.quest.ziel : '',
     n: a.wocheZaehler, anzahl: a.anzahl, rest: Math.max(0, a.anzahl - a.wocheZaehler),
-    gegner: g.nom, er: g.er, ihn: g.ihn
+    gegner: g.nom, er: g.er, ihn: g.ihn,
+    // nur bekannte Stil-Platzhalter mit echtem Text; fehlt einer, bleibt {name} sichtbar (fällt im Test auf, statt still zu fehlen)
+    ...Object.fromEntries(STIL_PLATZHALTER.filter(k => stilWerte && typeof stilWerte[k] === 'string' && stilWerte[k].trim()).map(k => [k, stilWerte[k]]))
   };
 }
 
@@ -62,12 +70,13 @@ export function anlass(stand, heute) {
   return 'sonst';
 }
 
-export function botschaft(stand, heute, vorlage, tabelle, botschaften, nameVon) {
-  const an = anlass(stand, heute);
+// anlassFest (Version 68): Anlass vorgeben statt ermitteln, z. B. 'besiegt' am Siegtag, solange der neue Gegner verborgen bleibt.
+export function botschaft(stand, heute, vorlage, tabelle, botschaften, nameVon, stilWerte, anlassFest = null) {
+  const an = typeof anlassFest === 'string' && anlassFest ? anlassFest : anlass(stand, heute);
   const eintrag = botschaften.find(b => b.anlass === an) || botschaften.find(b => b.anlass === 'sonst');
   if (!eintrag || !eintrag.texte.length) return { anlass: an, text: '' };
   const i = streuwert(tagKey(heute) + an) % eintrag.texte.length;
-  return { anlass: an, text: fuelle(eintrag.texte[i], werteFuer(stand, heute, vorlage, tabelle, nameVon)) };
+  return { anlass: an, text: fuelle(eintrag.texte[i], werteFuer(stand, heute, vorlage, tabelle, nameVon, stilWerte)) };
 }
 
 // Text eines Story-Teils (Version 47). `text` ist ein String (eine Fassung) oder { ja, nein }:
@@ -85,11 +94,11 @@ export function storyText(teil, antwort) {
 
 // Story der laufenden Woche: Woche 1 je Gegner, danach die allgemeine Woche.
 // Je Tag mit Tages-Check in dieser Woche wird ein Teil frei (höchstens 7).
-export function storyWoche(stand, heute, vorlage, tabelle, stories, nameVon) {
+export function storyWoche(stand, heute, vorlage, tabelle, stories, nameVon, stilWerte) {
   const a = auswertung(stand, heute);
   // Erste Runde gegen einen Gegner: seine eigene Geschichte (falls vorhanden), sonst die allgemeine Woche.
   const geschichte = (a.ersteRundeGegner && stories[a.gegner || vorlage.gegner]) || stories._allgemein;
-  const w = werteFuer(stand, heute, vorlage, tabelle, nameVon);
+  const w = werteFuer(stand, heute, vorlage, tabelle, nameVon, stilWerte);
   const frei = Math.min(geschichte.teile.length, a.eintraegeWoche);
   // Teil i wird vom i-ten Eintrag der Runde frei; dessen Antwort wählt die Fassung (Version 47).
   const tageRunde = Object.keys(stand.tage || {}).filter(t => t >= a.rundeVon && t <= a.heute).sort();
@@ -102,6 +111,29 @@ export function storyWoche(stand, heute, vorlage, tabelle, stories, nameVon) {
     frei,
     gelesen,
     neu: frei > gelesen
+  };
+}
+
+// Story einer vergangenen Runde zum Nachlesen (Karte, 30.10.2026). runde = Eintrag aus rundenListe (logik/karte.js):
+// { key, von, bis, gegner, erste, anwendungen }. Gleiche Regeln wie storyWoche: erste Runde gegen einen Gegner = seine
+// Geschichte, sonst die allgemeine Woche; Fassung je Tag nach der Antwort. Liefert nur GELESENE Teile (Nachlesen ändert
+// nichts; ungelesene bleiben versiegelt, damit die Karte die Siegel nicht umgeht). Platzhalter {n}/{rest} beziehen sich
+// auf diese Runde. Wirft bei ungültiger Runde; fehlt die Geschichte, kommt { titel: '', teile: [] }.
+export function storyRunde(stand, runde, vorlage, tabelle, stories, nameVon, stilWerte) {
+  if (!runde || typeof runde.key !== 'string' || typeof runde.von !== 'string' || typeof runde.bis !== 'string') throw new Error('storyRunde: ungültige Runde');
+  const geschichte = (runde.erste && stories[runde.gegner]) || stories._allgemein;
+  if (!geschichte || !Array.isArray(geschichte.teile)) return { titel: '', teile: [] };
+  const v = tabelle.gegner[runde.gegner] ? { ...vorlage, gegner: runde.gegner } : vorlage;
+  const w = werteFuer(stand, ausTagKey(runde.bis), v, tabelle, nameVon, stilWerte);
+  const anzahl = Number.isFinite(w.anzahl) ? w.anzahl : 0;
+  const n = Number.isFinite(runde.anwendungen) ? runde.anwendungen : 0;
+  Object.assign(w, { n, rest: Math.max(0, anzahl - n) });
+  const tageRunde = Object.keys(stand.tage || {}).filter(t => t >= runde.von && t <= runde.bis).sort();
+  const frei = Math.min(geschichte.teile.length, tageRunde.length);
+  const gelesen = Math.min(frei, Math.max(0, (stand.story && stand.story.gelesen && stand.story.gelesen[runde.key]) | 0));
+  return {
+    titel: fuelle(geschichte.titel, w),
+    teile: geschichte.teile.slice(0, gelesen).map((t, i) => ({ nr: i + 1, titel: fuelle(t.titel, w), text: fuelle(storyText(t, stand.tage[tageRunde[i]]), w) }))
   };
 }
 
@@ -151,7 +183,7 @@ export const FASSUNGEN = ['ja', 'nein'];
 
 // Prüft die Texte auf unbekannte Platzhalter; liefert Fehlertexte.
 export function pruefeTexte(botschaften, stories) {
-  const erlaubt = new Set(['verbuendeter', 'faehigkeit', 'ziel', 'n', 'anzahl', 'rest', 'gegner', 'Gegner', 'er', 'Er', 'ihn']);
+  const erlaubt = new Set(TEXT_PLATZHALTER);
   const fehler = [];
   const pruefe = (wo, text) => { for (const m of String(text).matchAll(/\{(\w+)\}/g)) if (!erlaubt.has(m[1])) fehler.push(`${wo}: {${m[1]}}`); };
   for (const b of botschaften) b.texte.forEach((x, i) => pruefe(`${b.anlass}[${i}]`, x));

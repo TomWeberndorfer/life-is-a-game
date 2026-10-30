@@ -7,7 +7,9 @@ const NAME = /^[a-z][a-z0-9_]{2,40}$/;
 const MAX_SESSIONS_JE_TAG = 40;
 const MAX_SCHLUESSEL = 80;
 // Zusatzangaben zu Ereignissen: nur diese Felder werden gezählt (ohne Personendaten), je Session als „ereignis|feld:wert“.
-export const MERKMAL_FELDER = Object.freeze(['domain', 'kapitel']);
+// bereich (Freischaltungen: stadt, welten, karte …) und abschnitt (Startseite: quest, premium) seit 30.10.2026; vorher wurden
+// sie mitgeschickt, aber verworfen. Werte sind feste IDs der App, nie Eingaben der Nutzer.
+export const MERKMAL_FELDER = Object.freeze(['domain', 'kapitel', 'bereich', 'abschnitt']);
 const WERT = /^[a-z0-9-]{1,30}$/;
 const MAX_ATTR = 60;
 

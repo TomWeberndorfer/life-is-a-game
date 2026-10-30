@@ -10,14 +10,22 @@ export const GEWICHTE = {
 export const FEATURES = [
   { id: 'crew', name: 'Verbündeter', screens: ['crew'], events: ['crew_viewed', 'crew_revisited', 'character_opened'], bewertung: 'crew_score' },
   { id: 'boss', name: 'Gegner', screens: ['boss', 'neuer_gegner'], events: ['boss_viewed', 'boss_revisited', 'boss_revealed'], bewertung: 'boss_score' },
-  { id: 'quest', name: 'Quest der Woche', screens: ['quest', 'start'], events: ['quest_viewed', 'quest_checkin', 'quest_completed'], bewertung: null },
+  // Bildschirm „quest“ und Ereignis „quest_viewed“ meldet die App nicht mehr (Startseite seit Version 43) → entfernt 30.10.2026
+  { id: 'quest', name: 'Hauptquest', screens: ['start'], events: ['quest_checkin', 'quest_completed'], bewertung: null },
+  { id: 'bearbeiten', name: 'Quest bearbeiten', screens: ['quest_bearbeiten'], events: ['quest_edited'], bewertung: null },
   { id: 'faehigkeit', name: 'Fähigkeit', screens: ['faehigkeit'], events: ['skill_viewed'], bewertung: null },
   { id: 'story', name: 'Story', screens: ['story', 'sieg', 'stilwahl'], events: ['story_opened', 'story_part_read', 'story_completed', 'style_selected'], bewertung: 'story_curiosity_score' },
   { id: 'mikro', name: 'Mikroquests', screens: [], events: ['mikroquest_done'], bewertung: null },
   { id: 'botschaft', name: 'Crew-Botschaft', screens: [], events: ['crew_message_seen'], bewertung: null },
   { id: 'mehrheld', name: 'Weitere Helden', screens: [], events: ['hero_focus', 'hero_added', 'new_adventure_started'], bewertung: null },
-  { id: 'stadt', name: 'Stadt', screens: ['stadt'], events: [], bewertung: null }
+  { id: 'stadt', name: 'Stadt', screens: ['stadt'], events: [], bewertung: null },
+  { id: 'logbuch', name: 'Logbuch', screens: ['logbuch'], events: ['logbook_filter', 'logbook_more'], bewertung: null },
+  { id: 'karte', name: 'Karte', screens: ['karte'], events: ['map_place_opened'], bewertung: null }
 ];
+
+// Freischaltungen (30.10.2026): freigegeben = unlock_released mit bereich; genutzt = unlock_opened mit bereich (Tabs)
+// oder die eigenen Ereignisse der Bereiche ohne Tab. Neuer Bereich ohne Tab = eine Zeile hier.
+export const FREISCHALT_GENUTZT = { welten: ['style_selected'], angebot: ['new_adventure_started'] };
 
 export const TRICHTER = [
   ['ob1', '1 Bereich'], ['ob3', '3 Ziel'], ['ob5', '5 Verbündeter'], ['ob7', '7 Fähigkeit'], ['onboarding_finished', '8 Abenteuer beginnen']
@@ -180,6 +188,37 @@ export function lebensbereiche(tester) {
   return Object.entries(m).map(([domain, anzahl]) => ({ domain, anzahl })).sort((a, b) => b.anzahl - a.anzahl || (a.domain < b.domain ? -1 : 1));
 }
 
+// Freischaltungen: je Bereich, wie viele Tester ihn freigegeben bekamen und wie viele ihn danach genutzt haben.
+// „genutzt“ zählt nur bei Testern, die den Bereich auch freigegeben bekamen (sonst Altbestand vor Version 69).
+export function freischaltungen(tester, genutzt = FREISCHALT_GENUTZT) {
+  const m = {};
+  for (const t of tester) {
+    const frei = attrJeTester(t, 'bereich', ['unlock_released']);
+    const offen = attrJeTester(t, 'bereich', ['unlock_opened']);
+    for (const b of Object.keys(frei)) {
+      const x = m[b] || (m[b] = { bereich: b, freigegeben: 0, genutzt: 0 });
+      x.freigegeben += 1;
+      if (offen[b] || (genutzt[b] || []).some(e => hatEvent(t, e))) x.genutzt += 1;
+    }
+  }
+  const spaeter = tester.filter(t => hatEvent(t, 'unlock_later')).length;
+  return { bereiche: Object.values(m).sort((a, b) => b.freigegeben - a.freigegeben || (a.bereich < b.bereich ? -1 : 1)), spaeter };
+}
+
+// Einklappen der Startseite: je Abschnitt, wie viele Tester ihn eingeklappt bzw. wieder aufgeklappt haben.
+export function klappen(tester) {
+  const m = {};
+  for (const t of tester) {
+    for (const [ereignis, feld] of [['section_collapsed', 'zu'], ['section_expanded', 'auf']]) {
+      for (const a of Object.keys(attrJeTester(t, 'abschnitt', [ereignis]))) {
+        const x = m[a] || (m[a] = { abschnitt: a, zu: 0, auf: 0 });
+        x[feld] += 1;
+      }
+    }
+  }
+  return Object.values(m).sort((a, b) => b.zu - a.zu || (a.abschnitt < b.abschnitt ? -1 : 1));
+}
+
 export function feedbackAuswertung(tester) {
   const fb = tester.map(t => t.feedback).filter(Boolean);
   const anteil = (k, v) => (fb.filter(f => f[k]).length ? fb.filter(f => f[k] === v).length / fb.filter(f => f[k]).length : null);
@@ -190,7 +229,7 @@ const pct = x => (x === null ? '–' : `${Math.round(100 * x)} %`);
 const minSek = ms => (ms === null || ms === undefined ? '–' : `${Math.floor(ms / 60000)}:${String(Math.round((ms % 60000) / 1000)).padStart(2, '0')}`);
 export const format = { pct, minSek };
 
-const ANZEIGE = { ob1: 'Onboarding 1', ob2: 'Onboarding 2', ob3: 'Onboarding 3', ob4: 'Analyse', ob5: 'Verbündeter (Onboarding)', ob6: 'Gegner (Onboarding)', ob7: 'Fähigkeit (Onboarding)', ob8: 'Quest der Woche (Onboarding)', start: 'Startseite', crew: 'Verbündeter', boss: 'Gegner', faehigkeit: 'Fähigkeit', quest: 'Quest', story: 'Geschichte', sieg: 'Siegesanzeige', stilwahl: 'Stilwahl', stadt: 'Stadt', neuer_gegner: 'Neuer Gegner', einstellungen: 'Einstellungen', feedback: 'Feedback', premium: 'Premium' };
+const ANZEIGE = { ob1: 'Onboarding 1', ob2: 'Onboarding 2', ob3: 'Onboarding 3', ob4: 'Analyse', ob5: 'Verbündeter (Onboarding)', ob6: 'Gegner (Onboarding)', ob7: 'Fähigkeit (Onboarding)', ob8: 'Quest der Woche (Onboarding)', start: 'Startseite', crew: 'Verbündeter', boss: 'Gegner', faehigkeit: 'Fähigkeit', quest: 'Quest', story: 'Geschichte', sieg: 'Siegesanzeige', stilwahl: 'Stilwahl', stadt: 'Stadt', logbuch: 'Logbuch', karte: 'Karte', quest_bearbeiten: 'Quest bearbeiten', admin: 'Auswertung', pflege: 'Inhalte pflegen', welten: 'Welten', angebot: 'Neues Abenteuer', neuer_gegner: 'Neuer Gegner', einstellungen: 'Einstellungen', feedback: 'Feedback', premium: 'Premium' };
 export const screenName = k => ANZEIGE[k] || k;
 
 export function erkenntnisse(tester, heuteKey) {
@@ -215,6 +254,8 @@ export function erkenntnisse(tester, heuteKey) {
   if (kp.sieger) out.push(`Bosskette: ${kp.sieger} von ${kp.basis} Testern haben einen Gegner besiegt${kp.stufen[0] ? `, ${kp.stufen[0].tester} haben Kapitel 2 erreicht` : ''}.`);
   const lb = lebensbereiche(tester);
   if (lb[0]) out.push(`Häufigster Lebensbereich beim Start: ${lb[0].domain} (${lb[0].anzahl} Tester).`);
+  const fs = freischaltungen(tester).bereiche.filter(b => b.freigegeben >= 2 && b.genutzt / b.freigegeben < 0.5);
+  if (fs[0]) out.push(`Wenig genutzt nach der Freischaltung: ${fs.map(b => `${screenName(b.bereich)} (${b.genutzt} von ${b.freigegeben})`).join(', ')}.`);
   if (g.tester < 5) out.push(`Achtung: erst ${g.tester} Tester. Unterschiede sind noch nicht belastbar.`);
   return out;
 }

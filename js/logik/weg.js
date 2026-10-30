@@ -17,12 +17,24 @@ export function wegAnsicht(a, kette) {
   return { stationen, position: nr - 1 + anteil, kapitel: nr, kapitelAnzahl: k.length };
 }
 
-// Sichtbarer Ausschnitt mit offenem Horizont (Version 20): letzte geschaffte Station (oder Start), aktueller Gegner,
-// höchstens ein kommender Gegner, danach immer Nebel. So verrät der Weg nie, wie viele Gegner noch kommen.
-export function wegFenster(w) {
+// Sichtbarer Ausschnitt mit offenem Horizont (Version 20, einstellbar seit 30.10.2026): `zurueck` geschaffte Stationen
+// (besiegte Gegner, am Anfang der Start), aktueller Gegner, `voraus` kommende Gegner, danach immer Nebel.
+// So verrät der Weg nie, wie viele Gegner noch kommen. Die Startseite nutzt WEG_FENSTER aus daten/startseite.js.
+export const FENSTER_STANDARD = Object.freeze({ zurueck: 1, voraus: 1 });
+const FENSTER_MAX = 6; // mehr passt auf dem Handy nicht in eine Zeile
+
+// Gültige Fenster-Werte: ganze Zahlen 0–FENSTER_MAX; Ungültiges fällt einzeln auf den Standard zurück.
+export function fensterKonfig(cfg) {
+  const c = cfg && typeof cfg === 'object' ? cfg : {};
+  const ok = v => Number.isInteger(v) && v >= 0 && v <= FENSTER_MAX;
+  return { zurueck: ok(c.zurueck) ? c.zurueck : FENSTER_STANDARD.zurueck, voraus: ok(c.voraus) ? c.voraus : FENSTER_STANDARD.voraus };
+}
+
+export function wegFenster(w, cfg = FENSTER_STANDARD) {
   if (!w || !Array.isArray(w.stationen)) throw new Error('wegFenster: ungültiger Weg');
-  const von = Math.max(0, w.kapitel - 1);
-  const stationen = [...w.stationen.slice(von, w.kapitel + 2), { gegner: null, status: STATION.nebel }];
+  const { zurueck, voraus } = fensterKonfig(cfg);
+  const von = Math.max(0, w.kapitel - zurueck);
+  const stationen = [...w.stationen.slice(von, w.kapitel + 1 + voraus), { gegner: null, status: STATION.nebel }];
   return { stationen, position: Math.min(stationen.length - 1, Math.max(0, w.position - von)), kapitel: w.kapitel };
 }
 

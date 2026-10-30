@@ -194,6 +194,26 @@ export function klappUmschalten(gespeichert, id, klein) {
   return klein ? [...alt, id] : alt;
 }
 
+// Alte Einzel-Wahlen einmalig in die allgemeine Liste übernehmen (Version 63, Etappe C).
+// Beispiel: Premium hatte bis Version 62 ein eigenes Merkmal `premium_klein`. Wer die Karte klein hatte,
+// soll sie nach dem Umzug nicht plötzlich groß sehen.
+// gespeichert  aktuelle Liste (merkmal 'start_klein'), darf kaputt sein
+// alt          { <abschnittId>: <alter Wert> }; nur echtes true heißt „klein“, alles andere wird verworfen
+// Rückgabe     { liste, aufraeumen } – aufraeumen = Abschnitte, deren altes Merkmal noch einen Wert hat und
+//              geleert werden soll (auch false/Unsinn, damit die Übernahme nur einmal läuft). Wirft nie.
+// Eine neuere Wahl in der allgemeinen Liste gewinnt nicht gegen „klein“: die Liste kennt nur „klein“, nie „groß“.
+export function klappUebernehmen(gespeichert, alt) {
+  let liste = Array.isArray(gespeichert) ? gespeichert.filter(x => typeof x === 'string') : [];
+  const aufraeumen = [];
+  if (!alt || typeof alt !== 'object') return { liste, aufraeumen };
+  for (const [id, wert] of Object.entries(alt)) {
+    if (wert === undefined || wert === null) continue; // nie gesetzt oder schon übernommen
+    aufraeumen.push(id);
+    if (wert === true && !liste.includes(id)) liste = [...liste, id];
+  }
+  return { liste, aufraeumen };
+}
+
 // Abschnitt vorziehen (Version 57, „Siegel weiter oben“). Ein Abschnitt mit `vorziehen: { nach: '<id>' }` rückt direkt
 // hinter den genannten Abschnitt, solange sein Signal wahr ist (z. B. Story: ein Siegel wartet). Sonst bleibt er an seinem Platz.
 // ids      geordnete IDs aus ordneAbschnitte()
@@ -260,4 +280,14 @@ export function neuAufStart(register, quellen) {
     vor: v ? { abschnitt: v.z.abschnitt, nach: v.z.vorziehen } : null,
     glanz: aktiv.filter(x => typeof x.z.glanz === 'string' && x.z.glanz).map(x => ({ id: x.z.id, abschnitt: x.z.abschnitt, stil: x.z.glanz, kennung: x.roh }))
   };
+}
+
+// Wenn-dann für die Heldentat in zwei Feldern (Version 61). Die Fähigkeiten speichern den Auslöser als ganzen Satz
+// („Wenn du Süßigkeiten essen möchtest:“); im Feld „WENN“ steht nur der Rest („du Süßigkeiten essen möchtest“).
+// Fehlt „Wenn“ am Anfang, bleibt der Satz ganz (nur der Doppelpunkt am Ende fällt weg). Nie undefined.
+export function wennDann(f) {
+  const s = v => (typeof v === 'string' ? v.trim() : '');
+  const roh = s(f && f.wenn).replace(/\s*[:：]\s*$/, '');
+  const m = /^wenn\s+(.+)$/i.exec(roh);
+  return { wenn: m ? m[1] : roh, dann: s(f && f.kurz) };
 }
