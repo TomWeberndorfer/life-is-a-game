@@ -14,6 +14,7 @@
 //   notizArten    Eintragsarten, deren Text als antippbarer Chip unter „Was hat geholfen?“ erscheint
 //   notizenMax    höchstens so viele Chips (die neuesten); verweiseMax = so viele dürfen gewählt sein
 //   chipZeichen   Länge des Chip-Texts (danach „…“)
+//   ruhigeFrage   ab so vielen Tagen „Keine Versuchung“ in der Runde fragt der Brief leise nach (Version 146; 0 = aus)
 //   ruhigNach     Eintragsarten, nach denen die alte Runde nicht mehr besprochen wird (Willkommen zurück war schon da)
 export const RUECKBLICK = Object.freeze({
   fensterTage: 3,
@@ -25,6 +26,7 @@ export const RUECKBLICK = Object.freeze({
   notizenMax: 6,
   verweiseMax: 6,
   chipZeichen: 40,
+  ruhigeFrage: 4,
   ruhigNach: Object.freeze(['neustart', 'wiederda'])
 });
 

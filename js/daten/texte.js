@@ -375,6 +375,7 @@ export const TEXTE = {
   'rb.vor.max': 'Mehr als {max}× je Runde geht nicht. Du bist schon ganz oben.',
   'rb.vor.min': 'Kleiner geht es nicht. Wenn eine Woche voll ist, hilft ein Ruhetag.',
   'rb.vor.steigt': 'Die nächsten Gegner werden ohnehin stärker, bis {alt}× je Runde nötig sind.',
+  'rb.ruhigFrage': 'Viele ruhige Tage in dieser Runde. Kam der Moment wirklich selten, oder ist er manchmal unbemerkt vorbeigezogen? Beides ist in Ordnung. Schon das Hinschauen schärft den Blick.', // Version 146
   'rb.schwerHinweis': 'Weniger, dafür sicher, ist ein starker Zug.',
   'rb.fertig': 'Neue Runde beginnen',
   'rb.gespeichert': 'Festgehalten.',
@@ -1026,6 +1027,8 @@ export const TEXTE = {
   'ob.belohnungGegner': 'Schaden gegen {gegner}',
   'ob.belohnungHeld': 'Erfahrung für {held}',
   'ob.beginnen': 'Abenteuer beginnen',
+  'ob.ausloeserTitel': 'Damit es zur Gewohnheit wird:', // Version 146
+  'ob.ausloeserText': 'Verbinde deinen Besuch mit etwas, das du ohnehin jeden Tag tust, z. B. abends nach dem Zähneputzen. Und leg die App auf deinen Startbildschirm, dann ist sie mit einem Tipp da.',
 
   // Story-Seite (app.js aufteilen, 30.10.2026). story.eyebrow nutzt auch die Story-Karte der Startseite.
   'story.eyebrow': 'GESCHICHTE · WOCHE {nr}',

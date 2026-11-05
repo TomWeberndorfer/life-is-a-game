@@ -85,7 +85,8 @@ export const WEG_FENSTER = { zurueck: 2, voraus: 1 };
 // Unbekannter Wert → 'pfad'.
 // warumZeichen (Etappe 3, Teil A): Warum und Lebenszeile teilen sich eine Zeile. Ist das Warum länger, wird es auf
 // eine Zeile gekürzt und lässt sich aufklappen (nur in der Sitzung gemerkt). 0 = immer ganz zeigen.
-export const KOPFLEISTE = { weg: 'streifen', warumZeichen: 44 };
+// Version 146: 60 statt 44 Zeichen (das eigene Warum soll meist ganz lesbar sein, Bewertung 05.11.2026 Punkt 10).
+export const KOPFLEISTE = { weg: 'streifen', warumZeichen: 60 };
 
 // Heldenkopf: wie viele Mini-Porträts der Knopf „Helden wechseln“ höchstens stapelt.
 export const HELDENKOPF = { stapelMax: 3 };

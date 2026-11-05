@@ -106,7 +106,9 @@ function siegelLeiste(id, runde) {
     const inhalt = a ? icon(a.symbol ? symbol(a.symbol, a.icon) : a.icon) : '';
     return `<span class="rb-tag"><span class="ch-siegel ${a ? esc(a.klasse || '') : 'leer rb-offen'}">${inhalt}</span><small>${esc(WOCHENTAG[K.ausTagKey(x.tag).getDay()])}</small></span>`;
   };
-  return `<div class="rb-siegel" role="img" aria-label="${esc(T('rb.siegelAria', { n: runde.anwendungen, anzahl: runde.ziel }))}">${tage.map(s).join('')}</div>`;
+  // Version 146: leise Nachfrage bei vielen ruhigen Tagen (ohne Wertung, ohne Folgen)
+  const frage = RB.vieleRuhige(tage, RUECKBLICK.ruhigeFrage) ? `<p class="klein rb-ruhig-frage">${esc(T('rb.ruhigFrage'))}</p>` : '';
+  return `<div class="rb-siegel" role="img" aria-label="${esc(T('rb.siegelAria', { n: runde.anwendungen, anzahl: runde.ziel }))}">${tage.map(s).join('')}</div>${frage}`;
 }
 
 // Vorschlag zur gewählten Einschätzung als ein ruhiger Satz.

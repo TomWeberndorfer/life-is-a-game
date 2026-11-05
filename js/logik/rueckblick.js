@@ -67,6 +67,15 @@ export function rundenSiegel(stand, runde, eintraege, reihenfolge = ['treffer', 
   return aus;
 }
 
+// Viele ruhige Tage (Version 146, Bewertung 05.11.2026 Punkt 12): true, wenn in den Siegeln der Runde (rundenSiegel)
+// mindestens `ab` Tage „ruhig“ (Keine Versuchung) sind. Dann fragt der Brief ohne Wertung nach, ob der Moment wirklich
+// nicht kam. Psychologie: „Keine Versuchung“ kostet nichts und lässt sich kaum prüfen; eine leise Frage hält die
+// Selbstbeobachtung ehrlich, ohne Misstrauen oder Folgen. ab: ganze Zahl 1–31, 0 oder ungültig = aus. Wirft nie.
+export function vieleRuhige(tage, ab) {
+  if (!Number.isInteger(ab) || ab < 1 || ab > 31 || !Array.isArray(tage)) return false;
+  return tage.filter(t => t && t.siegel === 'ruhig').length >= ab;
+}
+
 // Eigene Notizen aus der Runde als Chips: Einträge der notizArten mit Text oder Plan, neueste zuerst, höchstens max.
 // Ergebnis [{ id, text }] – text gekürzt auf zeichen (mit „…“).
 export function rundenNotizen(eintraege, runde, cfg) {

@@ -98,7 +98,7 @@ import { START_KLICKS, START_KURZ, START_SCREENS, START_TEILE, buehneDauerMs, bu
 import { BUEHNE_KLICKS } from './ansicht/buehne.js'; // 02.11.2026: aus startseite.js ausgelagert
 import { NACHTRAG_KLICKS } from './ansicht/nachtrag.js';
 
-export const VERSION = { nr: 145, datum: '05.11.2026 · 11:16' };
+export const VERSION = { nr: 146, datum: '05.11.2026 · 13:18' };
 
 // Version 78: Hash aus Profil und Sprungziel (daten/sprungziele.js), z. B. #notfall oder #test+notfall.
 const HASH = leseHash(location.hash, { profile: PROFILE, ziele: SPRUNGZIELE });

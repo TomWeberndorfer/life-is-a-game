@@ -188,8 +188,10 @@ export const ONBOARDING_SCREENS = {
     </section>`;
   },
 
+  // Version 146 (Bewertung 05.11.2026, Punkt 11): Auslöser-Hinweis beim ersten Helden. Ohne Push-Nachrichten braucht der
+  // tägliche Besuch einen festen Anker im Alltag (Gewohnheit an eine bestehende Routine koppeln). Nur Text, nichts gespeichert.
   ob8() {
-    const { T, aktuelleVorlage, img, nameVon, wort } = kx;
+    const { T, aktuelleVorlage, img, nameVon, ui, wort } = kx;
     const v = aktuelleVorlage();
     const f = TABELLE.faehigkeiten[v.faehigkeit];
     const g = TABELLE.gegner[v.gegner];
@@ -218,6 +220,7 @@ export const ONBOARDING_SCREENS = {
           <li>${img('boss-' + v.gegner, g.name, 'boss', 'rund')}${esc(T('ob.belohnungGegner', { gegner: akkusativ(g.name) }))}</li>
           <li>${img(v.held, nameVon(v.held), 'held', 'rund')}${esc(T('ob.belohnungHeld', { held: nameVon(v.held) }))}</li>
         </ul>
+        ${ui.neu ? '' : `<div class="notiz ob-ausloeser">${icon('sonne')}<p><b>${esc(T('ob.ausloeserTitel'))}</b> ${esc(T('ob.ausloeserText'))}</p></div>`}
       </div>
       <div class="fuss"><button class="cta" data-a="beginnen">${esc(T('ob.beginnen'))}</button></div>
     </section>`;

@@ -156,13 +156,17 @@ export function buehneHtml({ v, f, g, a }) {
     const wd = wennDann(f);
     const kopf = `<div class="tat-kopf"><span class="tat-medaille" aria-hidden="true">${icon(f.icon || 'stern')}</span>
         <span class="spalte"><span class="eyebrow tat-eyebrow">${esc(nt ? T('nachtrag.eyebrow', { tag: nachtragName(nt).toUpperCase() }) : T('tat.eyebrow'))}</span>
-        <button class="tat-name tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(T('tat.ansehen', { faehigkeit: f.name }))}">${esc(f.name)}</button></span></div>
-      ${wd.wenn || wd.dann ? `<p class="tat-regel">${wd.wenn ? `<b>${esc(T('tat.wenn'))}</b> <span>${esc(wd.wenn)}</span>` : ''}${wd.wenn && wd.dann ? ' <span class="tat-pfeil" aria-hidden="true">→</span> ' : ''}${wd.dann ? `<b class="dann">${esc(T('tat.dannLabel'))}</b> <span>${esc(wd.dann)}</span>` : ''}</p>` : ''}`;
+        <button class="tat-name tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(T('tat.ansehen', { faehigkeit: f.name }))}">${esc(f.name)}</button></span></div>`;
+    // Version 146 (Bewertung 05.11.2026, Punkt 9a): Der Wenn-dann-Plan steht IN der haftenden Daumenleiste direkt über
+    // der Tagesfrage. Vorher stand er darüber im mitscrollenden Teil und war am Handy oft hinter der Leiste verborgen,
+    // gerade im Moment der Entscheidung. Psychologie: Ein Wenn-dann-Plan wirkt, wenn er vor der Entscheidung abgerufen
+    // wird (Gollwitzer). Nachtrag und „beginnt später“ haben keine Daumenleiste: dort bleibt er unter dem Namen.
+    const regel = regelHtml(wd);
     // Startpaket (18a): Quest beginnt erst später → keine Siegel, nur ein ruhiger Hinweis (heute ist nichts zu tun)
-    tat = nt ? kopf + nachtragHtml(nt, f)
-      : K.vorBeginn(kx.stand, K.tagKey(jetzt())) ? `${kopf}<div class="ruhe-zeile vor-beginn" role="status"><span class="eyebrow">${esc(beginntText(kx.stand).toUpperCase())}</span><p class="ruhe-text">${esc(T('beginn.titel'))}</p><p class="klein">${esc(T('beginn.text', { faehigkeit: f.name }))}</p></div>`
+    tat = nt ? kopf + regel + nachtragHtml(nt, f)
+      : K.vorBeginn(kx.stand, K.tagKey(jetzt())) ? `${kopf}${regel}<div class="ruhe-zeile vor-beginn" role="status"><span class="eyebrow">${esc(beginntText(kx.stand).toUpperCase())}</span><p class="ruhe-text">${esc(T('beginn.titel'))}</p><p class="klein">${esc(T('beginn.text', { faehigkeit: f.name }))}</p></div>`
       : `${kopf}${nachtragZeile()}${ruhetagHeuteZeile()}
-      <div class="tat-daumen${ersterTag() ? ' erster' : ''}"><p class="tat-frage">${esc(tagesfrage(v, f, T(artSchluessel('frage', 'tat.frage'), { faehigkeit: f.name })))}</p>${ersterTagHtml()}${vorsatzZeileHtml(spiel.fokus)}
+      <div class="tat-daumen${ersterTag() ? ' erster' : ''}">${regel.replace('class="tat-regel"', 'class="tat-regel im-daumen"')}<p class="tat-frage">${esc(tagesfrage(v, f, T(artSchluessel('frage', 'tat.frage'), { faehigkeit: f.name })))}</p>${ersterTagHtml()}${vorsatzZeileHtml(spiel.fokus)}
       ${a.ohneFrage ? `<p class="klein tat-zw-hinweis">${esc(artText('hinweis', 'tat.frage'))}</p>` : ''}
       ${siegelReiheHtml(a.ohneFrage)}
       <div class="daumen-hilfen">${ratHtml(wd)}${schwerSiegelDa(a.ohneFrage) ? '' : eintragLink('schwer', 'eintrag.link.schwer')}</div></div>`;
@@ -179,6 +183,12 @@ export function buehneHtml({ v, f, g, a }) {
     ${bid && !ablaufId && !ui.feier ? vorstellungHinweisHtml() : ''}
     <div class="buehne-tat heldentat">${tat}</div>
   </section>`;
+}
+// Wenn-dann-Zeile der Fähigkeit (leer ohne Text in der Vorlage). Wirft nie.
+function regelHtml(wd) {
+  const { T } = kx;
+  if (!wd || (!wd.wenn && !wd.dann)) return '';
+  return `<p class="tat-regel">${wd.wenn ? `<b>${esc(T('tat.wenn'))}</b> <span>${esc(wd.wenn)}</span>` : ''}${wd.wenn && wd.dann ? ' <span class="tat-pfeil" aria-hidden="true">→</span> ' : ''}${wd.dann ? `<b class="dann">${esc(T('tat.dannLabel'))}</b> <span>${esc(wd.dann)}</span>` : ''}</p>`;
 }
 // Siegel statt großer Knöpfe: gleich groß, Wort und Symbol je Stil (stile.js `texte` / `symbole`)
 // wortKey (Zählweisen, 04.11.2026): eigener Textschlüssel fürs Wort (Rhythmus „Erledigt“); ohne = Wort des Stils.
