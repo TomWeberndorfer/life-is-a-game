@@ -2,7 +2,7 @@
 // Ruhezustand, „Rat für heute“. Seit Etappe 1 (Version 95) mit Daumenleiste und Rückgängig.
 import { trackEvent } from '../analytics.js';
 import { BEWEGUNG } from '../daten/bewegung.js';
-import { KAMPFBUEHNE } from '../daten/startseite.js';
+import { KAMPFBUEHNE, RUECKGAENGIG } from '../daten/startseite.js';
 import { BOTSCHAFTEN, STORIES } from '../daten/inhalte.js';
 import { LAGERFEUER } from '../daten/lagerfeuer.js'; // Etappe 3, Teil C
 import { SIEGELLEISTE } from '../daten/siegelleiste.js'; // Etappe 3, Teil D
@@ -13,7 +13,7 @@ import * as K from '../logik/kern.js';
 import { lagerfeuerSatz, lagerfeuerStand } from '../logik/lagerfeuer.js';
 import { erfolgsSatz, siegelleiste } from '../logik/siegelleiste.js';
 import { ablaufEndeMs, ablaufJetzt, leisteAnimation, lesedauerMs, mitLesezeit } from '../logik/bewegung.js';
-import { buehneDauer, buehneZustand, naechsterOffener, tagesfrage, wennDann } from '../logik/startseite.js';
+import { buehneDauer, buehneZustand, naechsterOffener, rueckDauer, tagesfrage, wennDann } from '../logik/startseite.js';
 import { blitzEbene, bwStil, esc, fortschrittHier, grossAnfang, icon, kachelLeiste } from './helfer.js';
 import { kx } from './kontext.js';
 import { eintragLink, oeffneEintrag } from './eintrag.js';
@@ -288,7 +288,7 @@ function ersterTagHtml() {
 // (Ablauf, Lagerfeuer, ein Held) bleibt das Popup über der Tableiste, außerhalb von #app mit eigenem Hörer. Steht die Zeile
 // auf der Seite, blendet CSS das Popup aus (:has). Grund: Rückgängig bleibt beim Daumen, ohne den nächsten Schritt zu verdecken.
 // Der Zustand gilt auch ohne echtes DOM (Rauchtest prüft die Zeile).
-const RUECK_MS = 6000;
+const RUECK_MS = rueckDauer(RUECKGAENGIG); // Version 147: aus den Daten (vorher fest 6000)
 let rueckTimer = null;
 let rueckFuer = null; // { heroId, tag, antwort, seit }: Rückgängig gilt nur für diesen Helden an diesem Tag
 function rueckgaengigMachen() {
@@ -356,7 +356,7 @@ function zeigeRueckPopup() {
     const ansage = rueckAnsage();
     const el = document.createElement('div');
     el.id = 'rueck-hinweis'; el.className = 'rueck-hinweis'; el.setAttribute('role', 'status');
-    el.innerHTML = `<span>${esc(rueckText(rueckFuer.antwort))}${ansage ? `<span class="nur-sr"> ${esc(ansage)}</span>` : ''}</span><button type="button">${esc(T('rueck.knopf'))}</button><i aria-hidden="true"></i>`;
+    el.innerHTML = `<span>${esc(rueckText(rueckFuer.antwort))}${ansage ? `<span class="nur-sr"> ${esc(ansage)}</span>` : ''}</span><button type="button">${esc(T('rueck.knopf'))}</button><i aria-hidden="true" style="animation-duration:${RUECK_MS}ms"></i>`;
     el.querySelector('button').addEventListener('click', rueckgaengigMachen);
     document.body.appendChild(el);
   } catch (e) { console.warn('Rückgängig (Hinweis):', e.message); }

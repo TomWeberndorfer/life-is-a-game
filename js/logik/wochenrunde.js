@@ -24,6 +24,14 @@ export function skalaVon(opt = WOCHENRUNDE) {
   return s && ganz(s.min) && ganz(s.max) && s.min >= 0 && s.max > s.min && s.max <= 100 ? { min: s.min, max: s.max } : { min: 1, max: 10 };
 }
 
+// Vorschlag für Bereiche ohne Wert (nur Anzeige): 'mitte' → Mitte der Skala, ganze Zahl der Skala → diese, sonst null.
+export function vorschlagWert(opt = WOCHENRUNDE) {
+  const { min, max } = skalaVon(opt);
+  const v = opt ? opt.vorschlag : undefined;
+  if (v === 'mitte') return Math.round((min + max) / 2);
+  return ganz(v) && v >= min && v <= max ? v : null;
+}
+
 // Konfiguration prüfen (beim Start). Liefert Meldungen, leer = in Ordnung.
 export function pruefeWochenrunde(cfg, { texte = null } = {}) {
   const m = [];
@@ -39,6 +47,7 @@ export function pruefeWochenrunde(cfg, { texte = null } = {}) {
   if (!ganz(cfg.vorsatzMax) || cfg.vorsatzMax < 1) m.push('Wochenrunde: vorsatzMax fehlt');
   if (!ganz(cfg.vorsatzTage) || cfg.vorsatzTage < 1 || cfg.vorsatzTage > 31) m.push('Wochenrunde: vorsatzTage muss 1–31 sein');
   if (!ganz(cfg.wochenMax) || cfg.wochenMax < 2) m.push('Wochenrunde: wochenMax muss mindestens 2 sein');
+  if (cfg.vorschlag !== undefined && cfg.vorschlag !== null && cfg.vorschlag !== 'mitte' && vorschlagWert(cfg) === null) m.push("Wochenrunde: vorschlag muss 'mitte', eine Zahl der Skala oder null sein");
   if (!Array.isArray(cfg.schritte) || !cfg.schritte.length) m.push('Wochenrunde: schritte fehlen');
   else if (texte) for (const id of cfg.schritte) if (!(`wr.schritt.${id}` in texte)) m.push(`Wochenrunde: Text wr.schritt.${id} fehlt`);
   return m;
@@ -167,12 +176,14 @@ export function wertSetzen(wheel, bereichId, wert, opt = WOCHENRUNDE) {
   if (typeof wert !== 'number' || !Number.isFinite(wert)) return { ...w };
   return { ...w, [bereichId]: Math.max(min, Math.min(max, Math.round(wert))) };
 }
-// Um schritt ändern; ohne Wert beginnt + bei der Mitte (nicht bei 1), − ebenso.
+// Um schritt ändern. Ohne Wert: vom Vorschlag aus (Version 147, + von 6 → 7), ohne Vorschlag beginnen + und − bei der Mitte.
 export function wertAendern(wheel, bereichId, schritt, opt = WOCHENRUNDE) {
   const { min, max } = skalaVon(opt);
+  const s = ganz(schritt) ? schritt : 0;
   const alt = wheel && ganz(wheel[bereichId]) ? wheel[bereichId] : null;
-  const mitte = Math.round((min + max) / 2);
-  return wertSetzen(wheel, bereichId, alt === null ? mitte : alt + (ganz(schritt) ? schritt : 0), opt);
+  const vor = vorschlagWert(opt);
+  const neu = alt !== null ? alt + s : vor !== null ? vor + s : Math.round((min + max) / 2);
+  return wertSetzen(wheel, bereichId, neu, opt);
 }
 
 // Abschließen: speichert Wheel (nur gesetzte Werte), Vorsatz und den Tag. Liefert ein neues Spiel.

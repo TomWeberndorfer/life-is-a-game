@@ -254,7 +254,7 @@ export const ONBOARDING_KLICKS = {
   beginnen() { const { beginnen } = kx; beginnen(); },
   'neues-abenteuer'() {
     const { geheZu, spiel, ui } = kx;
-    Object.assign(ui, { heldenWahl: false, neu: true, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null, obStart: Date.now() });
+    Object.assign(ui, { heldenWahl: false, blatt: null, neu: true, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null, obStart: Date.now() });
     trackEvent('new_adventure_started', { helden: spiel.helden.length });
     geheZu('ob1');
   },

@@ -1783,7 +1783,7 @@ button.sl-tag:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px;
 .rueck-hinweis:not(.toast) > span:first-child::before { content: "✓ "; color: var(--gut); font-weight: 800; } /* 04.11.2026: Häkchen statt „Eingetragen:“ */
 .rueck-hinweis button { min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--panel); font: 800 calc(14px * var(--text-skala, 1)) var(--fh); letter-spacing: .04em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .rueck-hinweis button:focus-visible { outline: 3px solid var(--panel); outline-offset: 2px; }
-.rueck-hinweis i { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--ac); transform-origin: left; animation: rueck-ablauf 6s linear forwards; }
+.rueck-hinweis i { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--ac); transform-origin: left; animation: rueck-ablauf 3s linear forwards; } /* Dauer setzt die Ansicht (RUECKGAENGIG) */
 @keyframes rueck-auf { from { opacity: 0; transform: translateY(8px); } }
 @keyframes rueck-ablauf { to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .rueck-hinweis, .rueck-hinweis i { animation: none; } }
@@ -2040,6 +2040,9 @@ body:has(.rueck-zeile) #rueck-hinweis { display: none; } /* steht die Zeile in d
 .wr-ring.voll { fill: var(--ac); fill-opacity: .6; }
 .wr-ring.gewaehlt { fill-opacity: .16; }
 .wr-ring.voll.gewaehlt { fill-opacity: .9; }
+.wr-ring.vorschlag { fill: var(--ac); fill-opacity: .18; } /* Version 147: nur Vorschlag, noch nicht eingeschätzt */
+.wr-ring.vorschlag.gewaehlt { fill-opacity: .28; }
+.wr-modi { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 .wr-label { fill: var(--mute); font: 600 calc(10.5px * var(--text-skala, 1)) var(--fb); cursor: pointer; }
 .wr-label.gewaehlt { fill: var(--ink); font-weight: 700; }
 .wr-fein { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 4px 0 8px; }

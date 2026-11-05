@@ -15,6 +15,7 @@ import { ruhetagRundeText } from './ruhetag.js'; // Version 90
 import { baldBlattInhalt } from './rahmen.js'; // Etappe 3, Teil A
 import { modusAbschnittHtml } from './heldenmodi.js'; // Heldenmodi (04.11.2026)
 import { wochenBogenHtml } from './wochenrunde.js'; // Wochenrunde (05.11.2026)
+import { heldFrei } from '../logik/helden.js'; // Version 147: neuen Helden aus dem Heldenbogen holen
 import { bogenZeileHtml, istBestaendigkeit } from './bestaendigkeit.js'; // Beständigkeit (04.11.2026)
 
 // Fortschritt im Leben (Version 21): echtes Verhalten seit Questbeginn, nicht nur XP.
@@ -105,6 +106,7 @@ export function blattHtml() {
       <div class="bogen">
       ${modusAbschnittHtml(spiel.fokus)}
       ${wochenBogenHtml()}
+      ${neuerHeldBogenHtml()}
       ${entwicklungHtml(v)}
       ${bogenFaehigkeitHtml(f)}
       ${messzielBogenHtml(spiel.fokus)}
@@ -147,6 +149,20 @@ export function blattHtml() {
       <div class="blatt-inhalt">${inhalt}<button class="cta" data-a="blatt-zu">${esc(T('nav.schliessen'))}</button></div>
     </div>
   </div>`;
+}
+
+// Neuen Helden dazuholen (Version 147, Klicktest 05.11.2026, Punkt 17): fester, stiller Weg im Heldenbogen, solange im
+// Register ein Held frei ist. Vorher nur über die Heldenwahl (erst ab 2 Helden) oder das Angebot nach einem Sieg; wer
+// mit einem Helden „Später“ tippte, hatte bis zum nächsten Sieg keinen Weg. Die App drängt weiter nicht (Angebot nur nach
+// einem Sieg), aber wer selbst will, findet den Weg (Autonomie).
+function neuerHeldBogenHtml() {
+  const { T, spiel } = kx;
+  let frei = false;
+  try { frei = heldFrei(spiel); } catch (e) { console.warn('Heldenbogen (neuer Held):', e.message); }
+  if (!frei) return '';
+  return `<section class="bogen-abschnitt bogen-neu-held"><span class="eyebrow">${esc(T('bogen.neuEyebrow'))}</span>
+    <p class="klein">${esc(T('bogen.neuText'))}</p>
+    <button class="btn" data-a="neues-abenteuer">${icon('menschen')} ${esc(T('kopf.neuerHeld'))}</button></section>`;
 }
 
 // ---------- Klicks (Klick-Logik aufteilen, 30.10.2026) ----------

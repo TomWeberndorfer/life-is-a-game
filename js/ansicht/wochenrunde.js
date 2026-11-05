@@ -77,6 +77,7 @@ export function wheelSvg(wheel, gewaehlt) {
   const schritt = 360 / ids.length;
   const stufen = max - min + 1;
   const ring = k => R0 + (R - R0) * k / stufen;
+  const vor = W.vorschlagWert(); // Version 147: blasser Vorschlag für Bereiche ohne Wert (nur Anzeige)
   let teile = '';
   ids.forEach((id, i) => {
     const a0 = i * schritt - schritt / 2 + luecke, a1 = i * schritt + schritt / 2 - luecke;
@@ -84,7 +85,8 @@ export function wheelSvg(wheel, gewaehlt) {
     for (let k = 1; k <= stufen; k++) {
       const v = min + k - 1;
       const voll = wert !== null && v <= wert;
-      teile += `<path class="wr-ring${voll ? ' voll' : ''}${id === gewaehlt ? ' gewaehlt' : ''}" d="${ringstueck(ring(k - 1), ring(k), a0, a1)}" data-a="woche-wert" data-id="${esc(id)}:${v}" aria-hidden="true"></path>`;
+      const vorschlag = wert === null && vor !== null && v <= vor;
+      teile += `<path class="wr-ring${voll ? ' voll' : ''}${vorschlag ? ' vorschlag' : ''}${id === gewaehlt ? ' gewaehlt' : ''}" d="${ringstueck(ring(k - 1), ring(k), a0, a1)}" data-a="woche-wert" data-id="${esc(id)}:${v}" aria-hidden="true"></path>`;
     }
     const [x, y] = pt(R + 10, i * schritt).split(' ').map(Number);
     const anker = Math.abs(x) < 8 ? 'middle' : x > 0 ? 'start' : 'end';
@@ -103,12 +105,14 @@ function schrittWheel(w) {
     const v = Number.isInteger(w.wheel[id]) ? w.wheel[id] : null;
     return `<button class="opt kurz ${id === g ? 'sel' : ''}" aria-pressed="${id === g}" data-a="woche-bereich" data-id="${esc(id)}">${esc(bereichName(id))}<b class="wr-zahl">${v === null ? '–' : v}</b></button>`;
   }).join('');
+  const vor = W.vorschlagWert();
+  const offenText = vor === null ? T('wr.wheel.offen', { bereich: bereichName(g) }) : T('wr.wheel.vorschlag', { bereich: bereichName(g), wert: vor });
   return `<p class="lead">${esc(T('wr.wheel.frage'))}</p>
-    <p class="klein">${esc(T(w.vorbelegt ? 'wr.wheel.vorbelegt' : 'wr.wheel.hinweis'))}</p>
+    <p class="klein">${esc(T('wr.wheel.privat'))} ${esc(T(w.vorbelegt ? 'wr.wheel.vorbelegt' : vor === null ? 'wr.wheel.hinweis' : 'wr.wheel.hinweisVorschlag'))}</p>
     ${wheelSvg(w.wheel, g)}
     <div class="wr-fein" role="group" aria-label="${esc(bereichName(g))}">
       <button class="icbtn" data-a="woche-minus" data-id="${esc(g)}" aria-label="${esc(T('wr.wheel.minus', { bereich: bereichName(g) }))}">−</button>
-      <span class="wr-fein-text" role="status">${esc(wert === null ? T('wr.wheel.offen', { bereich: bereichName(g) }) : T('wr.wheel.wert', { bereich: bereichName(g), wert, max }))}</span>
+      <span class="wr-fein-text" role="status">${esc(wert === null ? offenText : T('wr.wheel.wert', { bereich: bereichName(g), wert, max }))}</span>
       <button class="icbtn" data-a="woche-plus" data-id="${esc(g)}" aria-label="${esc(T('wr.wheel.plus', { bereich: bereichName(g) }))}">+</button>
     </div>
     <div class="wahl wr-chips">${chips}</div>`;
@@ -148,6 +152,7 @@ function schrittEnergie(w) {
   }).join('');
   return `<p class="lead">${esc(T('wr.en.frage'))}</p>
     ${einl}
+    <ul class="wr-modi klein">${HELDENMODI.modi.map(x => `<li><b>${esc(modusName(x))}:</b> ${esc(T('wr.en.modus.' + x))}</li>`).join('')}</ul>
     <ul class="wr-helden">${zeilen}</ul>
     <p class="klein">${esc(T('wr.en.hinweis', { max: HELDENMODI.fokusMax, fokus }))}</p>
     ${w.info ? `<p class="klein modus-info" role="status">${esc(w.info)}</p>` : ''}`;

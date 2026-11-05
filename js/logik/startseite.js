@@ -355,6 +355,13 @@ export function neuAufStart(register, quellen) {
 // Wenn-dann für die Heldentat in zwei Feldern (Version 61). Die Fähigkeiten speichern den Auslöser als ganzen Satz
 // („Wenn du Süßigkeiten essen möchtest:“); im Feld „WENN“ steht nur der Rest („du Süßigkeiten essen möchtest“).
 // Fehlt „Wenn“ am Anfang, bleibt der Satz ganz (nur der Doppelpunkt am Ende fällt weg). Nie undefined.
+// Dauer des Rückgängig-Hinweises (Version 147, daten/startseite.js RUECKGAENGIG). Ungültig → 3000 ms. Wirft nie.
+export const RUECK_STANDARD_MS = 3000;
+export function rueckDauer(cfg) {
+  const ms = cfg && typeof cfg === 'object' ? cfg.ms : undefined;
+  return Number.isInteger(ms) && ms >= 1000 && ms <= 15000 ? ms : RUECK_STANDARD_MS;
+}
+
 export function wennDann(f) {
   const s = v => (typeof v === 'string' ? v.trim() : '');
   const roh = s(f && f.wenn).replace(/\s*[:：]\s*$/, '');

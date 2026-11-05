@@ -21,6 +21,11 @@
 // vorsatzTage         so viele Tage nach dem Abschließen erscheint der Vorsatz beim Helden (Woche + Nachholtag)
 // wochenMax           so viele Wochen werden höchstens gemerkt (die ältesten fallen weg; rund 5 Jahre)
 // schritte            Reihenfolge der Schritte; Text 'wr.schritt.<id>'
+// vorschlag           (Version 147, Klicktest 05.11.2026, Punkt 13) blasser Startwert für Bereiche ohne Wert: 'mitte' = Mitte
+//                     der Skala, eine ganze Zahl der Skala, null = kein Vorschlag (leerer Kreis). Er ist NUR Anzeige: gespeichert
+//                     wird nur, was man angefasst hat (Tipp in den Ring, − oder +; − und + gehen vom Vorschlag aus).
+//                     Psychologie: ein fest eingetragener Wert wirkt als Anker und bleibt oft stehen (Default-Effekt); der
+//                     Vorschlag nimmt die Scheu vor dem leeren Kreis, ohne die eigene Einschätzung zu ersetzen.
 export const WOCHENRUNDE = Object.freeze({
   skala: Object.freeze({ min: 1, max: 10 }),
   einladung: Object.freeze({ schwelle: 2, modi: Object.freeze(['erhalt']) }),
@@ -30,5 +35,6 @@ export const WOCHENRUNDE = Object.freeze({
   vorsatzMax: 200,
   vorsatzTage: 8,
   wochenMax: 260,
-  schritte: Object.freeze(['wheel', 'rueckblick', 'energie'])
+  schritte: Object.freeze(['wheel', 'rueckblick', 'energie']),
+  vorschlag: 'mitte'
 });

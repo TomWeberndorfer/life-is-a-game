@@ -62,6 +62,11 @@ export const KAMPFBUEHNE = {
   kurz: { abTreffer: 7, vollBeiComeback: true }
 };
 
+// Rückgängig nach einer Antwort (Version 147, Klicktest am Handy 05.11.2026, Punkt 6): so lange steht „✓ Getroffen ·
+// Rückgängig“ in der Daumenleiste (bzw. als Popup), mit ablaufender Leiste. Vorher 6 Sekunden; 3 reichen, weil man einen
+// Fehltipp sofort merkt und „Ändern“ den ganzen Tag bleibt. ms: ganze Zahl 1000–15000, sonst 3000 (logik/startseite.js).
+export const RUECKGAENGIG = { ms: 3000 };
+
 // Fester Platz für Neuigkeiten (31.10.2026): höchstens `max` verschiedene am Tag, in dieser Reihenfolge (Vorrang).
 // Was nicht mehr passt, wartet auf den nächsten Tag; ein erledigter Platz wird heute nicht neu besetzt.
 // Erlaubte IDs: Karten in ansicht/startseite.js (NEU_KARTEN); unbekannte werden beim Start gemeldet und übersprungen.
