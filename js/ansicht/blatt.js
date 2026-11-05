@@ -15,7 +15,7 @@ import { ruhetagRundeText } from './ruhetag.js'; // Version 90
 import { baldBlattInhalt } from './rahmen.js'; // Etappe 3, Teil A
 import { modusAbschnittHtml } from './heldenmodi.js'; // Heldenmodi (04.11.2026)
 import { wochenBogenHtml } from './wochenrunde.js'; // Wochenrunde (05.11.2026)
-import { heldFrei } from '../logik/helden.js'; // Version 147: neuen Helden aus dem Heldenbogen holen
+import { fokusSetzen, heldFrei } from '../logik/helden.js'; // Version 147: neuen Helden aus dem Heldenbogen holen
 import { bogenZeileHtml, istBestaendigkeit } from './bestaendigkeit.js'; // Beständigkeit (04.11.2026)
 
 // Fortschritt im Leben (Version 21): echtes Verhalten seit Questbeginn, nicht nur XP.
@@ -163,6 +163,23 @@ function neuerHeldBogenHtml() {
   return `<section class="bogen-abschnitt bogen-neu-held"><span class="eyebrow">${esc(T('bogen.neuEyebrow'))}</span>
     <p class="klein">${esc(T('bogen.neuText'))}</p>
     <button class="btn" data-a="neues-abenteuer">${icon('menschen')} ${esc(T('kopf.neuerHeld'))}</button></section>`;
+}
+
+// Heldenkarte für einen bestimmten Helden öffnen (05.11.2026, Stadt als Einstieg). Das Heldenblatt zeigt immer den Helden im
+// Fokus; darum wird er vorher in den Fokus geholt (wie beim Tipp auf ein Porträt). Das Blatt liegt über der aktuellen Seite,
+// Schließen führt also von selbst dorthin zurück (Herkunft). herkunft = Ort des Aufrufs für die Auswertung ('stadt', …).
+// Unbekannter Held → Hinweis statt Blatt. Wirft nie.
+export function zeigeHeldenkarte(heroId, herkunft = 'start') {
+  const { T, oeffneBlatt, render, setzeHinweis, setzeSpiel, speichere, spiel, ui } = kx;
+  if (heroId !== spiel.fokus) {
+    try {
+      setzeSpiel(fokusSetzen(spiel, heroId)); speichere();
+      trackEvent('hero_focus', { held: heroId, quelle: String(herkunft || 'start') });
+    } catch (e) { setzeHinweis(T('kopf.heldFehlt')); console.warn('Heldenkarte:', e.message); render(); return false; }
+  }
+  ui.botschaftOffen = false;
+  oeffneBlatt('crew');
+  return true;
 }
 
 // ---------- Klicks (Klick-Logik aufteilen, 30.10.2026) ----------

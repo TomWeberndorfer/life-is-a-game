@@ -847,6 +847,11 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .bezirk { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px 10px; border-radius: var(--r); text-align: center; font-size: calc(13px * var(--text-skala, 1)); line-height: 1.3; }
 .bezirk b { font: 700 calc(13px * var(--text-skala, 1)) var(--fh); overflow-wrap: anywhere; }
 .bezirk span:last-child { color: var(--mute); font-size: calc(12px * var(--text-skala, 1)); }
+/* Stadt als Einstieg zur Heldenkarte (05.11.2026): Bezirke und Bildleiste sind Knöpfe */
+.bezirke > li { display: flex; min-width: 0; }
+button.bezirk { width: 100%; font: inherit; color: var(--ink); background: none; border: 1px solid transparent; cursor: pointer; }
+button.sky { font: inherit; padding: 0; border: 0; background: none; cursor: pointer; }
+button.bezirk:active, button.sky:active { transform: translateY(2px); }
 .bezirk.entsteht { background: var(--sel); border: 2px solid var(--ac); }
 .bezirk.entsteht span:last-child { color: var(--ac); }
 .bezirk.unentdeckt { border: 1px dashed var(--edge); background: var(--tief); color: var(--mute); }

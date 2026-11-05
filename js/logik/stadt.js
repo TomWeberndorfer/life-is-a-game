@@ -38,3 +38,18 @@ export function ausbauStufe(siege, cfg = AUSBAU_STANDARD) {
   const naechsteAb = stufe < cfg.schwellen.length ? cfg.schwellen[stufe] : null;
   return { stufe, max: cfg.schwellen.length, siege: n, naechsteAb, platz: stufe ? cfg.platz + stufe : null };
 }
+
+// Stadt als Einstieg zur Heldenkarte (05.11.2026): was ein Tipp auf einen Bezirk öffnet. Reine Funktion, wirft nie.
+// bezirke = Ergebnis von stadtAnsicht. Ergebnis: null (Bezirk unbekannt) |
+//   { art: 'held', heroId, bezirk }        genau ein Held → seine Heldenkarte
+//   { art: 'auswahl', helden, bezirk }     mehrere Helden im Bereich → kleine Auswahl
+//   { art: 'unentdeckt', bezirk }          noch kein Held → Name des Bereichs, leiser Weg „Neuen Helden dazuholen“
+export const ZIEL = Object.freeze({ held: 'held', auswahl: 'auswahl', unentdeckt: 'unentdeckt' });
+export function bezirkZiel(bezirke, domainId) {
+  const b = Array.isArray(bezirke) ? bezirke.find(x => x && x.domainId === domainId) : null;
+  if (!b) return null;
+  const helden = [...new Set((Array.isArray(b.helden) ? b.helden : []).filter(h => typeof h === 'string' && h))];
+  if (helden.length === 1) return { art: ZIEL.held, heroId: helden[0], bezirk: b };
+  if (helden.length > 1) return { art: ZIEL.auswahl, helden, bezirk: b };
+  return { art: ZIEL.unentdeckt, bezirk: b };
+}

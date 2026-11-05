@@ -585,6 +585,10 @@ export const TEXTE = {
   'stadt.fuss': 'Bald baut jeder Held seinen {bezirk} aus.',
   'bezirk.entsteht': '{helden} · entsteht',
   'bezirk.unentdeckt': 'unentdeckt',
+  'stadt.bezirkAria': '{bezirk}: {helden} ansehen',
+  'stadt.bezirkAriaLeer': '{bezirk}: unentdeckt',
+  'stadt.auswahlText': 'In diesem {bezirk} leben mehrere Helden. Wen möchtest du ansehen?',
+  'stadt.unentdecktText': 'Hier ist noch niemand eingezogen. Wenn dir {bereich} gerade wichtig ist, kann ein Held diesen {bezirk} beleben. Das hat Zeit.',
 
   // Sieg und Weltenwahl (Version 42)
   'sieg.stufe': '{held} erreicht {stufe} {nr} · {titel}',

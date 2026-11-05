@@ -62,7 +62,7 @@ import { pruefeTagesnotiz } from './logik/tagesnotiz.js';
 import { WOCHE_FELDER, WOCHE_KLICKS, wochenBlattHtml, wochenEbene } from './ansicht/wochenrunde.js'; // Wochenrunde (05.11.2026)
 import { WOCHENRUNDE } from './daten/wochenrunde.js';
 import { pruefeWochenrunde } from './logik/wochenrunde.js';
-import { STADT_SCREENS } from './ansicht/stadt.js';
+import { STADT_KLICKS, STADT_SCREENS, stadtBlattHtml } from './ansicht/stadt.js';
 import { KARTE_KLICKS, KARTE_SCREENS, karteBlattHtml } from './ansicht/karte.js';
 import { STORY_KLICKS, STORY_SCREENS } from './ansicht/story.js';
 import { QUEST_FELDER, QUEST_KLICKS, QUEST_SCREENS } from './ansicht/quest-bearbeiten.js';
@@ -98,7 +98,7 @@ import { START_KLICKS, START_KURZ, START_SCREENS, START_TEILE, buehneDauerMs, bu
 import { BUEHNE_KLICKS } from './ansicht/buehne.js'; // 02.11.2026: aus startseite.js ausgelagert
 import { NACHTRAG_KLICKS } from './ansicht/nachtrag.js';
 
-export const VERSION = { nr: 147, datum: '05.11.2026 · 14:46' };
+export const VERSION = { nr: 148, datum: '05.11.2026 · 15:18' };
 
 // Version 78: Hash aus Profil und Sprungziel (daten/sprungziele.js), z. B. #notfall oder #test+notfall.
 const HASH = leseHash(location.hash, { profile: PROFILE, ziele: SPRUNGZIELE });
@@ -225,6 +225,7 @@ if (tabFehler.length) console.warn('Vorlagen-Tabelle:', tabFehler);
 const ui = {
   screen: istAdmin ? 'admin' : stand.onboarding.fertig ? 'start' : 'ob1',
   blatt: null,        // Detailblatt: 'crew' | 'boss' | 'faehigkeit' | 'premium'
+  stadtBlatt: null,   // Bezirksblatt der Stadt (05.11.2026): domainId eines Bezirks ohne oder mit mehreren Helden
   eintrag: null,      // Eintragsblatt (Version 75): { art, heroId, situation, stimmung, text, fehler }
   woche: null,        // Wochenrunde (05.11.2026): { woche, schritt, wheel, vorher, gewaehlt, vorsatz, vorsatzAlt, info, fehler }, ansicht/wochenrunde.js
   notiz: null,        // Tagesnotiz (04.11.2026): { id, tag, bereiche, stimmung, felder, fehler, loeschenSicher }, ansicht/notiz.js
@@ -927,6 +928,7 @@ let letzterFokus = null;
 function ebenenSchluessel() {
   if (ui.feier) return 'feier:' + ui.feier.art + ':' + (ui.feier.bewertung || ui.feier.nr || ui.feier.gegner || '');
   if (ui.blatt) return 'blatt:' + ui.blatt;
+  if (ui.stadtBlatt) return 'stadt:' + ui.stadtBlatt; // Stadt als Einstieg (05.11.2026)
   if (ui.karteOrt) return 'karte:' + ui.karteOrt.heroId + ':' + ui.karteOrt.i;
   if (ui.eintrag) return 'eintrag:' + ui.eintrag.art;
   if (ui.woche) return wochenEbene(); // Wochenrunde: jeder Schritt beginnt oben
@@ -968,7 +970,7 @@ function renderJetzt() {
   const xpFlug = ui.xpFlug && ui.screen === 'start' ? `<span class="xpflug schwebend" aria-hidden="true">${ui.xpFlug > 0 ? '+' : ''}${ui.xpFlug} XP</span>` : '';
   const blattScroll = app.querySelector('.feier .blatt')?.scrollTop || 0;
   const seite = testleiste() + fn() + tabLeiste() + xpFlug;
-  let ebenen = blattHtml() + karteBlattHtml() + eintragBlattHtml() + notizBlattHtml() + wochenBlattHtml() + probeBlattHtml() + anzeigeBlattHtml() + ruhetagBlattHtml() + notfallBlattHtml() + notfallWahlHtml() + notfallErinnerungHtml() + messzielBlattHtml() + heldenWahlHtml() + feierHtml() + willkommenHtml() + rueckblickSeiteHtml();
+  let ebenen = blattHtml() + stadtBlattHtml() + karteBlattHtml() + eintragBlattHtml() + notizBlattHtml() + wochenBlattHtml() + probeBlattHtml() + anzeigeBlattHtml() + ruhetagBlattHtml() + notfallBlattHtml() + notfallWahlHtml() + notfallErinnerungHtml() + messzielBlattHtml() + heldenWahlHtml() + feierHtml() + willkommenHtml() + rueckblickSeiteHtml();
   // Version 75: Ein offenes Blatt, in dem man tippt (Eintragsblatt, Notfallkarte, Heldenwahl …), wird mit dem Bildschirm
   // neu gezeichnet. Die Einblendung („erscheint“) gehört nur zum Öffnen; sonst wächst das Blatt bei jedem Tipp neu auf
   // und springt nach oben (wirkte wie Flackern). Gleiche Ebene wie zuvor → ohne Einblendung, Scrollstand im Blatt bleibt.
@@ -1514,7 +1516,7 @@ async function ladeAdmin() {
 // Klicks (Klick-Logik aufteilen, 30.10.2026): jede Ansicht hat ihr Register <NAME>_KLICKS (Aktion data-a → Funktion).
 // Neue Ansicht = Register exportieren + eine Zeile hier. Fehler im Register (doppelt, keine Funktion) meldet der Start;
 // klick.test.js verlangt, dass es keine gibt und jeder Knopf eine Aktion hat.
-const KLICKS = klickRegister({ ONBOARDING_KLICKS, START_KLICKS, BUEHNE_KLICKS, NACHTRAG_KLICKS, RAHMEN_KLICKS, FEIER_KLICKS, BLATT_KLICKS, FEEDBACK_KLICKS, EINSTELLUNGEN_KLICKS, ADMIN_KLICKS, STILWAHL_KLICKS, LOGBUCH_KLICKS, QUEST_KLICKS, STORY_KLICKS, PFLEGE_KLICKS, KARTE_KLICKS, EINTRAG_KLICKS, NOTFALL_KLICKS, MESSZIEL_KLICKS, PROBE_KLICKS, RUHETAG_KLICKS, STUETZEN_KLICKS, ZIELQUEST_KLICKS, WILLKOMMEN_KLICKS, RUECKBLICK_KLICKS, ANZEIGE_KLICKS, NOTIZ_KLICKS, HELDENMODI_KLICKS, WOCHE_KLICKS });
+const KLICKS = klickRegister({ ONBOARDING_KLICKS, START_KLICKS, BUEHNE_KLICKS, NACHTRAG_KLICKS, RAHMEN_KLICKS, FEIER_KLICKS, BLATT_KLICKS, FEEDBACK_KLICKS, EINSTELLUNGEN_KLICKS, ADMIN_KLICKS, STILWAHL_KLICKS, LOGBUCH_KLICKS, QUEST_KLICKS, STORY_KLICKS, PFLEGE_KLICKS, KARTE_KLICKS, EINTRAG_KLICKS, NOTFALL_KLICKS, MESSZIEL_KLICKS, PROBE_KLICKS, RUHETAG_KLICKS, STUETZEN_KLICKS, ZIELQUEST_KLICKS, WILLKOMMEN_KLICKS, RUECKBLICK_KLICKS, ANZEIGE_KLICKS, NOTIZ_KLICKS, HELDENMODI_KLICKS, WOCHE_KLICKS, STADT_KLICKS });
 KLICKS.fehler.forEach(m => console.error(m));
 // Fehler in einer Aktion: Spiel läuft weiter, kurzer Hinweis statt stillem Nichts (Einzelheiten in der Konsole).
 function klickFehler(err, aktion) {
