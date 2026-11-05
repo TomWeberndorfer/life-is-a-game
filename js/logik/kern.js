@@ -2,12 +2,37 @@
 // Alle Zahlen (XP, Level, Bosskraft) werden aus dem Stand abgeleitet,
 // damit Rückgängig, Neuladen und Nachträge nie doppelte oder fehlende XP erzeugen.
 
+import { anzahlFuer, bereinigeTeilziele, hauptAnzahl, hauptArtId, hauptGrenzen, setzeHauptAnzahl, teilzielAusAnzahl, TEILZIEL_ID, zaehltAntworten, hauptZaehlweise, zaehlweiseVon, setzeHauptZaehlweise, zaehlweisenFuerQuest } from './teilziele.js'; // Teilziele: Fundament (31.10.2026)
+import { TEILZIELE } from '../daten/zielarten.js'; // Schritt „Zähler“ (31.10.2026)
+import { bereinigeZielLink } from './zielquest.js'; // Ziel-Quests (31.10.2026)
+import { pausenTage } from './heldenmodi.js'; // Heldenmodi (04.11.2026)
+import { MINDEST } from '../daten/heldenmodi.js'; // Mindestaufgabe im Erhalt (04.11.2026)
+
 export const STAND_VERSION = 1;
 export const XP = Object.freeze({ anwendung: 10, sieg: 50, mikro: 5 });
 export const MAX_MIKRO_JE_TAG = 10;
 export const XP_JE_LEVEL = 60;
 export const TITEL = ['Anwärter', 'Wanderer', 'Kämpfer', 'Held', 'Legende'];
-export const ANTWORTEN = ['ja', 'nein'];
+
+// Rangnamen je Stil (Version 80): ein Stil darf eigene Titel mitbringen (stile.js, Feld `titel`).
+// Ungültige oder fehlende Liste → TITEL. Ab dem letzten Eintrag bleibt der letzte Titel.
+export function titelListe(liste) {
+  return Array.isArray(liste) && liste.length && liste.every(t => typeof t === 'string' && t.trim()) ? liste : TITEL;
+}
+export function titelFuer(level, liste) {
+  const l = titelListe(liste);
+  const n = Math.max(1, Math.floor(Number(level)) || 1);
+  return l[Math.min(l.length - 1, n - 1)];
+}
+// Nächster Titel nach dieser Stufe, oder null, wenn der letzte schon erreicht ist.
+export function naechsterTitel(level, liste) {
+  const l = titelListe(liste);
+  const n = Math.max(1, Math.floor(Number(level)) || 1);
+  return n < l.length ? { titel: l[n], abStufe: n + 1 } : null;
+}
+// Antworten des Tages-Checks aus dem Register (Version 141: dazu „schwer“, daten/antworten.js)
+export { ANTWORTEN } from '../daten/antworten.js';
+import { ANTWORTEN } from '../daten/antworten.js';
 
 // ---------- Datum ----------
 const pad = n => String(n).padStart(2, '0');
@@ -72,6 +97,12 @@ export function isoMontag(w) {
   return tagKey(d);
 }
 
+// Startpaket (02.11.2026, Punkt 18a): Beginnt die Quest erst nach heute (Versatz)? Dann ist heute nichts zu tun:
+// die Heldentat zeigt nur „beginnt …“, Tagesleiste, Wechsel und Lagerfeuer zählen den Helden nicht als offen.
+export function vorBeginn(stand, heuteK) {
+  const s = stand && stand.quest && stand.quest.start;
+  return !!ausTagKey(s) && typeof heuteK === 'string' && s > heuteK;
+}
 // Questbeginn mit Rückfall: gespeicherter Start → frühester Eintrag → heute.
 export function questStart(stand, heuteK) {
   if (stand.quest && ausTagKey(stand.quest.start)) return stand.quest.start;
@@ -84,6 +115,42 @@ export function kette(stand) {
   return k.length ? k : [null];
 }
 
+// Ruhetage (Version 90): bewusst ausgesetzte Tage eines Helden. Sie kommen aus spiel.eintraege (Art „ruhetag“) und werden
+// von helden.ansicht() als stand.ruhetage (Liste von Tagen) übergeben; im Heldenstand selbst werden sie nie gespeichert.
+// Jeder Ruhetag in einer Runde verlängert sie um einen Tag; Ziel und Gegnerkraft bleiben gleich. Ein Tag mit „Ja“ zählt
+// als Treffer, nicht als Ruhetag (er verlängert nichts). Wie oft und wann: daten/ruhetag.js, logik/ruhetag.js.
+// Beständigkeit (04.11.2026): Ein Tag, der für das Haupt-Teilziel zählt (auch „Keine Versuchung“), ist kein Ruhetag.
+export function ruhetageVon(stand) {
+  const roh = stand && Array.isArray(stand.ruhetage) ? stand.ruhetage : [];
+  const tage = (stand && stand.tage) || {};
+  const zaehlt = zaehltAntworten(stand && stand.quest);
+  return [...new Set(roh.filter(t => typeof t === 'string' && ausTagKey(t) && !zaehlt.includes(tage[t])))].sort();
+}
+// Tage, die für das Haupt-Teilziel zählen (bis einschließlich bisK). Zähler: „ja“; Beständigkeit: „ja“ und „nein“.
+export function zaehlTage(stand, bisK) {
+  // Wie vorher bei „ja“: ein Stand ohne tage wirft (ein defekter Held wird so gemeldet statt still leer gezeigt)
+  const zaehlt = zaehltAntworten(stand.quest);
+  return Object.keys(stand.tage).filter(t => zaehlt.includes(stand.tage[t]) && (!bisK || t <= bisK));
+}
+
+// Neuanfänge (Version 98, „Frisch anfangen“ in Willkommen zurück): wie Ruhetage aus spiel.eintraege (Art „neustart“),
+// von helden.ansicht() als stand.neustarts übergeben. Ein Neuanfang am Tag N beendet die laufende Runde still am Vortag
+// (ohne Sieg, ohne Strafe); ab N läuft eine neue Runde mit voller Gegnerkraft. Gegner, Siege und XP bleiben.
+export function neustartsVon(stand) {
+  const roh = stand && Array.isArray(stand.neustarts) ? stand.neustarts : [];
+  return [...new Set(roh.filter(t => typeof t === 'string' && ausTagKey(t)))].sort();
+}
+
+// Pausen (Heldenmodi, 04.11.2026): Tage in Erhalt oder Ruhe. Sie kommen aus spiel.modi und werden von helden.ansicht()
+// als stand.pausen (Zeiträume { von, bis|null }) übergeben, nie im Heldenstand gespeichert. Ein Pausentag verlängert die
+// Runde wie ein Ruhetag (ohne Kontingent), und ein „Ja“ an einem Pausentag zählt nicht für den Gegner (keine Treffer,
+// kein Sieg); XP für das „Ja“ bleiben. Gezählt wird nur ab Questbeginn bis heute: eine laufende Pause wächst Tag für Tag.
+export function pausenVon(stand, heuteK) {
+  const z = stand && Array.isArray(stand.pausen) ? stand.pausen : [];
+  if (!z.length || !ausTagKey(heuteK)) return [];
+  return pausenTage(z, questStart(stand, heuteK), heuteK);
+}
+
 // Alle Runden bis zur aktuellen. Liefert { runden, aktuell } – aktuell ist die Runde, in der heute
 // gekämpft wird: die Runde von heute oder, wenn heute ein Sieg war, die nächste (beginnt morgen).
 export function runden(stand, heuteK) {
@@ -91,27 +158,55 @@ export function runden(stand, heuteK) {
   const k = kette(stand);
   // Nur bis heute: Einträge „aus der Zukunft“ (Testprofil mit Zeitsprung zurück) verschieben keine Runden.
   const siegTage = [...new Set((stand.siege || []).map(x => x.tag))].filter(t => t <= heuteK).sort();
-  const ja = new Set(Object.keys(stand.tage).filter(t => stand.tage[t] === 'ja' && t <= heuteK));
+  const ja = new Set(zaehlTage(stand, heuteK)); // Beständigkeit: auch „nein“ (Keine Versuchung) zählt für den Gegner
+  const pause = new Set(pausenVon(stand, heuteK)); // Heldenmodi: Pausentage verlängern und zählen nicht
+  const ruheEcht = new Set(ruhetageVon(stand));
+  const ruhe = [...new Set([...ruheEcht, ...pause])].sort();
+  const neu = neustartsVon(stand).filter(t => t <= heuteK); // nur bis heute, wie die Siege
   const liste = [];
   let von = start, siege = 0, gegnerVorher = null;
   for (let nr = 1; nr <= MAX_RUNDEN; nr++) {
-    const bisMax = plus(von, RUNDE_TAGE - 1);
-    const sieg = siegTage.find(t => t >= von && t <= bisMax) || null;
-    const bis = sieg || bisMax;
+    // Ruhetage verlängern die Runde; ein Ruhetag am verlängerten Ende verlängert erneut (endet, weil die Liste endlich ist)
+    let bisMax = plus(von, RUNDE_TAGE - 1), ruhetage = [];
+    for (;;) {
+      ruhetage = ruhe.filter(t => t >= von && t <= bisMax);
+      const neu = plus(von, RUNDE_TAGE - 1 + ruhetage.length);
+      if (neu === bisMax) break;
+      bisMax = neu;
+    }
+    // Zählweise Wache (04.11.2026): Runde ohne Zeitlimit, sie wächst bis heute und endet nur mit einem Sieg (oder Neuanfang)
+    if (zaehlweiseVon(hauptZaehlweise(stand.quest, nr)).rundeOffen && heuteK > bisMax) bisMax = heuteK;
+    let sieg = siegTage.find(t => t >= von && t <= bisMax) || null;
+    // Neuanfang in dieser Runde (nicht am ersten Tag, nicht nach einem Sieg): Runde endet am Vortag
+    const neustart = neu.find(t => t > von && t <= bisMax && !(sieg && sieg < t)) || null;
+    if (neustart) sieg = null; // ein Sieg ab dem Neuanfang gehört zur neuen Runde
+    const bis = neustart ? plus(neustart, -1) : sieg || bisMax;
+    if (sieg || neustart) ruhetage = ruhetage.filter(t => t <= bis); // danach gehören sie zur nächsten Runde
     const idx = Math.min(siege, k.length - 1);
     const gegner = k[idx];
     let anwendungen = 0;
-    for (const t of ja) if (t >= von && t <= bis) anwendungen++;
+    for (const t of ja) if (t >= von && t <= bis && !pause.has(t)) anwendungen++;
     // siegeVorher (30.10.2026): Siege vor dieser Runde, bestimmt das Rundenziel der Einstiegsrampe (rundenZiel)
-    const r = { nr, key: rundeKey(nr), von, bis, sieg, gegner, gegnerIdx: idx, neuerGegner: nr > 1 && gegner !== gegnerVorher, anwendungen, siegeVorher: siege };
+    const pausen = ruhetage.filter(t => pause.has(t));
+    ruhetage = ruhetage.filter(t => !pause.has(t) || ruheEcht.has(t));
+    const r = { nr, key: rundeKey(nr), von, bis, bisMax, ruhetage, pausen, sieg, neustart: !!neustart, gegner, gegnerIdx: idx, neuerGegner: nr > 1 && gegner !== gegnerVorher, anwendungen, siegeVorher: siege };
     liste.push(r);
     if (von > heuteK) return { runden: liste, aktuell: r };
-    if (bis >= heuteK && !sieg) return { runden: liste, aktuell: r };
+    if (bis >= heuteK && !sieg && !neustart) return { runden: liste, aktuell: r };
     if (sieg) siege++;
     gegnerVorher = gegner;
     von = plus(bis, 1);
   }
   throw new Error('runden: zu viele Runden');
+}
+
+// Zählweise, die heute gilt (Runde von heute; nach einem Sieg die schon begonnene nächste). Eintrag aus dem Register
+// mit id; ohne Quest oder bei kaputtem Stand der Standard (täglich). Wirft nie.
+export function zaehlweiseHeute(stand, heuteK) {
+  try {
+    if (!stand || !stand.quest) return zaehlweiseVon(null);
+    return zaehlweiseVon(hauptZaehlweise(stand.quest, runden(stand, heuteK).aktuell.nr));
+  } catch (e) { return zaehlweiseVon(null); }
 }
 
 // ---------- Einstiegsrampe (30.10.2026) ----------
@@ -138,8 +233,20 @@ export function pruefeRampe(roh) {
   return f;
 }
 // Anwendungen, die eine Runde braucht, nach siegeVorher Siegen. Ohne gültige Quest-Anzahl: 3 (wie migriere).
-export function rundenZiel(quest, siegeVorher) {
-  const ziel = quest && Number.isInteger(quest.anzahl) && quest.anzahl >= 1 ? quest.anzahl : 3;
+// Seit den Teilzielen (31.10.2026) zählt die Anzahl des Haupt-Teilziels (logik/teilziele.js, Fallback quest.anzahl bzw. 3).
+// nr (Schritt „Zähler“): Runde, für die das Ziel gilt (Anzahl-Verlauf); ohne nr der neueste Wert.
+// Ziel der Runde, die am Tag tagK mit einem Sieg endete (02.11.2026). Am Siegtag zeigt die Bühne den Besiegten grau mit
+// leerem Balken; die Zahl der Segmente muss zu SEINER Runde passen, nicht zur schon begonnenen nächsten (Einstiegsrampe:
+// Kapitel 2 brauchte 2 Treffer, die neue Runde braucht 3). Kein Sieg an diesem Tag oder Fehler → null.
+export function siegRundenZiel(stand, tagK) {
+  if (!stand || typeof tagK !== 'string') return null;
+  try {
+    const r = runden(stand, tagK).runden.find(x => x.sieg === tagK);
+    return r ? rundenZiel(stand.quest, r.siegeVorher, r.nr) : null;
+  } catch (e) { return null; }
+}
+export function rundenZiel(quest, siegeVorher, nr) {
+  const ziel = quest ? hauptAnzahl(quest, nr) : 3;
   const r = bereinigeRampe(quest && quest.rampe);
   if (!r) return ziel;
   const n = Number.isInteger(siegeVorher) && siegeVorher > 0 ? siegeVorher : 0;
@@ -176,15 +283,17 @@ function siegeAusAlt(alt, start, tage, anzahl, k) {
 }
 
 // ---------- Stand ----------
+export const HAKEN_JE_TAG = TEILZIELE.max + TEILZIELE.archivMax;
 export function neuerStand(profilId) {
   return {
     v: STAND_VERSION,
     profilId: String(profilId || 'unbekannt'),
     onboarding: { fertig: false, bereich: null, problem: null, ziel: null, freitext: '' },
-    quest: null,       // { vorlageId, ziel, anzahl, start, kette: [gegnerId, …] }
-    tage: {},          // { 'YYYY-MM-DD': 'ja' | 'nein' }
+    quest: null,       // { vorlageId, ziel, anzahl, start, kette: [gegnerId, …], teilziele: [{ id, art, haupt, anzahl, zeitraum }] }
+    tage: {},          // { 'YYYY-MM-DD': 'ja' | 'nein' | 'schwer' } (daten/antworten.js)
     siege: [],         // [{ tag: 'YYYY-MM-DD', gegner }] – je Sieg ein Eintrag, bleibt auch bei Rückgängig
     mikro: {},         // { 'YYYY-MM-DD': ['mikro-id', …] } erledigte Mikroquests
+    haken: {},         // { 'YYYY-MM-DD': ['tz2', …] } abgehakte Stützgewohnheiten (Schritt „Zähler“, ohne XP)
     story: { gelesen: {} }, // { 'R1': Anzahl gelesener Teile }
     stil: { aktiv: 'fantasy', frei: false, angeboten: false }
   };
@@ -214,10 +323,17 @@ export function migriere(roh, profilId, stilIds = ['fantasy']) {
       ziel: typeof q.ziel === 'string' && q.ziel.trim() ? q.ziel.slice(0, 120) : 'Mein Ziel',
       anzahl,
       start: ausTagKey(q.start) ? q.start : null,
-      kette: Array.isArray(q.kette) ? q.kette.filter(x => typeof x === 'string' && GEGNER_ID.test(x)).slice(0, 50) : []
+      kette: Array.isArray(q.kette) ? q.kette.filter(x => typeof x === 'string' && GEGNER_ID.test(x)).slice(0, 50) : [],
+      // Teilziele (31.10.2026): fehlen sie (alle Quests vor dieser Version), wird quest.anzahl zum ersten Teilziel
+      // „Zähler, Zeitraum Runde“. Läuft bei jedem Laden und legt nichts doppelt an. quest.anzahl bleibt als Spiegel.
+      teilziele: bereinigeTeilziele(q.teilziele, anzahl)
     };
+    s.quest.anzahl = anzahlFuer(s.quest.teilziele[0]); // Spiegel: neuester Wert des Haupt-Teilziels
     const rampe = bereinigeRampe(q.rampe); // fehlt bei Quests vor der Einstiegsrampe → bleibt ohne (feste Anzahl)
     if (rampe) s.quest.rampe = rampe;
+    const warum = bereinigeWarum(q.warum); // Warum-Feld (Version 75): fehlt bei älteren Quests → bleibt ohne
+    if (warum) s.quest.warum = warum;
+    bereinigeZielLink(q, s.quest); // Ziel-Quests (31.10.2026): Verknüpfung zum Messziel; fehlt bei allen älteren Quests
   }
   if (s.onboarding.fertig && !s.quest) s.onboarding.fertig = false;
 
@@ -243,6 +359,15 @@ export function migriere(roh, profilId, stilIds = ['fantasy']) {
       if (!ausTagKey(k) || !Array.isArray(v)) continue;
       const ids = [...new Set(v.filter(x => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)))].slice(0, MAX_MIKRO_JE_TAG);
       if (ids.length) s.mikro[k] = ids;
+    }
+  }
+  // Stützgewohnheiten (Schritt „Zähler“, 31.10.2026): fehlt bei älteren Ständen → leer. Auch IDs archivierter Teilziele
+  // bleiben (Logbuch); je Tag höchstens HAKEN_JE_TAG verschiedene IDs.
+  if (roh.haken && typeof roh.haken === 'object' && !Array.isArray(roh.haken)) {
+    for (const [k, v] of Object.entries(roh.haken)) {
+      if (!ausTagKey(k) || !Array.isArray(v)) continue;
+      const ids = [...new Set(v.filter(x => typeof x === 'string' && TEILZIEL_ID.test(x)))].slice(0, HAKEN_JE_TAG);
+      if (ids.length) s.haken[k] = ids;
     }
   }
   const g = roh.story && roh.story.gelesen;
@@ -282,20 +407,39 @@ export function gegnerKette(vorlage) {
   return k.filter(x => typeof x === 'string' && GEGNER_ID.test(x));
 }
 
+// Warum-Feld (Version 75): optionaler eigener Grund für die Quest („Warum ist dir das wichtig?“).
+// Leer oder kein Text → null (Feld fehlt in der Quest). Zu lang wird gekürzt; Zeilenumbrüche werden zu Leerzeichen.
+// Der Text bleibt im Spielstand und geht nie in Analytics (dort zählt nur das Ereignis quest_why_set).
+export const WARUM_MAX = 200;
+export function bereinigeWarum(roh) {
+  if (typeof roh !== 'string') return null;
+  const t = roh.replace(/\s+/g, ' ').trim().slice(0, WARUM_MAX).trim();
+  return t || null;
+}
+
 // rampe (30.10.2026): Einstiegsrampe aus daten/rampe.js; null/ungültig = feste Anzahl in jeder Runde.
-export function questAnlegen(stand, vorlage, zielText, heute, rampe = null) {
+// warum (Version 75): optionaler Grund, siehe bereinigeWarum.
+export function questAnlegen(stand, vorlage, zielText, heute, rampe = null, warum = null) {
   if (!vorlage) throw new Error('Keine Vorlage für diese Auswahl gefunden.');
   const s = kopie(stand);
-  const anzahl = Number.isInteger(vorlage.quest && vorlage.quest.anzahl) ? vorlage.quest.anzahl : 3;
+  const vq = vorlage.quest || {};
+  const anzahl = Number.isInteger(vq.anzahl) ? vq.anzahl : 3;
+  // Teilziele (31.10.2026): ein Haupt-Teilziel; seine Art kommt aus der Vorlage (Beständigkeit, 04.11.2026), sonst Zähler.
+  // Die Anzahl richtet sich nach den Grenzen der Art (Beständigkeit höchstens 6), quest.anzahl bleibt ihr Spiegel.
+  const tz = teilzielAusAnzahl(Math.min(7, Math.max(1, anzahl)), 'tz1', undefined, undefined, typeof vq.art === 'string' ? vq.art : undefined);
   s.quest = {
     vorlageId: vorlage.id,
     ziel: String(zielText || vorlage.ziel || 'Mein Ziel').trim().slice(0, 120) || 'Mein Ziel',
-    anzahl: Math.min(7, Math.max(1, anzahl)),
+    anzahl: tz.anzahl,
     start: tagKey(heute),
     kette: gegnerKette(vorlage)
   };
-  const r = bereinigeRampe(rampe);
+  s.quest.teilziele = [tz];
+  // Eigene Rampe der Vorlage (04.11.2026, z. B. Wutwald 3 · 4 · 5 · 6) geht vor der allgemeinen aus daten/rampe.js
+  const r = bereinigeRampe(vq.rampe) || bereinigeRampe(rampe);
   if (r) s.quest.rampe = r;
+  const w = bereinigeWarum(warum);
+  if (w) s.quest.warum = w;
   s.onboarding.fertig = true;
   return s;
 }
@@ -317,24 +461,30 @@ export function auswertung(stand, heute) {
   const heuteK = tagKey(heute);
   const { runden: alle, aktuell: r } = runden(stand, heuteK);
   // Einstiegsrampe: anzahl = Ziel dieser Runde; zielAnzahl = eigenes Ziel (quest.anzahl)
-  const anzahl = stand.quest ? rundenZiel(stand.quest, r.siegeVorher) : 3;
-  const zielAnzahl = stand.quest ? stand.quest.anzahl : 3;
+  const anzahl = stand.quest ? rundenZiel(stand.quest, r.siegeVorher, r.nr) : 3;
+  const zielAnzahl = stand.quest ? hauptAnzahl(stand.quest, r.nr) : 3;
+  // Schritt „Zähler“: eigenes Ziel ab der nächsten Runde (weicht ab, wenn eine Änderung noch wartet)
+  const naechsteZielAnzahl = stand.quest ? hauptAnzahl(stand.quest, r.nr + 1) : 3;
   const jaTage = Object.keys(stand.tage).filter(k => stand.tage[k] === 'ja');
   const wocheZaehler = r.anwendungen;
   const treffer = Math.min(wocheZaehler, anzahl);
   const mikroZahl = Object.values(stand.mikro || {}).reduce((x, v) => x + v.length, 0);
   const siege = (stand.siege || []).length;
-  const xp = jaTage.length * XP.anwendung + siege * XP.sieg + mikroZahl * XP.mikro;
+  // Mindestaufgabe im Erhalt (04.11.2026): Tage mit XP kommen aus spiel.mindest (helden.ansicht → stand.mindestXp)
+  const mindestZahl = new Set((Array.isArray(stand.mindestXp) ? stand.mindestXp : []).filter(t => ausTagKey(t))).size;
+  const xp = jaTage.length * XP.anwendung + siege * XP.sieg + mikroZahl * XP.mikro + mindestZahl * (XP[MINDEST.xp] || 0);
   const vorige = alle.length > 1 ? alle[alle.length - 2] : null;
   const k = kette(stand);
+  const zw = zaehlweiseVon(hauptZaehlweise(stand.quest, r.nr));
   return {
     heute: heuteK,
     woche: r.key,            // Schlüssel der laufenden Runde (Name „woche“ beibehalten)
     wocheNr: r.nr,
     rundeVon: r.von,
-    rundeBis: plus(r.von, RUNDE_TAGE - 1),
+    rundeBis: r.bisMax,      // Version 90: mit Ruhetagen verlängert
+    ruhetageRunde: r.ruhetage.slice(),
     rundeTag: tageZwischen(r.von, heuteK), // 0 = erster Tag, −1 = Runde beginnt morgen (nach Sieg heute)
-    naechsteRunde: plus(r.von, RUNDE_TAGE),
+    naechsteRunde: plus(r.bisMax, 1),
     gegner: r.gegner,
     gegnerNr: r.gegnerIdx + 1,
     gegnerAnzahl: k.length,
@@ -344,9 +494,15 @@ export function auswertung(stand, heute) {
     vorigeGewonnen: !!(vorige && vorige.sieg),
     anzahl,
     zielAnzahl,
+    naechsteZielAnzahl,
     rampe: !!(stand.quest && bereinigeRampe(stand.quest.rampe)),
+    zielArt: hauptArtId(stand.quest), // Beständigkeit (04.11.2026): Art des Haupt-Teilziels
+    // Zählweisen (04.11.2026): Zählweise der laufenden Runde; ohneFrage = Held gilt nie als „offen“, rundeOffen = Wache
+    zaehlweise: zw.id,
+    ohneFrage: !zw.tagesfrage,
+    rundeOffen: zw.rundeOffen,
     siegeVorher: r.siegeVorher,
-    vorigeAnzahl: vorige && stand.quest ? rundenZiel(stand.quest, vorige.siegeVorher) : null,
+    vorigeAnzahl: vorige && stand.quest ? rundenZiel(stand.quest, vorige.siegeVorher, vorige.nr) : null,
     wocheZaehler,
     treffer,
     bossKraft: anzahl ? (anzahl - treffer) / anzahl : 1,
@@ -367,7 +523,7 @@ export function wochenMontag(k) {
 }
 
 // ---------- Tages-Check ----------
-// antwort: 'ja' (angewendet), 'nein' (heute nicht gebraucht) oder null (rückgängig).
+// antwort: 'ja' (angewendet), 'nein' (heute nicht gebraucht), 'schwer' (war schwer, zählt neutral; Version 141) oder null (rückgängig).
 // Liefert den neuen Stand und die Ereignisse für Belohnung und Feiern.
 export function tagesCheck(stand, heute, antwort) {
   if (!stand.quest) throw new Error('Es gibt noch keine Quest.');
@@ -391,12 +547,16 @@ export function tagesCheck(stand, heute, antwort) {
 // Ein Sieg bleibt, auch wenn später rückgängig gemacht wird (keine Strafe, keine doppelte Vergabe).
 function siegPruefen(s, heute) {
   const k = tagKey(heute);
-  const ereignisse = [];
   const r = rundeVonTag(s, k);
-  const ziel = rundenZiel(s.quest, r.siegeVorher);
-  if (!r.sieg && r.anwendungen >= ziel) {
+  return siegVergeben(s, k, r, r.anwendungen);
+}
+// Sieg am Tag k in Runde r, wenn `anwendungen` (bis einschließlich k) das Rundenziel erreichen. Ändert s direkt.
+function siegVergeben(s, k, r, anwendungen) {
+  const ereignisse = [];
+  const ziel = rundenZiel(s.quest, r.siegeVorher, r.nr);
+  if (!r.sieg && anwendungen >= ziel) {
     s.siege = [...s.siege, { tag: k, gegner: r.gegner }].sort((a, b) => (a.tag < b.tag ? -1 : 1));
-    const danach = auswertung(s, heute);
+    const danach = auswertung(s, ausTagKey(k));
     // anzahl: was dieser Sieg gebraucht hat; naechsteAnzahl: Ziel der nächsten Runde (Einstiegsrampe)
     ereignisse.push({ typ: 'sieg', woche: r.key, gegner: r.gegner, naechster: danach.gegner, neuerGegner: danach.neuerGegner, kapitel: danach.gegnerNr, anzahl: ziel, naechsteAnzahl: danach.anzahl });
     if (!s.stil.frei) {
@@ -407,36 +567,132 @@ function siegPruefen(s, heute) {
   return ereignisse;
 }
 
+// ---------- Nachtragen (Version 79) ----------
+// Vergessene Tage bis maxTage zurück eintragen (Grenze: daten/nachtragen.js). Nachtragen ist normal, kein Versäumnis:
+// der Tag zählt wie jeder andere (XP, Runde, Sieg), es gibt keinen Abzug und keinen Hinweis auf „zu spät“.
+// Grenzen: nie in die Zukunft, nie vor dem Questbeginn, höchstens maxTage zurück. Heute → wie tagesCheck.
+export class NachtragFehler extends Error {}
+export const NACHTRAG_MAX_GRENZE = 14; // Sicherheitsnetz gegen kaputte Einstellungen
+
+// Tage, die sich nachtragen lassen (gestern zuerst): [{ tag, abstand, antwort }]. Leer ohne Quest.
+export function nachtragTage(stand, heute, maxTage) {
+  if (!stand || !stand.quest) return [];
+  const heuteK = tagKey(heute);
+  const n = Number.isInteger(maxTage) ? Math.max(0, Math.min(NACHTRAG_MAX_GRENZE, maxTage)) : 0;
+  const start = questStart(stand, heuteK);
+  const pause = new Set(pausenVon(stand, heuteK)); // Heldenmodi: in einer Pause gibt es nichts nachzutragen
+  const aus = [];
+  for (let i = 1; i <= n; i++) {
+    const t = plus(heuteK, -i);
+    if (t < start) break;
+    if (pause.has(t)) continue;
+    aus.push({ tag: t, abstand: i, antwort: stand.tage[t] || null });
+  }
+  return aus;
+}
+
+// Antwort für einen vergangenen Tag setzen (antwort null = zurücknehmen). Liefert wie tagesCheck
+// { stand, ereignisse, vorher, nachher }; vorher/nachher gelten für heute. Wirft NachtragFehler mit lesbarer Meldung.
+// Sieg: Die Tage vom Nachtrag bis heute werden der Reihe nach geprüft. Der Sieg landet an dem Tag, an dem das
+// Rundenziel tatsächlich erreicht war (auch wenn erst spätere „Ja“ es vollmachen); die Runden danach verschieben
+// sich entsprechend. Hat die Runde schon einen Sieg (auch an einem späteren Tag), gibt es keinen zweiten.
+// Ein Sieg bleibt, auch wenn der Nachtrag später zurückgenommen wird (wie beim Tages-Check).
+export function nachtragen(stand, tag, heute, antwort, maxTage) {
+  if (!stand || !stand.quest) throw new NachtragFehler('Es gibt noch keine Quest.');
+  if (antwort !== null && !ANTWORTEN.includes(antwort)) throw new NachtragFehler(`Unbekannte Antwort: ${antwort}`);
+  const heuteK = tagKey(heute);
+  if (!ausTagKey(tag)) throw new NachtragFehler('Ungültiger Tag.');
+  if (tag === heuteK) return tagesCheck(stand, heute, antwort);
+  if (tag > heuteK) throw new NachtragFehler('Dieser Tag liegt in der Zukunft.');
+  if (!nachtragTage(stand, heute, maxTage).some(x => x.tag === tag)) {
+    throw new NachtragFehler(tag < questStart(stand, heuteK) ? 'An diesem Tag lief das Abenteuer noch nicht.' : `Nachtragen geht bis ${maxTage} Tage zurück.`);
+  }
+  const vorher = auswertung(stand, heute);
+  const s = kopie(stand);
+  if (antwort === null) delete s.tage[tag]; else s.tage[tag] = antwort;
+  const ereignisse = [];
+  if (antwort !== null && zaehltAntworten(s.quest).includes(antwort)) { // Beständigkeit: auch „nein“ kann siegen
+    for (let k = tag; k <= heuteK; k = plus(k, 1)) {
+      const { runden: l } = runden(s, heuteK); // mit allen Siegen bis heute, damit kein zweiter Sieg in einer Runde entsteht
+      const r = l.find(x => x.von <= k && x.bis >= k);
+      if (!r || r.sieg) continue;
+      const pause = new Set(pausenVon(s, heuteK)); // Heldenmodi: Pausentage zählen nicht für den Gegner
+      const bisK = zaehlTage(s, k).filter(t => t >= r.von && !pause.has(t)).length;
+      ereignisse.push(...siegVergeben(s, k, r, bisK));
+    }
+  }
+  const nachher = auswertung(s, heute);
+  const delta = nachher.xp - vorher.xp;
+  if (delta !== 0) ereignisse.unshift({ typ: 'xp', xp: delta });
+  if (nachher.level > vorher.level) ereignisse.push({ typ: 'levelup', level: nachher.level, titel: nachher.titel });
+  ereignisse.push({ typ: 'nachtrag', tag, antwort });
+  return { stand: s, ereignisse, vorher, nachher };
+}
+
 // ---------- Quest bearbeiten (Version 38) ----------
-// Ziel-Text und Anzahl je Runde ändern (mit Einstiegsrampe: das eigene Ziel, die Rampe steigt höchstens bis dorthin). Die neue Anzahl gilt sofort, auch für die laufende Runde
-// (Entscheidung 28.10.2026, Variante „sofort“). Ist das neue Ziel damit schon erreicht, gibt es den Sieg sofort.
-// Tage, Siege und Mikroquests bleiben unverändert. Später: Teilziele mit Arten (siehe todo.md).
+// Ziel-Text und Anzahl je Runde ändern (mit Einstiegsrampe: das eigene Ziel, die Rampe steigt höchstens bis dorthin).
+// Schritt „Zähler“ (31.10.2026, Entscheidung 5, ersetzt „sofort“ vom 28.10.): Eine neue Anzahl gilt ab der nächsten Runde;
+// die laufende Runde behält ihr Ziel. Grund: Wer mitten in einer schwachen Runde das Ziel senkt, rettet den Sieg auf Kosten
+// seines Werts; für schwere Tage gibt es den Ruhetag. Ausnahme (5b): Hat die laufende Runde noch keinen Treffer, gilt sie
+// sofort (dann kann sie nichts entwerten). Tage, Siege und Mikroquests bleiben unverändert.
 export const ZIEL_MAX = 120, ANZAHL_MIN = 1, ANZAHL_MAX = 7;
-export function questPruefen(eingabe) {
+// g (Beständigkeit, 04.11.2026): Grenzen der Anzahl laut Art des Haupt-Teilziels; ohne Angabe 1 bis 7.
+export function questPruefen(eingabe, g = { min: ANZAHL_MIN, max: ANZAHL_MAX }) {
+  const min = Number.isInteger(g && g.min) ? g.min : ANZAHL_MIN, max = Number.isInteger(g && g.max) ? g.max : ANZAHL_MAX;
   const fehler = {};
   const ziel = typeof (eingabe && eingabe.ziel) === 'string' ? eingabe.ziel.trim() : '';
   if (!ziel) fehler.ziel = 'Bitte gib ein Ziel ein.';
   else if (ziel.length > ZIEL_MAX) fehler.ziel = `Höchstens ${ZIEL_MAX} Zeichen.`;
   const anzahl = Number(eingabe && eingabe.anzahl);
-  if (!Number.isInteger(anzahl) || anzahl < ANZAHL_MIN || anzahl > ANZAHL_MAX) fehler.anzahl = `Bitte eine Zahl von ${ANZAHL_MIN} bis ${ANZAHL_MAX} wählen.`;
-  return { ok: !Object.keys(fehler).length, fehler, werte: { ziel, anzahl } };
+  if (!Number.isInteger(anzahl) || anzahl < min || anzahl > max) fehler.anzahl = `Bitte eine Zahl von ${min} bis ${max} wählen.`;
+  // Warum (Version 75): optional. Fehlt der Schlüssel, bleibt das Warum beim Speichern unverändert (ältere Aufrufer).
+  const werte = { ziel, anzahl };
+  if (eingabe && 'warum' in eingabe) {
+    const roh = eingabe.warum;
+    if (roh !== null && roh !== undefined && typeof roh !== 'string') fehler.warum = 'Ungültige Eingabe.';
+    else if (typeof roh === 'string' && roh.replace(/\s+/g, ' ').trim().length > WARUM_MAX) fehler.warum = `Höchstens ${WARUM_MAX} Zeichen.`;
+    else werte.warum = bereinigeWarum(roh);
+  }
+  // Zählweise (04.11.2026): optional; fehlt der Schlüssel, bleibt sie unverändert. Ob sie zur Art passt, prüft questBearbeiten.
+  if (eingabe && 'zaehlweise' in eingabe && eingabe.zaehlweise !== undefined && eingabe.zaehlweise !== null) {
+    if (typeof eingabe.zaehlweise !== 'string' || !zaehlweiseVon(eingabe.zaehlweise) || zaehlweiseVon(eingabe.zaehlweise).id !== eingabe.zaehlweise) fehler.zaehlweise = 'Unbekannte Zählweise.';
+    else werte.zaehlweise = eingabe.zaehlweise;
+  }
+  return { ok: !Object.keys(fehler).length, fehler, werte };
 }
 
 export function questBearbeiten(stand, eingabe, heute) {
   if (!stand || !stand.quest) throw new Error('Es gibt noch keine Quest.');
-  const p = questPruefen(eingabe);
+  const p = questPruefen(eingabe, hauptGrenzen(stand.quest));
   if (!p.ok) throw new Error(Object.values(p.fehler).join(' '));
   const vorher = auswertung(stand, heute);
   const s = kopie(stand);
   const geaendert = [];
   if (s.quest.ziel !== p.werte.ziel) { s.quest.ziel = p.werte.ziel; geaendert.push('ziel'); }
-  if (s.quest.anzahl !== p.werte.anzahl) { s.quest.anzahl = p.werte.anzahl; geaendert.push('anzahl'); }
-  const ereignisse = geaendert.includes('anzahl') ? siegPruefen(s, heute) : [];
+  const r = runden(s, tagKey(heute)).aktuell;
+  const sofort = TEILZIELE.anzahlSofortOhneTreffer && r.anwendungen === 0;
+  if (setzeHauptAnzahl(s.quest, p.werte.anzahl, sofort ? r.nr : r.nr + 1)) geaendert.push('anzahl'); // Verlauf + Spiegel
+  // Zählweise: dieselbe Regel wie die Anzahl (sofort ohne Treffer, sonst ab der nächsten Runde). Bei der Wache heißt
+  // „nächste Runde“ nach dem nächsten Sieg (die Runde hat kein Zeitlimit); nichts Erkämpftes geht verloren.
+  let zwAb = null;
+  if (p.werte.zaehlweise) {
+    if (!zaehlweisenFuerQuest(s.quest).includes(p.werte.zaehlweise)) throw new Error('Diese Zählweise passt nicht zu deiner Quest.');
+    if (setzeHauptZaehlweise(s.quest, p.werte.zaehlweise, sofort ? r.nr : r.nr + 1)) {
+      geaendert.push('zaehlweise');
+      zwAb = sofort ? 'sofort' : zaehlweiseVon(hauptZaehlweise(stand.quest, r.nr)).rundeOffen ? 'naechsterSieg' : 'naechsteRunde';
+    }
+  }
+  if ('warum' in p.werte && (s.quest.warum || null) !== p.werte.warum) {
+    if (p.werte.warum) s.quest.warum = p.werte.warum; else delete s.quest.warum;
+    geaendert.push('warum');
+  }
+  const ereignisse = geaendert.includes('anzahl') || geaendert.includes('zaehlweise') ? siegPruefen(s, heute) : [];
   const nachher = auswertung(s, heute);
   const delta = nachher.xp - vorher.xp;
   if (delta !== 0) ereignisse.unshift({ typ: 'xp', xp: delta });
   if (nachher.level > vorher.level) ereignisse.push({ typ: 'levelup', level: nachher.level, titel: nachher.titel });
-  return { stand: s, geaendert, ereignisse, vorher, nachher };
+  // anzahlAb: ab welcher Runde die neue Anzahl gilt (für den Hinweis), null = Anzahl unverändert
+  return { stand: s, geaendert, ereignisse, vorher, nachher, anzahlAb: geaendert.includes('anzahl') ? (sofort ? 'sofort' : 'naechsteRunde') : null, zaehlweiseAb: zwAb };
 }
 
 // ---------- Stil ----------

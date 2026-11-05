@@ -14,11 +14,13 @@
 // rang       Vorrang (klein = wichtiger), entscheidet, wer vorrücken darf
 // Neue Neuigkeit = neue Zeile hier + Quelle in NEU_QUELLEN. Unbekannte Werte werden beim Start gemeldet und übersprungen.
 // Freischaltungen (Version 50) haben eigene Punkte am freigeschalteten Tab (logik/freischaltung.js).
+// Seit 31.10.2026 liegen Welten und Angebot im festen Platz „neuigkeiten“ (höchstens 2 am Tag, daten/startseite.js
+// NEU_PLATZ); ihr Glanz trifft dort genau ihre Karte (Attribut data-neu), nie den ganzen Platz.
 
 export const NEUIGKEITEN = [
   { id: 'story', tab: 'start', bis: 'erledigt', abschnitt: 'story', vorziehen: 'heldentat', glanz: 'siegel', rang: 1 },  // ein Story-Siegel wartet
-  { id: 'welten', tab: 'start', bis: 'erledigt', abschnitt: 'welten', vorziehen: 'heldentat', glanz: 'stern', rang: 2 }, // Weltenwahl wartet
+  { id: 'welten', tab: 'start', bis: 'erledigt', abschnitt: 'neuigkeiten', glanz: 'stern', rang: 2 },               // Weltenwahl wartet (fester Platz seit 31.10.)
   { id: 'gegner', tab: 'start', bis: 'gesehen', abschnitt: 'duell', glanz: 'kampf', rang: 3 },                       // neuer Gegner (Kapitelwechsel)
   { id: 'botschaft', tab: 'start', bis: 'erledigt', abschnitt: 'botschaft', glanz: 'wippen', rang: 4 },               // Crew-Botschaft heute noch nicht gelesen
-  { id: 'angebot', tab: null, abschnitt: 'angebot', glanz: 'stern', rang: 5 }                                         // „Neues Abenteuer?“ (ohne Punkt)
+  { id: 'angebot', tab: null, abschnitt: 'neuigkeiten', glanz: 'stern', rang: 5 }                                         // „Neues Abenteuer?“ (ohne Punkt)
 ];

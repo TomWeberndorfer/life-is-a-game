@@ -7,7 +7,7 @@ import { exportCode as kodiere } from './logik/austausch.js';
 import * as V from './logik/versand.js';
 
 const SENDE_ABSTAND = 15000;
-let ctx = null; // { testerId, profil, heute: () => Date }
+let ctx = null; // { testerId, profil, heute: () => Date, app?: VERSION.nr (seit Version 145 je Session gespeichert) }
 let puffer = null;
 let sid = null;
 let sessionTag = null;
@@ -41,7 +41,7 @@ export function initAnalytics(k) {
 function starteSession() {
   sid = neueId();
   sessionTag = tagKey(ctx.heute());
-  E.sessionStarten(puffer, sid, sessionTag, jetztIso());
+  E.sessionStarten(puffer, sid, sessionTag, jetztIso(), ctx.app);
   sichtbarSeit = document.visibilityState === 'hidden' ? null : Date.now();
   sichern();
 }

@@ -79,7 +79,7 @@ export async function speichern(p, u) {
   p.status = '';
   if (r.fehler) { p.fehler = r.fehler; u.zeichne(); return 'fehler'; }
   // Version 32: unbekannter Bildplatz → einmal nachfragen (zweites Tippen speichert trotzdem)
-  const chk = TB.schluesselPruefen(r.zeile.schluessel, r.zeile.typ, u.plaetze());
+  const chk = TB.schluesselPruefen(r.zeile.schluessel, r.zeile.typ, u.plaetze(), r.zeile.typ === 'bild' ? u.platzBekannt : null);
   if (r.zeile.typ === 'bild' && !chk.bekannt && p.unbekanntFrage !== r.zeile.schluessel) {
     p.unbekanntFrage = r.zeile.schluessel; p.fehler = []; u.zeichne(); return 'nachfrage';
   }

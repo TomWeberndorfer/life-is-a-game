@@ -1,5 +1,6 @@
 // Auswahl der täglichen Inhalte. Reine Funktionen; Texte kommen aus daten/inhalte.js.
 import { tagKey, ausTagKey, auswertung } from './kern.js';
+import { antwortArt } from './antworten.js'; // Version 141
 
 // Stabiler Zahlenwert je Text (gleicher Tag → gleiche Variante, jeden Tag eine andere).
 export function streuwert(text) {
@@ -12,11 +13,18 @@ const ARTIKEL = { Der: 'm', Die: 'f', Das: 'n' };
 const FUERWORT = { m: { er: 'er', ihn: 'ihn' }, f: { er: 'sie', ihn: 'sie' }, n: { er: 'es', ihn: 'es' } };
 
 // Nominativ für Fließtext und Genus für Fürwörter.
+// akk/dat (02.11.2026): Akkusativ, wenn der Gegner Objekt ist („Du hast den Heißhunger durchschaut“), Dativ nach
+// mit/von/bei („Kampf mit dem Heißhunger“). Namen ohne Artikel bleiben in allen Fällen gleich.
+const AKK_ARTIKEL = { m: 'den', f: 'die', n: 'das' };
+const DAT_ARTIKEL = { m: 'dem', f: 'der', n: 'dem' };
 export function gegnerFormen(g) {
-  const m = /^(Der|Die|Das) (.+)$/.exec(g.name || '');
-  const genus = m ? ARTIKEL[m[1]] : (g.genus || 'm');
-  const nom = m ? `${m[1].toLowerCase()} ${m[2]}` : (g.kurz || g.name || 'der Gegner');
-  return { nom, genus, ...FUERWORT[genus] };
+  const m = /^(Der|Die|Das) (.+)$/.exec((g && g.name) || '');
+  const genus = m ? ARTIKEL[m[1]] : ((g && FUERWORT[g.genus]) ? g.genus : 'm');
+  const nom = m ? `${m[1].toLowerCase()} ${m[2]}` : ((g && (g.kurz || g.name)) || 'der Gegner');
+  const ohneArtikel = !!(g && (g.kurz || g.name));
+  const akk = m ? `${AKK_ARTIKEL[genus]} ${m[2]}` : ohneArtikel ? nom : 'den Gegner';
+  const dat = m ? `${DAT_ARTIKEL[genus]} ${m[2]}` : ohneArtikel ? nom : 'dem Gegner';
+  return { nom, akk, dat, genus, ...FUERWORT[genus] };
 }
 
 const gross = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -24,6 +32,8 @@ const gross = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 export function fuelle(text, w) {
   return String(text).replace(/\{(\w+)\}/g, (all, k) => {
     if (k === 'Gegner') return gross(w.gegner);
+    if (k === 'GegnerAkk') return gross(w.gegnerAkk);
+    if (k === 'GegnerDat') return gross(w.gegnerDat);
     if (k === 'Er') return gross(w.er);
     return w[k] !== undefined && w[k] !== null ? String(w[k]) : all;
   });
@@ -33,7 +43,8 @@ export function fuelle(text, w) {
 // Neuer Platzhalter = Wort in stile.js (wort.<name>) + Name hier. app.js liefert die Werte (stilWerte).
 export const STIL_PLATZHALTER = ['stadtname'];
 // Alle Platzhalter, die werteFuer() füllt (eine Liste für Geschichten, Botschaften und Boss-Reaktionen, Version 68).
-export const TEXT_PLATZHALTER = ['verbuendeter', 'faehigkeit', 'ziel', 'n', 'anzahl', 'rest', 'gegner', 'Gegner', 'er', 'Er', 'ihn', ...STIL_PLATZHALTER];
+// gegnerAkk/GegnerAkk und gegnerDat/GegnerDat (02.11.2026): „den Heißhunger“, „mit dem Heißhunger“.
+export const TEXT_PLATZHALTER = ['verbuendeter', 'faehigkeit', 'ziel', 'n', 'anzahl', 'rest', 'gegner', 'Gegner', 'gegnerAkk', 'GegnerAkk', 'gegnerDat', 'GegnerDat', 'er', 'Er', 'ihn', ...STIL_PLATZHALTER];
 
 export function werteFuer(stand, heute, vorlage, tabelle, nameVon = id => (tabelle.helden[id] ? tabelle.helden[id].name : id), stilWerte = {}) {
   const a = auswertung(stand, heute);
@@ -43,7 +54,7 @@ export function werteFuer(stand, heute, vorlage, tabelle, nameVon = id => (tabel
     faehigkeit: tabelle.faehigkeiten[vorlage.faehigkeit].name,
     ziel: stand.quest ? stand.quest.ziel : '',
     n: a.wocheZaehler, anzahl: a.anzahl, rest: Math.max(0, a.anzahl - a.wocheZaehler),
-    gegner: g.nom, er: g.er, ihn: g.ihn,
+    gegner: g.nom, gegnerAkk: g.akk, gegnerDat: g.dat, er: g.er, ihn: g.ihn,
     // nur bekannte Stil-Platzhalter mit echtem Text; fehlt einer, bleibt {name} sichtbar (fällt im Test auf, statt still zu fehlen)
     ...Object.fromEntries(STIL_PLATZHALTER.filter(k => stilWerte && typeof stilWerte[k] === 'string' && stilWerte[k].trim()).map(k => [k, stilWerte[k]]))
   };
@@ -58,14 +69,16 @@ export function anlass(stand, heute) {
   const k = tagKey(heute);
   const gestern = tagKey(plusTage(heute, -1));
   const start = stand.quest.start;
-  if (start === k) return 'erster_tag';
+  // Startpaket (18a): vor dem Beginn wie am ersten Tag, also keine Crew-Botschaft (sonst „noch ein Treffer“ vor dem Start)
+  if (start === k || (start && start > k)) return 'erster_tag';
   if (a.neuerGegner && (a.siegHeute || a.rundeTag <= 0)) return 'neuer_gegner';
   if (a.siegHeute) return 'besiegt';
   if (a.anzahl - a.wocheZaehler === 1) return 'fast';
   // Erster Tag einer neuen Runde (Anlass-IDs „montag…“ aus Version 5 beibehalten)
   if (a.rundeTag === 0 && a.wocheNr > 1) return a.vorigeGewonnen ? 'montag_sieg' : 'montag';
-  if (stand.tage[gestern] === 'ja') return 'gestern_ja';
-  if (stand.tage[gestern] === 'nein') return 'gestern_nein';
+  // Version 141: Anlass je Antwort aus dem Register (gestern_ja, gestern_nein, gestern_schwer); ohne Text dort gilt „sonst“
+  const gArt = antwortArt(stand.tage[gestern]);
+  if (gArt && gArt.anlassGestern) return gArt.anlassGestern;
   if (start && start < gestern) return 'pause';
   return 'sonst';
 }

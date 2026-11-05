@@ -15,6 +15,9 @@
 // kapitelwechsel  'naechsterBesuch' = Weg und neuer Gegner erst, wenn die neue Runde begonnen hat (nächstes Öffnen),
 //                 'sofort' = direkt nach dem Sieg (bis Version 66)
 // fragenNurRuhig  true = Bewertungsfrage nur, wenn heute sonst kein Höhepunkt war (Sieg, Kapitel, Stufe, Story)
+// Version 115 (Entscheidung 03.11.2026, „Einführung vor Anzeige“):
+// kapitelwechsel  'vorstellung' = am Siegtag als dritte Szene die Vorstellung des Neuen (mit „Später ansehen“), danach ist er
+//                 überall offen; noch nicht gesehen → beim nächsten Öffnen nach Rundenbeginn. Gespeichert in spiel.vorgestellt.
 // kapitelStichtag Siege vor diesem Tag hatten Weg und neuen Gegner schon am Siegtag (bis Version 68) → nicht noch einmal
 // pauseMs         Puffer nach der Rückmeldung (Version 68): Einblendungen kommen nach dem Ablauf „tagesCheck“
 //                 (daten/bewegung.js) plus diesem Wert
@@ -31,7 +34,7 @@ export const MOMENTE = {
   storyBeiSieg: 'spaeter',
   levelupBeiSieg: 'zeile',
   weltenwahl: 'naechsterBesuch',
-  kapitelwechsel: 'naechsterBesuch',
+  kapitelwechsel: 'vorstellung',
   kapitelStichtag: '2026-10-30',
   fragenNurRuhig: true,
   pauseMs: 300

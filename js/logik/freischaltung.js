@@ -109,6 +109,27 @@ export function neuFreigeschaltet(tabs, aktiv, gesehen) {
   }).map(t => t.screen);
 }
 
+// ---------- Tab „Bald“ (Etappe 3, Teil A, 02.11.2026) ----------
+// Teilt die sichtbaren Tabs: nutzbare und gebaute in die Leiste, alles andere (gesperrt, verdient-aber-noch-nicht-
+// freigegeben, noch nicht gebaut) in die Liste „Bald“. Grund: drei Schlösser wirkten wie eine Bezahlschranke; ein Ort mit
+// Vorschau weckt Neugier statt Abweisung. Reihenfolge der Liste: verdient zuerst (Vorfreude), dann wie in TABS.
+// status(tab) → 'frei' | 'verdient' | 'gesperrt'. Wirft nie: ein Fehler in status() zählt als „gesperrt“ (nie fälschlich offen).
+// cfg.an === false → alte Leiste mit Schlössern (alle sichtbaren Tabs in der Leiste, Liste leer).
+export function teileBald(tabs, status, cfg = {}) {
+  const liste = (Array.isArray(tabs) ? tabs : []).filter(t => t && typeof t.screen === 'string');
+  const st = t => { try { const s = status(t); return s === 'frei' || s === 'verdient' ? s : 'gesperrt'; } catch (e) { return 'gesperrt'; } };
+  if (!cfg || cfg.an === false) return { leiste: liste, bald: [] };
+  const leiste = [], bald = [];
+  for (const t of liste) {
+    const s = st(t);
+    if (s === 'frei' && t.bald !== true) leiste.push(t);
+    else bald.push({ tab: t, status: t.bald === true && s === 'frei' ? 'gebaut' : s });
+  }
+  const rang = { verdient: 0, gesperrt: 1, gebaut: 2 };
+  bald.sort((a, b) => rang[a.status] - rang[b.status]); // stabil: innerhalb gleicher Art wie in TABS
+  return { leiste, bald };
+}
+
 // ---------- Höchstens eine Freischaltung pro Tag (Version 69, Vorschlag 30.10.2026) ----------
 // Verdiente Bereiche (Tab-Regel erfüllt, Welten frei, erstes Angebot …) werden nicht alle am selben Tag freigegeben,
 // sondern nacheinander: höchstens cfg.maxProTag je Tag, nicht an Höhepunkt-Tagen (Sieg, Kapitelwechsel), in der

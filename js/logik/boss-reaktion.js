@@ -5,7 +5,7 @@ import { streuwert, TEXT_PLATZHALTER } from './inhalte.js';
 
 export const REAKTION_ARTEN = ['treffer', 'ruhe', 'phase', 'morgen'];
 // „morgen“ (Siegtag mit neuem Gegner) darf den neuen Gegner nicht verraten: {gegner} & Co. wären schon der Neue.
-const OHNE_GEGNERNAME = { morgen: ['gegner', 'Gegner', 'er', 'Er', 'ihn'] };
+const OHNE_GEGNERNAME = { morgen: ['gegner', 'Gegner', 'gegnerAkk', 'GegnerAkk', 'gegnerDat', 'GegnerDat', 'er', 'Er', 'ihn'] };
 const RUECKFALL_ART = { phase: 'treffer' };
 
 // Restkraft, bei der der Phasenwechsel kommt. 0 = keine Phase (ungültige Werte, zu kleine Runde).

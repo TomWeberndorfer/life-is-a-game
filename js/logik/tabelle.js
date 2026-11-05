@@ -3,7 +3,7 @@
 //   medien/<assetId>            = eine hochgeladene Datei, einmal gespeichert   { art, titel, asset }
 //   inhalte/<stil>~<schluessel> = eine Verwendung (Bild oder Text) je Stil      { schluessel, stil, typ, medium | datei | text, pos, formen }
 // Version 30: `datei` = eingebaute Datei des Stils (nur Ausschnitt ändern, Bild behalten);
-//             `formen` = eigener Ausschnitt je Darstellung { rund, quadrat, breit }, sonst gilt `pos`.
+//             `formen` = eigener Ausschnitt je Darstellung { rund, quadrat, auftritt, breit, arena }, sonst gilt `pos`.
 // Vorrang beim Anzeigen: Tabelle (eigener Stil) → Tabelle („alle“) → Dateien (stile.js, texte.js) → Platzhalter des Stils.
 // Reine Funktionen ohne Zugriff auf Datenbank oder Oberfläche (testbar mit node --test).
 
@@ -15,7 +15,12 @@ const SCHLUESSEL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 const ASSET = /^[0-9a-f]{32}$/;
 const POS = /^(\d{1,3})% (\d{1,3})%$/;
 const DATEI = /^(bilder\/[a-z0-9][a-z0-9_\-\/]*\.(jpg|jpeg|png|webp|svg)|\/_blob\/[0-9a-f]{32})$/i;
-export const FORMEN = ['rund', 'quadrat', 'breit'];
+export const FORMEN = ['rund', 'quadrat', 'auftritt', 'breit', 'arena'];
+// Auftritt (Version 111): großes, fast quadratisches Bild, wenn ein Gegner eingeführt wird. Ohne eigenen Ausschnitt
+// gilt der Ausschnitt der ähnlichsten Form (Quadrat), dann der gemeinsame. Neue Form = Zeile hier + Name in texte.js.
+// Arena (Version 142): Gegnerbild auf der Kampfbühne, rechts in der Bühne (fast quadratisch, Gesicht neben der
+// Crew-Sprechblase). Ohne eigenen Ausschnitt gilt „breit“ (dieselbe Stelle wie bisher), dann der gemeinsame.
+export const FORM_RUECKFALL = { auftritt: 'quadrat', arena: 'breit' };
 export const STANDARD_POS = '50% 30%';
 
 export const docId = (stil, schluessel) => `${stil}~${schluessel}`;
@@ -25,7 +30,7 @@ export const assetUrl = id => '/_blob/' + id;
 export function artVon(schluessel) {
   const k = String(schluessel || '');
   if (k.startsWith('boss-')) return 'boss';
-  if (k === 'szene' || k === 'karte' || k.startsWith('bezirk-') || k.startsWith('banner-') || k.startsWith('story-')) return 'szene';
+  if (k === 'szene' || k === 'karte' || k.startsWith('bezirk-') || k.startsWith('ausbau-') || k.startsWith('banner-') || k.startsWith('story-') || k.startsWith('karte-')) return 'szene';
   return 'held';
 }
 
@@ -119,10 +124,11 @@ export function bildAus(index, stil, schluessel) {
   return (index.bilder[stil] || {})[schluessel] || (index.bilder[ALLE] || {})[schluessel] || null;
 }
 
-// Ausschnitt eines Eintrags für eine Darstellung: Form → gemeinsamer Ausschnitt → Rückfall.
+// Ausschnitt eines Eintrags für eine Darstellung: Form → verwandte Form (FORM_RUECKFALL) → gemeinsamer Ausschnitt → Rückfall.
 export function posFuer(eintrag, form, rueckfall = STANDARD_POS) {
   if (!eintrag) return rueckfall;
-  return (eintrag.formen && eintrag.formen[form]) || eintrag.pos || rueckfall;
+  const f = eintrag.formen || {};
+  return f[form] || (FORM_RUECKFALL[form] && f[FORM_RUECKFALL[form]]) || eintrag.pos || rueckfall;
 }
 
 // Texte der Tabelle für einen Stil: eigener Stil überschreibt „alle“.
@@ -220,9 +226,13 @@ export function vorschlag(schluessel, bekannte) {
 }
 
 // Bekannt? → { bekannt, vorschlag } für den Hinweis im Formular.
-export function schluesselPruefen(schluessel, typ, bekannte) {
+// istBekannt (optional, Version 126): Prüfung für Plätze, die nicht alle aufgezählt werden (z. B. nummerierte
+// Kartenbilder karte-hintergrund-3, auch je Held). Wirft sie, gilt der Schlüssel als unbekannt.
+export function schluesselPruefen(schluessel, typ, bekannte, istBekannt = null) {
   const k = normSchluessel(schluessel, typ);
   if (!k) return { bekannt: true, vorschlag: null };
-  const bekannt = (bekannte || []).includes(k);
+  let extra = false;
+  if (typeof istBekannt === 'function') { try { extra = !!istBekannt(k); } catch (e) { extra = false; } }
+  const bekannt = extra || (bekannte || []).includes(k);
   return { bekannt, vorschlag: bekannt ? null : vorschlag(k, bekannte) };
 }

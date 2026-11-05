@@ -1,8 +1,18 @@
 // Stil-Register. Feste IDs (nie ändern; wenn doch, alte ID unter `alt`).
 // Ein Stil ändert nur Darstellung: Farben ([data-stil=<id>] in index.html), Wörter, Namen, Bilder.
+// Stil-Tokens (Version 116): Farben, Schriften und Formen stehen als CSS-Variablen in index.html, Fantasy auf :root als Rückfall
+//   für jeden Stil; ein Stil setzt nur, was bei ihm anders ist (z. B. --r-siegel, --glanz). Feste Farben in allgemeinen Regeln
+//   verhindert app-tests/stil-tokens.test.js.
 // Wörter: crew = alle Helden zusammen (ohne eigene XP), verbuendeter = ein einzelner Held an deiner Seite.
 // Optional je Stil: texte: { 'schluessel': '…' } überschreibt Texte aus daten/texte.js (z. B. tab.logbuch = Name des Logbuchs je Stil, Version 56); bezirke: { health: '…' } benennt Bezirke.
 // Fehlt ein Wort (z. B. kapitel) oder ein Bezirksname, gilt Fantasy bzw. der Name des Lebensbereichs.
+// titel (optional, Version 80): Rangnamen je Stufe (Stufe 1 = erster Eintrag); fehlt die Liste, gelten die Titel aus kern.js.
+// Wörter für Sätze mit Artikel: stadt weiblich („deine Stadt“), bezirk männlich („seinen Bezirk“).
+// symbole (optional, Version 84): Symbol je Schlüssel aus daten/symbole.js, z. B. 'tab.start' (Tab-Leiste, je Bildschirm-ID
+//   aus freischaltung.js) und 'siegel.treffer' / 'siegel.ruhe' / 'siegel.schwer' (Siegel der Kampfbühne, Version 141). Rückfall je Schlüssel: Fantasy, dann
+//   das Standard-Symbol der Stelle (logik/symbole.js). Wörter dazu über `texte` ('tab.start', 'siegel.treffer' …).
+//   Kulisse und Arena je Stil stehen als CSS in index.html (:root[data-stil=…], Variablen --k-* und --arena-*).
+//   Auf welchen Seiten die Kulisse liegt, steht in KULISSE_SEITEN (unten); app.js setzt dort die Klasse „kulisse“.
 // marke (optional, Version 61): kleine Marke über der Heldentat-Karte (Sci-Fi „MISSION // HEUTE“); fehlt sie, keine.
 // stadt/bezirk/stadtname: Heldenstadt (nur Darstellung). Bezirksbilder: Bildplatz `bezirk-<domainId>`, sonst gezeichnete Silhouette.
 // Regel: Kein Stil leiht Bilder eines anderen. Fehlt ein Bild, gilt die Rückfallkette (BILD_RUECKFALL, nur innerhalb
@@ -19,7 +29,7 @@ export const BILD_RUECKFALL = [
   { von: 'bezirk-', nach: 'banner-', ueber: 'bereichHeld' }
 ];
 
-export const STIL_REIHENFOLGE = ['fantasy', 'scifi', 'myth', 'cozy', 'monster', 'strasse'];
+export const STIL_REIHENFOLGE = ['fantasy', 'scifi', 'myth', 'cozy', 'monster', 'strasse', 'rom'];
 
 // Version 33: `waehlbar` je Stil steuert, ob die Welt gewählt werden kann. Gesperrte Welten werden
 // in der Auswahl gezeigt, aber mit Schloss. Fehlt das Feld, gilt der Stil als gesperrt (sicherer Rückfall).
@@ -29,8 +39,9 @@ export const STILE = {
   fantasy: {
     name: 'Fantasy', alt: [], waehlbar: true,
     karte: 'bilder/fantasy/szene.jpg',
-    wort: { crew: 'Gefährten', verbuendeter: 'Verbündeter', gegner: 'Gegner', quest: 'Hauptquest', woche: 'Quest der Woche', faehigkeit: 'Fähigkeit', stufe: 'Stufe', sieg: 'besiegt', stadt: 'Stadt', bezirk: 'Bezirk', stadtname: 'Talwacht', kapitel: 'Kapitel' },
-    texte: { 'story.knopf': 'Zurück ins Lager', 'tab.logbuch': 'Chronik' },
+    wort: { modus_fokus: 'Fokus', modus_erhalt: 'Erhalt', modus_ruhe: 'Ruhe', crew: 'Gefährten', verbuendeter: 'Verbündeter', gegner: 'Gegner', quest: 'Hauptquest', woche: 'Quest der Woche', faehigkeit: 'Fähigkeit', stufe: 'Stufe', sieg: 'besiegt', stadt: 'Stadt', bezirk: 'Bezirk', stadtname: 'Talwacht', kapitel: 'Kapitel' },
+    texte: { 'story.knopf': 'Zurück ins Lager', 'tab.logbuch': 'Chronik', 'tab.start': 'Lager', 'tab.gruppe': 'Gefährten' },
+    symbole: { 'tab.start': 'zelt', 'tab.logbuch': 'buch', 'tab.karte': 'karte', 'tab.stadt': 'burg', 'tab.gruppe': 'menschen', 'siegel.treffer': 'schwert', 'siegel.ruhe': 'schild' },
     namen: {},
     bilder: {
       szene: 'bilder/fantasy/szene.jpg',
@@ -49,15 +60,21 @@ export const STILE = {
       'boss-kaufrausch': 'bilder/fantasy/boss-kaufrausch.jpg',
       'boss-trott': 'bilder/fantasy/boss-trott.jpg',
       'boss-nachtschwaermer': 'bilder/fantasy/boss-nachtschwaermer.jpg',
-      'boss-einsiedler': 'bilder/fantasy/boss-einsiedler.jpg'
+      'boss-einsiedler': 'bilder/fantasy/boss-einsiedler.jpg',
+      // Ausbau der Stadt (Version 82): Stufe 1–6, siehe AUSBAU in daten/stadt.js
+      'ausbau-1': 'bilder/fantasy/ausbau-1.jpg', 'ausbau-2': 'bilder/fantasy/ausbau-2.jpg', 'ausbau-3': 'bilder/fantasy/ausbau-3.jpg',
+      'ausbau-4': 'bilder/fantasy/ausbau-4.jpg', 'ausbau-5': 'bilder/fantasy/ausbau-5.jpg', 'ausbau-6': 'bilder/fantasy/ausbau-6.jpg'
     },
     pos: { trogadon: '50% 22%', 'boss-zuckerkobold': '50% 30%' }
   },
   scifi: {
     name: 'Sci-Fi', alt: [], waehlbar: true,
     karte: 'bilder/scifi/szene.jpg',
-    wort: { marke: 'MISSION // HEUTE', crew: 'Crew', verbuendeter: 'Copilot', gegner: 'Störsignal', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Protokoll', stufe: 'Rang', sieg: 'neutralisiert', stadt: 'Station', bezirk: 'Sektor', stadtname: 'Station Aurora' },
-    texte: { 'story.knopf': 'Zurück auf die Brücke', 'tab.logbuch': 'Bordbuch' },
+    wort: { modus_fokus: 'Mission', modus_erhalt: 'Bereitschaft', modus_ruhe: 'Kryoschlaf', marke: 'MISSION // HEUTE', crew: 'Crew', verbuendeter: 'Copilot', gegner: 'Störsignal', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Protokoll', stufe: 'Rang', sieg: 'neutralisiert', stadt: 'Station', bezirk: 'Sektor', stadtname: 'Station Aurora' },
+    titel: ['Kadett', 'Fähnrich', 'Leutnant', 'Kommandant', 'Captain', 'Admiral'],
+    texte: { 'feuer.titel': 'Bordruhe', 'story.knopf': 'Zurück auf die Brücke', 'tab.logbuch': 'Bordbuch', 'tab.start': 'Brücke', 'tab.gruppe': 'Crew', 'siegel.treffer': 'Neutralisiert', 'siegel.ruhe': 'Kein Einsatz nötig', 'siegel.schwer': 'Schwerer Einsatz', 'rat.titel': 'Lagebericht', 'ruhe.marke': 'EINSATZ BEENDET', 'ruhe.alle': 'Für heute ist alles erledigt. Bis morgen, Kommandant.',
+      'rb.karte.eyebrow': 'EINGEHENDE NACHRICHT', 'rb.karte.einer': '{held} hat dir einen Rundenbericht gefunkt.', 'rb.karte.mehrere': 'Deine Crew hat dir Rundenberichte gefunkt.', 'rb.karte.lesen': 'Nachricht öffnen', 'rb.ueberspringen': 'Nicht abspielen', 'rb.geholfen': 'Was hat dir im Einsatz geholfen?', 'rb.schwierigkeit': 'Wie hart war dieser Gegner?' },
+    symbole: { 'tab.start': 'rakete', 'tab.karte': 'kompass', 'tab.stadt': 'planet', 'siegel.treffer': 'blitz', 'siegel.ruhe': 'kraftfeld' },
     namen: { trogadon: 'Kommandant Trog-7', khara: 'Funkerin Kha-4', fisker: 'Scout Fisk-3', uldini: 'Administrator Uld-1', goldwin: 'Quartiermeister Gold-5', ahren: 'Offizier Ahr-2', jelninolan: 'Bordärztin Jel-9', 'der-erste': 'Pilot Prim-0' },
     bilder: {
       trogadon: 'bilder/scifi/trogadon.jpg', khara: 'bilder/scifi/khara.jpg', fisker: 'bilder/scifi/fisker.jpg',
@@ -70,15 +87,19 @@ export const STILE = {
       'banner-fisker': 'bilder/scifi/banner-fisker.jpg',
       'banner-uldini': 'bilder/scifi/banner-uldini.jpg',
       'szene': 'bilder/scifi/szene.jpg',
-      'boss-kaufrausch': 'bilder/scifi/boss-kaufrausch.jpg'
+      'boss-kaufrausch': 'bilder/scifi/boss-kaufrausch.jpg',
+      'ausbau-1': 'bilder/scifi/ausbau-1.jpg', 'ausbau-2': 'bilder/scifi/ausbau-2.jpg', 'ausbau-3': 'bilder/scifi/ausbau-3.jpg',
+      'ausbau-4': 'bilder/scifi/ausbau-4.jpg', 'ausbau-5': 'bilder/scifi/ausbau-5.jpg', 'ausbau-6': 'bilder/scifi/ausbau-6.jpg'
     },
     pos: {}
   },
   myth: {
     name: 'Mythologie', alt: [], waehlbar: false,
     karte: 'bilder/myth/szene.jpg',
-    wort: { crew: 'Bund', verbuendeter: 'Gefährte', gegner: 'Prüfung', quest: 'Heldenfahrt', woche: 'Prüfung der Woche', faehigkeit: 'Gabe', stufe: 'Rang', sieg: 'bestanden', stadt: 'Polis', bezirk: 'Viertel', stadtname: 'Neu-Ithaka' },
-    texte: { 'story.knopf': 'Zurück ans Feuer', 'tab.logbuch': 'Saga' },
+    wort: { modus_fokus: 'Aufbruch', modus_erhalt: 'Wacht', modus_ruhe: 'Rast', crew: 'Bund', verbuendeter: 'Gefährte', gegner: 'Prüfung', quest: 'Heldenfahrt', woche: 'Prüfung der Woche', faehigkeit: 'Gabe', stufe: 'Rang', sieg: 'bestanden', stadt: 'Polis', bezirk: 'Viertel', stadtname: 'Neu-Ithaka' },
+    titel: ['Sterblicher', 'Gefährte', 'Heros', 'Halbgott', 'Legende'],
+    texte: { 'feuer.titel': 'Am Herdfeuer', 'story.knopf': 'Zurück ans Feuer', 'tab.logbuch': 'Saga', 'tab.start': 'Tempel', 'tab.gruppe': 'Bund', 'siegel.treffer': 'Bestanden', 'siegel.ruhe': 'Keine Prüfung heute', 'siegel.schwer': 'Schwere Prüfung', 'rat.titel': 'Rat des Orakels' },
+    symbole: { 'tab.start': 'saeule', 'tab.karte': 'kompass', 'tab.stadt': 'amphore', 'tab.gruppe': 'feuer', 'siegel.treffer': 'blitz', 'siegel.ruhe': 'olive' },
     namen: { trogadon: 'Trogaides', khara: 'Charis', fisker: 'Fiskeus', uldini: 'Uldinos', goldwin: 'Ploutos', ahren: 'Ahrenos', jelninolan: 'Eleia', 'der-erste': 'Protos' },
     bilder: { szene: 'bilder/myth/szene.jpg' },
     pos: {}
@@ -86,8 +107,10 @@ export const STILE = {
   cozy: {
     name: 'Cozy', alt: [], waehlbar: false,
     karte: 'bilder/cozy/szene.jpg',
-    wort: { crew: 'Nachbarschaft', verbuendeter: 'Nachbar', gegner: 'Sturm', quest: 'Ernteziel', woche: 'Aufgabe der Woche', faehigkeit: 'Werkzeug', stufe: 'Stufe', sieg: 'vorübergezogen', stadt: 'Dorf', bezirk: 'Hof', stadtname: 'Sonnenhang' },
-    texte: { 'story.knopf': 'Zurück ins Dorf', 'tab.logbuch': 'Tagebuch' },
+    wort: { modus_fokus: 'Blüte', modus_erhalt: 'Pflege', modus_ruhe: 'Brache', crew: 'Nachbarschaft', verbuendeter: 'Nachbar', gegner: 'Sturm', quest: 'Ernteziel', woche: 'Aufgabe der Woche', faehigkeit: 'Werkzeug', stufe: 'Stufe', sieg: 'vorübergezogen', stadt: 'Dorf', bezirk: 'Hof', stadtname: 'Sonnenhang' },
+    titel: ['Neuling', 'Nachbar', 'Helfer', 'Dorfherz', 'Ehrenbürger'],
+    texte: { 'feuer.titel': 'Feierabend', 'story.knopf': 'Zurück ins Dorf', 'tab.logbuch': 'Tagebuch', 'tab.start': 'Hof', 'tab.gruppe': 'Nachbarn', 'siegel.treffer': 'Geschafft', 'siegel.ruhe': 'Ruhiger Tag', 'siegel.schwer': 'Harter Tag', 'rat.titel': 'Tipp für heute' },
+    symbole: { 'tab.start': 'haus', 'tab.stadt': 'blume', 'siegel.treffer': 'spross', 'siegel.ruhe': 'tasse' },
     namen: { trogadon: 'Trogi', khara: 'Kari', fisker: 'Fiski', uldini: 'Uldi', goldwin: 'Goldi', ahren: 'Ahri', jelninolan: 'Jelli', 'der-erste': 'Primo' },
     bilder: { szene: 'bilder/cozy/szene.jpg',
       // Eigene Dateien je Platz; fehlende Banner/Bezirke nutzen die Rückfallkette (Version 62)
@@ -108,7 +131,9 @@ export const STILE = {
     name: 'Monsterjäger', alt: [], waehlbar: false,
     karte: 'bilder/monster/szene.jpg',
     wort: { crew: 'Team', verbuendeter: 'Partner', gegner: 'Monster', quest: 'Hauptauftrag', woche: 'Auftrag der Woche', faehigkeit: 'Attacke', stufe: 'Level', sieg: 'gefangen', stadt: 'Basis', bezirk: 'Zone', stadtname: 'Basislager' },
-    texte: { 'story.knopf': 'Zurück zur Basis', 'tab.logbuch': 'Jagdbuch' },
+    titel: ['Anfänger', 'Fährtenleser', 'Jäger', 'Meisterjäger', 'Legende'],
+    texte: { 'feuer.titel': 'Im Basislager', 'story.knopf': 'Zurück zur Basis', 'tab.logbuch': 'Jagdbuch', 'tab.start': 'Lager', 'tab.gruppe': 'Team', 'siegel.treffer': 'Gefangen', 'siegel.ruhe': 'Keine Spur heute', 'siegel.schwer': 'Schwere Jagd', 'rat.titel': 'Tipp für heute' },
+    symbole: { 'tab.start': 'zelt', 'tab.stadt': 'pfote', 'siegel.treffer': 'netz', 'siegel.ruhe': 'blatt' },
     namen: {},
     bilder: {
       szene: 'bilder/monster/szene.jpg',
@@ -122,10 +147,16 @@ export const STILE = {
     name: 'Miami Nights', alt: [], waehlbar: true,
     karte: 'bilder/strasse/szene.jpg',
     wort: { crew: 'Crew', verbuendeter: 'Partner', gegner: 'Rivale', quest: 'Hauptmission', woche: 'Mission der Woche', faehigkeit: 'Move', stufe: 'Rang', sieg: 'erledigt', stadt: 'City', bezirk: 'Block', stadtname: 'Neon City' },
-    texte: { 'story.knopf': 'Zurück auf die Straße', 'tab.logbuch': 'Notizbuch' },
+    titel: ['Rookie', 'Player', 'Insider', 'Boss', 'Legende'],
+    texte: { 'feuer.titel': 'Nach Schicht', 'story.knopf': 'Zurück auf die Straße', 'tab.logbuch': 'Notizbuch', 'tab.gruppe': 'Crew', 'siegel.treffer': 'Erledigt', 'siegel.ruhe': 'Ruhige Nacht', 'siegel.schwer': 'Harte Nacht', 'rat.titel': 'Tipp für heute', 'ruhe.marke': 'SCHICHT VORBEI',
+      'rb.karte.eyebrow': 'POST FÜR DICH', 'rb.karte.einer': '{held} hat dir eine Nachricht hinterlassen.', 'rb.karte.mehrere': 'Deine Crew hat dir Nachrichten hinterlassen.', 'rb.karte.lesen': 'Aufmachen', 'rb.ueberspringen': 'Diesmal nicht', 'rb.geholfen': 'Was hat dir auf der Straße geholfen?', 'rb.schwierigkeit': 'Wie zäh war dieser Gegner?' },
+    symbole: { 'tab.start': 'palme', 'tab.stadt': 'skyline', 'siegel.treffer': 'faust', 'siegel.ruhe': 'sonnenbrille' },
     namen: { trogadon: 'Tank Trogg', khara: 'Lady Kay', fisker: 'Captain Fisk', uldini: 'Mr. Uld', goldwin: 'Der Quartiermeister', 'der-erste': 'Brick', ahren: 'Party-Ari', jelninolan: 'Doc Jell' },
     bilder: {
       szene: 'bilder/strasse/szene.jpg',
+      // Ausbau der City (Version 83): vom Eckhaus zur Villa, Stufe 1–6, siehe AUSBAU in daten/stadt.js
+      'ausbau-1': 'bilder/strasse/ausbau-1.jpg', 'ausbau-2': 'bilder/strasse/ausbau-2.jpg', 'ausbau-3': 'bilder/strasse/ausbau-3.jpg',
+      'ausbau-4': 'bilder/strasse/ausbau-4.jpg', 'ausbau-5': 'bilder/strasse/ausbau-5.jpg', 'ausbau-6': 'bilder/strasse/ausbau-6.jpg',
       trogadon: 'bilder/strasse/trogadon.jpg', khara: 'bilder/strasse/khara.jpg', fisker: 'bilder/strasse/fisker.jpg',
       uldini: 'bilder/strasse/uldini.jpg', 'der-erste': 'bilder/strasse/der-erste.jpg', ahren: 'bilder/strasse/ahren.jpg',
       // Eigene Dateien je Platz; fehlende Banner/Bezirke nutzen die Rückfallkette (Version 62)
@@ -133,6 +164,34 @@ export const STILE = {
       'bezirk-family': 'bilder/strasse/bezirk-family.jpg',
       'bezirk-adventure': 'bilder/strasse/bezirk-adventure.jpg'
     },
+    pos: {}
+  },
+  // Version 80: Rom (Legion). Rot nur, wo man handelt (Heldentat, Knöpfe); ruhige Bereiche bleiben Marmor und Gold.
+  // Zitate (Seneca, Marc Aurel, Epiktet) sind eigene Übersetzungen der antiken Originale.
+  rom: {
+    name: 'Rom', alt: [], waehlbar: false, // gesperrt bis zur Freigabe (Entscheidung 30.10.2026)
+    karte: 'bilder/rom/szene.jpg', // Datei folgt; bis dahin zeigt die App den Platzhalter rom-szene.svg
+    wort: { marke: 'TAGESBEFEHL', crew: 'Legion', verbuendeter: 'Kamerad', gegner: 'Feind', quest: 'Feldzug', woche: 'Marschbefehl der Woche', faehigkeit: 'Disziplin', stufe: 'Rang', sieg: 'bezwungen', stadt: 'Festung', bezirk: 'Abschnitt', stadtname: 'Castra Nova', kapitel: 'Kapitel' },
+    titel: ['Tiro', 'Legionär', 'Optio', 'Centurio', 'Präfekt', 'Tribun', 'Legat'],
+    texte: {
+      'feuer.titel': 'Im Atrium',
+      'story.knopf': 'Zurück in die Festung',
+      'tab.logbuch': 'Commentarii',
+      'tab.start': 'Forum', 'tab.gruppe': 'Legion', 'siegel.treffer': 'Bezwungen', 'siegel.ruhe': 'Stellung gehalten', 'siegel.schwer': 'Schwerer Kampf', 'rat.titel': 'Rat des Tages',
+      'notfall.innehalten': 'Atme dreimal langsam aus. „Nicht die Dinge selbst beunruhigen uns, sondern unser Urteil über sie.“ (Epiktet)',
+      'notfall.ideeZiehen': '„Was im Weg steht, wird zum Weg.“ (Marc Aurel) Zieh eine Idee aus deiner Amphore.',
+      'notfall.ideeLeer': 'Deine Amphore ist leer. Leg eine Idee hinein, die dir in so einem Moment helfen kann.',
+      'notfall.verwalten': 'Amphore',
+      'ideen.titel': 'AMPHORE',
+      'ideen.text': 'Kleine Dinge, die du statt des alten Musters tun kannst. Die Notfallkarte zieht daraus.',
+      'ideen.hinzufuegen': 'In die Amphore legen',
+      'eintrag.frage.schwer': 'Heute war es schwer. „Wir leiden öfter in der Vorstellung als in der Wirklichkeit.“ (Seneca)',
+      'eintrag.gespeichert.schwer': 'Festgehalten. „Wirst du zurückgeworfen, kehre zurück, und freu dich, wenn das meiste gelingt.“ (Marc Aurel)'
+    },
+    symbole: { 'tab.start': 'forum', 'tab.stadt': 'burg', 'siegel.treffer': 'schwert', 'siegel.ruhe': 'scutum' },
+    bezirke: { health: 'Exerzierfeld', mindset: 'Heiligtum', partner: 'Garten', family: 'Lararium', friends: 'Taverne', career: 'Principia', finance: 'Aerarium', adventure: 'Hafen', growth: 'Bibliothek' },
+    namen: { trogadon: 'Trogadus', khara: 'Cara', fisker: 'Piscator', uldini: 'Uldinus', goldwin: 'Aureus', ahren: 'Arrius', jelninolan: 'Iulia', 'der-erste': 'Primus' },
+    bilder: {},
     pos: {}
   }
 };
@@ -179,6 +238,10 @@ export const EIGENE_BILDER = {
     ],
     'jelninolan': [
       'bilder/speicher/95bf1cb615531ccf3630f974c604cad2.jpg',
+      '50% 30%'
+    ],
+    'karte-hintergrund': [
+      'bilder/speicher/b05939aef6fe09625f2000909872f1dc.png',
       '50% 30%'
     ],
     'story-drycha': [
@@ -316,3 +379,8 @@ export function stilId(id) {
   for (const [k, s] of Object.entries(STILE)) if ((s.alt || []).includes(id)) return k;
   return 'fantasy';
 }
+
+// Seiten mit Stil-Kulisse (31.10.2026, Schritt Kopfleiste und Neuigkeiten): Bildschirm-IDs (ui.screen). Die Kulisse ist
+// reine Darstellung (CSS .screen.kulisse in index.html); eine Seite ohne Eintrag behält den ruhigen Grund des Stils.
+// Version 108 (Etappe 3, Teil F): auch die Geschichte (Buch-Look wie die Chronik).
+export const KULISSE_SEITEN = ['start', 'logbuch', 'karte', 'stadt', 'story'];

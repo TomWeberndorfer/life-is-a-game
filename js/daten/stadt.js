@@ -16,3 +16,12 @@ export const SILHOUETTEN = {
   growth: '<rect x="10" y="22" width="44" height="22"/><path d="M6 22h52L32 8z"/><path d="M18 28v12M26 28v12M38 28v12M46 28v12" style="stroke:var(--panel);stroke-width:3;fill:none"/><circle cx="32" cy="15" r="3" style="fill:var(--panel)"/><rect x="2" y="44" width="60" height="2"/>',
   _standard: '<path d="M10 44V24l22-16 22 16v20z"/><rect x="27" y="32" width="10" height="12" style="fill:var(--panel)"/><rect x="2" y="44" width="60" height="2"/>'
 };
+
+// Ausbau der Stadt (Version 82): ein großes Bild über den Bezirken, das mit der Gesamtzahl der Siege wächst.
+// Grund für Siege statt Heldenzahl: Die Burg soll für echtes Tun wachsen, nicht fürs Anlegen vieler Ziele auf einmal
+// (wenige Ziele gleichzeitig wirken besser; Helden nur für den nächsten Turm wären ein extrinsischer Anreiz).
+// schwellen  ab wie vielen Siegen Stufe 1, 2, 3 … gilt (aufsteigend, ganze Zahlen ab 1). Zahl der Stufen = Länge der Liste.
+// platz      Präfix der Bildplätze: Stufe n → Bildplatz `<platz><n>` (z. B. ausbau-3). Bilder je Stil in stile.js
+//            (`bilder`) oder selbst gepflegt (Pflege/Tabelle). Hat ein Stil kein Bild für die Stufe, zeigt die Stadt
+//            keinen Ausbau (kein Leihen aus anderen Stilen, kein Platzhalter).
+export const AUSBAU = { schwellen: [1, 3, 6, 10, 15, 21], platz: 'ausbau-' };

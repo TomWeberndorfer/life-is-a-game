@@ -5,9 +5,24 @@
 // Die bewährte Ein-Helden-Logik in kern.js arbeitet unverändert auf einer „Heldenansicht“.
 import * as K from './kern.js';
 import { bereinigeFreigaben, freigabeSetzen } from './freischaltung.js'; // Version 69 (Kreis-Import nur mit Funktionen, unkritisch)
+import { PROBE } from '../daten/startseite.js'; // Version 81: Varianten der Morgenprobe
+import { SPRECHBLASEN } from '../daten/bewegung.js'; // 02.11.2026: Sprechblasen automatisch oder per Tippen
+import { bereinigeEintraege } from './eintraege.js'; // Version 75: eigene Einträge (geschafft, schwerer Tag)
+import { EINTRAG_OPT } from '../daten/eintrag-arten.js';
+import { bereinigeIdeen } from './ideen.js'; // Version 75: Ideenglas je Held (Notfallkarte)
+import { IDEEN_OPT } from '../daten/notfall.js';
+import { bereinigeMessziele } from './messziele.js'; // Version 76: Messziele je Held
+import { linksBereinigen } from './zielquest.js'; // Ziel-Quests (31.10.2026)
+import { bereinigeVorgestellt } from './vorstellung.js'; // Version 115: Einführung vor Anzeige
+import * as HM from './heldenmodi.js'; // Heldenmodi (04.11.2026)
+import { bereinigeWochen } from './wochenrunde.js'; // Wochenrunde (05.11.2026)
+import { DOMAIN_IDS as WR_BEREICHE } from '../daten/lebensbereiche.js';
+import { HELDEN } from '../daten/helden.js';
 
 export const SPIEL_VERSION = 4; // 4: Siege mit Tag, Bosskette je Quest (Version 14)
-export const MAX_HELDEN = 3;
+// Heldenmodi (04.11.2026): keine eigene Grenze mehr. Höchstens so viele Helden, wie das Register kennt (jeder Held gehört zu
+// genau einem Lebensbereich); neue Helden im Register erhöhen die Zahl ohne Codeänderung. Fokus = daten/heldenmodi.js.
+export const MAX_HELDEN = Math.max(1, Object.keys(HELDEN).length);
 const ID = /^[a-z0-9-]{1,40}$/;
 const gueltigeId = id => typeof id === 'string' && ID.test(id);
 
@@ -41,11 +56,11 @@ export function zuordner(tabelle, rueckfall) {
 
 export function neuesSpiel(profilId) {
   const s = K.neuerStand(profilId);
-  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [], freigaben: {}, freigabeWartet: null };
+  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [], freigaben: {}, freigabeWartet: null, eintraege: [], ideen: {}, messziele: {}, einstellungen: bereinigeEinstellungen(null), vorgestellt: [], modi: {}, mindest: {}, wochen: {} };
 }
 
 function heldAusAnsicht(heroId, domainId, a) {
-  return { heroId, domainId, quest: a.quest, tage: a.tage, siege: a.siege, mikro: a.mikro, story: a.story };
+  return { heroId, domainId, quest: a.quest, tage: a.tage, siege: a.siege, mikro: a.mikro, haken: a.haken || {}, story: a.story };
 }
 
 export const heldVon = (spiel, heroId) => spiel.helden.find(x => x.heroId === heroId) || null;
@@ -58,7 +73,15 @@ export function ansicht(spiel, heroId) {
     ...basis,
     onboarding: spiel.onboarding,
     stil: spiel.stil,
-    ...(h ? { quest: h.quest, tage: h.tage, siege: h.siege, mikro: h.mikro, story: h.story } : {})
+    ...(h ? { quest: h.quest, tage: h.tage, siege: h.siege, mikro: h.mikro, haken: h.haken || {}, story: h.story } : {}),
+    // Version 90: Ruhetage aus spiel.eintraege (Art „ruhetag“); nur gelesen, heldAusAnsicht() schreibt sie nie zurück
+    ruhetage: h ? (Array.isArray(spiel.eintraege) ? spiel.eintraege : []).filter(e => e && e.heroId === heroId && e.art === 'ruhetag').map(e => e.tag) : [],
+    // Version 98: Neuanfänge („Frisch anfangen“) ebenso, Art „neustart“
+    neustarts: h ? (Array.isArray(spiel.eintraege) ? spiel.eintraege : []).filter(e => e && e.heroId === heroId && e.art === 'neustart').map(e => e.tag) : [],
+    // Heldenmodi (04.11.2026): Pausen (Erhalt, Ruhe) aus spiel.modi als Zeiträume; nur gelesen, nie zurückgeschrieben
+    pausen: h ? HM.pausenVon(spiel, heroId) : [],
+    // Mindestaufgabe im Erhalt (04.11.2026): Tage, an denen ein Haken XP gab; nur gelesen (kern.auswertung)
+    mindestXp: h ? HM.mindestXpTage(spiel, heroId) : []
   });
 }
 
@@ -94,14 +117,16 @@ export function uebernehmen(spiel, heroId, a, z) {
 
 // Neuer Held aus einer Vorlage (heroId und domainId kommen aus der Vorlage).
 // rampe (30.10.2026): Einstiegsrampe für die neue Quest (daten/rampe.js); ohne = feste Anzahl.
-export function heldHinzufuegen(spiel, vorlage, zielText, heute, z, rampe = null) {
+export function heldHinzufuegen(spiel, vorlage, zielText, heute, z, rampe = null, warum = null) {
   if (!vorlage) throw new Error('Keine Vorlage für diese Auswahl gefunden.');
   if (spiel.helden.length >= MAX_HELDEN) throw new Error(`Du hast schon ${MAX_HELDEN} Helden. Mehr gehen gerade nicht gleichzeitig.`);
   if (heldVon(spiel, vorlage.held)) throw new Error('Dieser Held ist schon in deiner Crew.');
   const leer = ansicht(spiel, null);
-  const a = K.questAnlegen(leer, vorlage, zielText, heute, rampe);
-  const s = uebernehmen(spiel, vorlage.held, a, z);
+  const a = K.questAnlegen(leer, vorlage, zielText, heute, rampe, warum);
+  let s = uebernehmen(spiel, vorlage.held, a, z);
   s.fokus = vorlage.held;
+  // Heldenmodi: ist der Fokus voll, startet der neue Held im Erhalt (Runde steht still, bis er in den Fokus kommt)
+  s = HM.neuenHeldenEinordnen(s, vorlage.held, K.tagKey(heute)).spiel;
   s.angebot = { abgelehntBei: gesamtSiege(s) }; // angenommen: nächste Frage erst nach dem nächsten Sieg
   return s;
 }
@@ -155,10 +180,14 @@ export function heldenJeDomain(spiel, domainIds) {
 }
 
 // Frage „Willst du ein neues Abenteuer beginnen?“: nach einem Sieg, solange Platz ist und seit dem letzten Ablehnen ein neuer Sieg dazukam.
+// Heldenmodi (04.11.2026, Entscheidung 8a): nur, solange im Fokus Platz ist. Die App drängt nicht zu mehr Helden, als man
+// gleichzeitig verfolgen kann; weitere holt man selbst über die Heldenwahl.
 export function zielAngebot(spiel) {
   const siege = gesamtSiege(spiel);
-  return spiel.helden.length > 0 && spiel.helden.length < MAX_HELDEN && siege >= 1 && siege > (spiel.angebot.abgelehntBei || 0);
+  return spiel.helden.length > 0 && spiel.helden.length < MAX_HELDEN && HM.fokusFrei(spiel) && siege >= 1 && siege > (spiel.angebot.abgelehntBei || 0);
 }
+// Ist im Register noch ein Held frei (für „Neuen Helden dazuholen“ in der Heldenwahl)?
+export const heldFrei = spiel => spiel.helden.length < MAX_HELDEN;
 
 export function angebotAblehnen(spiel) {
   return { ...kopie(spiel), angebot: { abgelehntBei: gesamtSiege(spiel) } };
@@ -199,6 +228,7 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
       s.fokus = hid;
       s.stil.frei = s.stil.frei || alt.siege.length > 0;
       s.freigaben = null; // Version 69: Altbestand, app.js gibt beim Start frei, was schon verdient ist
+      s.vorgestellt = null; // Version 115: Altbestand, app.js füllt beim Start (vorstellungAltbestand)
     }
     return s;
   }
@@ -209,7 +239,7 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
     if (!h || typeof h !== 'object') continue;
     const hid = roh.v === 2 ? h.id : h.heroId; // v2: id = heroId
     if (!gueltigeId(hid) || gesehen.has(hid) || s.helden.length >= MAX_HELDEN) continue;
-    const a = ketteAuffrischen(K.migriere({ quest: h.quest, tage: h.tage, siege: h.siege, siegeWochen: h.siegeWochen, mikro: h.mikro, story: h.story, onboarding: { fertig: true } }, profilId, stilIds), z);
+    const a = ketteAuffrischen(K.migriere({ quest: h.quest, tage: h.tage, siege: h.siege, siegeWochen: h.siegeWochen, mikro: h.mikro, haken: h.haken, story: h.story, onboarding: { fertig: true } }, profilId, stilIds), z);
     if (!a.quest) continue;
     gesehen.add(hid);
     if (roh.v >= 3 && h.domainId !== undefined && !z.domains.has(h.domainId)) warn(`Held ${hid}: unbekannter Lebensbereich „${h.domainId}“`);
@@ -225,5 +255,38 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
   s.neuGesehen = bereinigeGesehen(roh.neuGesehen);
   s.freigaben = bereinigeFreigaben(roh.freigaben); // Version 69: null = Stand vor der Taktung (Altbestand)
   s.freigabeWartet = TAG.test(String(roh.freigabeWartet)) ? roh.freigabeWartet : null; // fehlt bei älteren Ständen = nichts wartet
+  // Version 75: eigene Einträge; fehlt die Liste (Altbestand) → [] (nichts geht verloren, es gab noch keine).
+  // Einträge eines Helden, der nicht mehr im Spielstand ist, fallen weg (wie bei „gelesen“).
+  s.eintraege = bereinigeEintraege(roh.eintraege, { ...EINTRAG_OPT, heroIds: new Set(s.helden.map(h => h.heroId)) }, warn);
+  // Version 75: Ideenglas; fehlt das Feld (Altbestand) → {} (es gelten die Startideen der Fähigkeit, nichts geht verloren).
+  s.ideen = bereinigeIdeen(roh.ideen, { ...IDEEN_OPT, heroIds: new Set(s.helden.map(h => h.heroId)) });
+  // Version 76: Messziele; fehlt das Feld (Altbestand) → {} (es gab noch keine, nichts geht verloren).
+  s.messziele = bereinigeMessziele(roh.messziele, { heroIds: new Set(s.helden.map(h => h.heroId)) });
+  linksBereinigen(s); // Ziel-Quests (31.10.2026): Verweis auf ein gelöschtes Messziel fällt weg, die Quest bleibt
+  // Version 81: persönliche Einstellungen; fehlt das Feld (Altbestand) → Standard (Morgenprobe kurz, wie bisher).
+  s.einstellungen = bereinigeEinstellungen(roh.einstellungen);
+  // Version 115: vorgestellte Elemente (Einführung vor Anzeige); fehlt das Feld (Altbestand) → null, app.js füllt es beim
+  // Start einmal (bekannte Gegner gelten als gesehen, niemand bekommt einen alten Gegner noch einmal vorgestellt).
+  s.vorgestellt = bereinigeVorgestellt(roh.vorgestellt);
+  // Heldenmodi (04.11.2026): fehlt das Feld (Altbestand) → {} = alle Helden im Fokus, wie bisher (niemand verliert etwas)
+  s.modi = HM.bereinigeModi(roh.modi, { heroIds: new Set(s.helden.map(h => h.heroId)) });
+  // Mindestaufgabe im Erhalt (04.11.2026): fehlt das Feld (Altbestand) → {} (es gab noch keine, nichts geht verloren)
+  s.mindest = HM.bereinigeMindest(roh.mindest, { heroIds: new Set(s.helden.map(h => h.heroId)) });
+  // Wochenrunde (05.11.2026): fehlt das Feld (Altbestand) → {} (es gab noch keine Runde, nichts geht verloren).
+  // Die Werte gehören zum Lebensbereich, nicht zum Helden (Abschnitt 34): sie bleiben, auch wenn ein Held geht.
+  s.wochen = bereinigeWochen(roh.wochen, { bereichIds: new Set(WR_BEREICHE) });
   return s;
+}
+
+// Persönliche Einstellungen im Spielstand (Version 81). Unbekannte Schlüssel fallen weg, ungültige Werte → Standard.
+// Regeln als Daten: PROBE in daten/startseite.js, SPRECHBLASEN in daten/bewegung.js (02.11.2026; fehlt das Feld → Standard
+// „auto“, also wie bisher: niemand verliert etwas).
+const auswahl = (wert, regel, rueckfall) => {
+  const erlaubt = regel && Array.isArray(regel.varianten) && regel.varianten.length ? regel.varianten : [rueckfall];
+  const standard = erlaubt.includes(regel && regel.standard) ? regel.standard : erlaubt[0];
+  return erlaubt.includes(wert) ? wert : standard;
+};
+export function bereinigeEinstellungen(roh) {
+  const r = roh && typeof roh === 'object' && !Array.isArray(roh) ? roh : {};
+  return { probe: auswahl(r.probe, PROBE, 'kurz'), blasen: auswahl(r.blasen, SPRECHBLASEN, 'auto') };
 }

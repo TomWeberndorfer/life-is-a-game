@@ -20,7 +20,26 @@ export const FEATURES = [
   { id: 'mehrheld', name: 'Weitere Helden', screens: [], events: ['hero_focus', 'hero_added', 'new_adventure_started'], bewertung: null },
   { id: 'stadt', name: 'Stadt', screens: ['stadt'], events: [], bewertung: null },
   { id: 'logbuch', name: 'Logbuch', screens: ['logbuch'], events: ['logbook_filter', 'logbook_more'], bewertung: null },
-  { id: 'karte', name: 'Karte', screens: ['karte'], events: ['map_place_opened'], bewertung: null }
+  { id: 'karte', name: 'Karte', screens: ['karte'], events: ['map_place_opened'], bewertung: null },
+  // Version 145 (05.11.2026): Funktionen ab Version 75. Nur Kernaktionen (öffnen, abschließen, eintragen), keine Abbrüche,
+  // damit oft genutzte Kleinigkeiten das Ranking nicht verzerren. Neue Funktion = neue Zeile; der Test prüft, dass jedes
+  // Ereignis hier in der App vorkommt (Schutz gegen Umbenennen).
+  { id: 'eintrag', name: 'Einträge (geschafft, schwer)', screens: [], events: ['entry_done', 'entry_hard_day', 'entry_plan'], bewertung: null },
+  { id: 'notfall', name: 'Notfallkarte', screens: [], events: ['emergency_opened', 'emergency_helped', 'emergency_quick'], bewertung: null },
+  { id: 'ideen', name: 'Ideenglas', screens: [], events: ['idea_drawn', 'idea_added'], bewertung: null },
+  { id: 'notiz', name: 'Tagesnotiz', screens: [], events: ['note_opened', 'note_saved', 'note_edited'], bewertung: null },
+  { id: 'wochenrunde', name: 'Wochenrunde', screens: [], events: ['week_round_opened', 'week_round_done'], bewertung: null },
+  { id: 'heldenmodi', name: 'Heldenmodi', screens: [], events: ['hero_mode_set'], bewertung: null },
+  { id: 'mindest', name: 'Mindestaufgabe', screens: [], events: ['minimum_task_set', 'minimum_task_ticked'], bewertung: null },
+  { id: 'zaehlweise', name: 'Zählweise', screens: [], events: ['counting_mode_set'], bewertung: null },
+  { id: 'messziele', name: 'Messziele', screens: [], events: ['measure_opened', 'measure_logged', 'measure_goal_added'], bewertung: null },
+  { id: 'stuetzen', name: 'Stützgewohnheiten', screens: [], events: ['support_habit_added', 'support_habit_checked'], bewertung: null },
+  { id: 'ruhetag', name: 'Ruhetag', screens: [], events: ['rest_day_opened', 'rest_day_set'], bewertung: null },
+  { id: 'nachtrag', name: 'Nachtragen', screens: [], events: ['backfill_opened', 'quest_backfill_yes', 'quest_backfill_no', 'quest_backfill_hard'], bewertung: null },
+  { id: 'rueckblick', name: 'Rundenrückblick', screens: [], events: ['round_review_shown', 'round_review_adjusted'], bewertung: null },
+  { id: 'probe', name: 'Probe', screens: [], events: ['probe_opened', 'probe_marked'], bewertung: null },
+  { id: 'rat', name: 'Rat der Crew', screens: [], events: ['advice_opened'], bewertung: null },
+  { id: 'willkommen', name: 'Willkommen zurück', screens: [], events: ['welcome_back_shown', 'welcome_continue', 'welcome_fresh'], bewertung: null }
 ];
 
 // Freischaltungen (30.10.2026): freigegeben = unlock_released mit bereich; genutzt = unlock_opened mit bereich (Tabs)
@@ -99,6 +118,20 @@ export function trichter(tester) {
   return { schritte, dauerMs: mittel(dauer) };
 }
 
+// App-Versionen (Version 145): Sessions und Tester je VERSION.nr; Sessions vor Version 145 haben keine Nummer (nr null,
+// steht am Ende). Neueste Version zuerst. Ein Tester mit mehreren Versionen zählt bei jeder.
+export function versionen(tester) {
+  const je = new Map();
+  for (const t of tester || []) for (const s of sessionsVon(t)) {
+    const nr = Number.isInteger(s.app) && s.app > 0 ? s.app : null;
+    const e = je.get(nr) || { nr, sessions: 0, ids: new Set() };
+    e.sessions += 1; e.ids.add(t.id);
+    je.set(nr, e);
+  }
+  return [...je.values()].map(e => ({ nr: e.nr, sessions: e.sessions, tester: e.ids.size }))
+    .sort((a, b) => (a.nr === null) - (b.nr === null) || (b.nr || 0) - (a.nr || 0));
+}
+
 export function featureRanking(tester) {
   const roh = FEATURES.map(f => {
     const proTester = tester.map(t => ({ ...screenWerte(t, f.screens), ev: eventZahl(t, f.events), b: f.bewertung ? bewertungen(t, f.bewertung) : [] }));
@@ -110,7 +143,8 @@ export function featureRanking(tester) {
       wiederbesuche: tester.length ? summe(proTester.map(x => Math.max(0, x.n - 1))) / tester.length : 0,
       interaktionen: tester.length ? summe(proTester.map(x => x.ev)) / tester.length : 0,
       bewertung: f.bewertung ? mittel(alleB) : null,
-      bewertungen: alleB.length
+      bewertungen: alleB.length,
+      tester: aktiv.length // Reichweite (Version 145): wie viele Tester die Funktion überhaupt genutzt haben
     };
   });
   const max = k => Math.max(0, ...roh.map(r => r[k] || 0));

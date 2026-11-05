@@ -39,13 +39,17 @@ function beruehre(p, tag) {
   else p.profilStand = p.stand;
 }
 
-export function sessionStarten(p, sid, tag, startIso) {
+// app (Version 145): App-Version (VERSION.nr) der Session, damit die Auswertung Daten vor und nach einer Änderung
+// trennen kann. Nur ganze Zahlen ab 1; sonst fehlt das Feld (alte Sessions haben es nie, die Auswertung zählt sie als „ohne“).
+const istAppNr = n => Number.isInteger(n) && n > 0 && n < 100000;
+export function sessionStarten(p, sid, tag, startIso, app = null) {
   if (!p.erster || tag < p.erster) { p.erster = tag; p.profilStand = p.stand + 1; }
   const t = p.tage[tag] || (p.tage[tag] = { tag, sessions: {}, stand: 0 });
   if (!t.sessions[sid]) {
     const ids = Object.keys(t.sessions);
     if (ids.length >= MAX_SESSIONS_JE_TAG) delete t.sessions[ids.sort((a, b) => (t.sessions[a].start < t.sessions[b].start ? -1 : 1))[0]];
     t.sessions[sid] = { start: startIso, ende: startIso, ms: 0, screens: {}, events: {}, attr: {} };
+    if (istAppNr(app)) t.sessions[sid].app = app;
   }
   beruehre(p, tag);
   return p;

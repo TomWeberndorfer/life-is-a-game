@@ -2,15 +2,24 @@
 // Einwilligungs-Karte und Status nutzen auch Onboarding und Startseite.
 import { analyticsStatus, hatFeedback, trackEvent } from '../analytics.js';
 import { EINWILLIGUNG } from '../daten/forschung.js';
+import { SPRUNGZIELE } from '../daten/sprungziele.js';
 import * as EW from '../logik/einwilligung.js';
 import * as H from '../logik/helden.js';
 import * as K from '../logik/kern.js';
 import { esc, icon } from './helfer.js';
 import { kx } from './kontext.js';
+import { probeEinstellung } from './probe.js'; // Version 81
+import { anzeigeEinstellung } from './anzeige.js'; // Version 125: Blatt „Anzeige“
+import { SPRECHBLASEN } from '../daten/bewegung.js'; // 02.11.2026
+import { STARTPAKETE } from '../daten/startpakete.js'; // Startpaket (02.11.2026)
 
 export const EINSTELLUNGEN_SCREENS = {
   einstellungen() {
-    const { T, VERSION, einw, istTest, speicher, stil, testerId, ui, weltenFrei } = kx;
+    const { T, VERSION, abgleichStatus, einw, istTest, speicher, stil, testerId, ui, weltenFrei } = kx;
+    const ab = abgleichStatus();
+    // Version 86: Premium steht seit Version 85 nur noch hier. „Gesehen“ zählt einmal je Sitzung, sobald die Einstellungen
+    // mit dem Knopf offen sind (vorher: Premium-Karte auf der Startseite). Für die Kachel „Premium“ in der Auswertung.
+    if (!ui.premiumGesehen && ui.screen === 'einstellungen') { ui.premiumGesehen = true; trackEvent('premium_viewed', {}); }
     return `<section class="screen">
       <div class="start-kopf"><button class="link" data-a="start">${icon('zurueck')} ${esc(T('nav.zurueck'))}</button></div>
       <div class="inhalt">
@@ -22,9 +31,13 @@ export const EINSTELLUNGEN_SCREENS = {
         </div>
         <div class="karte spalte">
           <span class="eyebrow">${esc(T('einst.speichern'))}</span>
-          <p class="klein">${esc(T(speicher.verfuegbar ? 'einst.speicherOk' : 'einst.speicherAus'))}</p>
+          <p class="klein" role="status">${esc(ab !== 'aus' ? T(`einst.abgleich.${ab}`) : T(speicher.verfuegbar ? 'einst.speicherOk' : 'einst.speicherAus'))}</p>
           ${istTest ? `<p class="klein">${esc(T('einst.testprofil'))}</p>` : ''}
         </div>
+        ${anzeigeEinstellung()}
+        ${probeEinstellung()}
+        ${blasenEinstellung()}
+        ${sprungKarten()}
         <div class="karte spalte">
           <span class="eyebrow">${esc(T('einst.testphase'))}</span>
           <p class="klein">${esc(einwStatus())}</p>
@@ -35,6 +48,7 @@ export const EINSTELLUNGEN_SCREENS = {
           ${ui.istBesitzer ? `<button class="btn voll" data-a="admin">${esc(T('einst.auswertung'))}</button>` : ''}
           ${ui.istBesitzer && ui.db ? `<button class="btn" data-a="pflege">${esc(T('einst.pflege'))}</button>` : ''}
         </div>
+        ${startpaketKarte()}
         <div class="karte spalte">
           <span class="eyebrow">${esc(T('einst.neu'))}</span>
           <p class="klein">${esc(T('einst.neuText'))}</p>
@@ -45,6 +59,49 @@ export const EINSTELLUNGEN_SCREENS = {
     </section>`;
   }
 };
+// Startpaket (02.11.2026): nur für den Besitzer und im Testprofil #test. Auch im ersten Onboarding-Schritt (ansicht/onboarding.js).
+// Zweistufig wie „Zurücksetzen“ (ui.startpaketFrage). Helden, die schon da sind, werden ergänzt (fehlende Ziele, Messziele, Ideen).
+export function startpaketKnopf(id, klasse = 'btn voll') {
+  const { T, ui } = kx;
+  const p = STARTPAKETE[id];
+  if (!p) return '';
+  const frage = ui.startpaketFrage === id;
+  // Scheitert das Anlegen, steht die Meldung direkt unter dem Knopf (bleibt bis zum nächsten Tipp)
+  return `<button class="${klasse} ${frage ? 'warn' : ''}" data-a="startpaket" data-id="${esc(id)}">${esc(frage ? T('einst.startpaketFrage') : p.name)}</button>${ui.startpaketInfo ? `<p class="fehler" role="alert">${esc(ui.startpaketInfo)}</p>` : ''}`;
+}
+function startpaketKarte() {
+  const { T, startpaketErlaubt } = kx;
+  if (!startpaketErlaubt()) return '';
+  return `<div class="karte spalte">
+          <span class="eyebrow">${esc(T('einst.startpaket'))}</span>
+          ${Object.entries(STARTPAKETE).map(([id, p]) => `<p class="klein">${esc(p.text)}</p>${startpaketKnopf(id)}`).join('')}
+        </div>`;
+}
+// Sprechblasen (02.11.2026): automatisch nach Lesezeit oder nur per Tippen (spiel.einstellungen.blasen).
+function blasenEinstellung() {
+  const { T, spiel } = kx;
+  const jetzt = H.bereinigeEinstellungen(spiel.einstellungen).blasen;
+  return `<div class="karte spalte">
+    <span class="eyebrow">${esc(T('einst.blasen'))}</span>
+    <p class="klein">${esc(T('einst.blasenText'))}</p>
+    <div class="wahl" role="group" aria-label="${esc(T('einst.blasen'))}">${SPRECHBLASEN.varianten.map(x => `<button class="opt kurz ${jetzt === x ? 'sel' : ''}" aria-pressed="${jetzt === x}" data-a="blasen-modus" data-id="${esc(x)}">${esc(T('einst.blasen.' + x))}</button>`).join('')}</div>
+  </div>`;
+}
+// Version 78: je Sprungziel eine Karte mit dem Link (z. B. Notfallkarte auf den Startbildschirm), sichtbar, sobald die
+// zugehörige Funktion frei ist. Der Link steht auch als Text da, falls Kopieren im eingebetteten Rahmen nicht klappt.
+function sprungKarten() {
+  const { T, funktionFrei, sprungLink, ui } = kx;
+  return Object.entries(SPRUNGZIELE).filter(([, d]) => d.titel && (!d.funktion || funktionFrei(d.funktion))).map(([id, d]) => {
+    const info = ui.sprungInfo && ui.sprungInfo.id === id ? ui.sprungInfo : null;
+    return `<div class="karte spalte">
+      <span class="eyebrow">${esc(T(d.titel))}</span>
+      <p class="klein">${esc(T(d.text))}</p>
+      <p class="sprung-link">${esc(sprungLink(id))}</p>
+      <button class="btn" data-a="sprung-kopieren" data-id="${esc(id)}">${esc(T('einst.sprung.kopieren'))}</button>
+      ${info ? `<p class="klein" role="status">${esc(info.text)}</p>` : ''}
+    </div>`;
+  }).join('');
+}
 // ---------- Daten senden / importieren (Version 24) ----------
 // Einwilligungs-Karte (Version 28). imOnboarding: zeigt nach der Wahl eine Bestätigungszeile statt zu verschwinden.
 // eingebettet: ohne eigene Karte/Überschrift (z. B. in den Einstellungen).
@@ -91,6 +148,26 @@ export const EINSTELLUNGEN_KLICKS = {
   export() { const { erstelleExport } = kx; erstelleExport(); },
   'export-kopieren'() { const { kopiereExport } = kx; kopiereExport(); },
   'export-teilen'() { const { teileExport } = kx; teileExport(); },
+  // Version 78: Link eines Sprungziels kopieren. Im eingebetteten Rahmen kann die Zwischenablage gesperrt sein:
+  // dann Hinweis, den Link darüber selbst zu markieren.
+  async 'sprung-kopieren'({ id }) {
+    const { T, render, sprungLink, ui } = kx;
+    if (!Object.prototype.hasOwnProperty.call(SPRUNGZIELE, id)) { console.warn('Sprungziel unbekannt:', id); return; }
+    let ok = false;
+    try { await navigator.clipboard.writeText(sprungLink(id)); ok = true; } catch (e) { ok = false; }
+    ui.sprungInfo = { id, text: T(ok ? 'einst.sprung.kopiert' : 'einst.sprung.manuell') };
+    render();
+  },
+  // 02.11.2026: Sprechblasen automatisch oder nur per Tippen; gilt ab dem nächsten Treffer
+  'blasen-modus'({ id }) {
+    const { render, setzeSpiel, speichere, spiel } = kx;
+    if (!SPRECHBLASEN.varianten.includes(id)) { console.warn('Sprechblasen: unbekannte Einstellung', id); return; }
+    setzeSpiel({ ...spiel, einstellungen: { ...H.bereinigeEinstellungen(spiel.einstellungen), blasen: id } });
+    speichere();
+    trackEvent('blasen_modus', { modus: id });
+    render();
+  },
+  startpaket({ id }) { const { startpaket } = kx; startpaket(id); },
   stilwahl() { const { geheZu, stand, ui } = kx; ui.stilAuswahl = stand.stil.aktiv; geheZu('stilwahl'); },
   admin() { const { geheZu, ladeAdmin } = kx; geheZu('admin'); ladeAdmin(); },
   pflege() { const { geheZu, pflegeZustand } = kx; pflegeZustand(); geheZu('pflege'); },
@@ -100,7 +177,7 @@ export const EINSTELLUNGEN_KLICKS = {
     if (!ui.resetFrage) { ui.resetFrage = true; render(); return; }
     speicher.loeschen();
     setzeSpiel(H.neuesSpiel(testerId));
-    Object.assign(ui, { bereich: null, problem: null, ziel: null, freitext: '', feier: null, resetFrage: false });
+    Object.assign(ui, { bereich: null, problem: null, ziel: null, freitext: '', warum: '', feier: null, resetFrage: false });
     speichere();
     trackEvent('onboarding_started', { neu: true });
     geheZu('ob1');

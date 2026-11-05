@@ -5,7 +5,8 @@
 // Format (Überschriften bestimmen die Bedeutung, Leerzeilen trennen):
 //   # Geschichten
 //   ## <gegner-id> · <Titel der Woche>          z. B. „## drycha · Die verbrannte Linie“; „_allgemein“ = allgemeine Woche
-//   ### <nr> · <Titel des Teils>               genau 7 Teile, Nummern 1–7 in Reihenfolge
+//   ### <Titel des Teils>                      genau 7 Teile; die Nummer ergibt sich aus der Reihenfolge (seit Version 128;
+//                                              die alte Form „### 1 · Titel“ und Plugin-Nummern liest md-bloecke.js weg)
 //   Andeutung: <Satz>                          optional (versiegelter Teil auf der Story-Seite)
 //   Ja: <Text>  /  Nein: <Text>                zwei Fassungen (nach „Ja, geschafft“ / „Heute nicht gebraucht“)
 //   oder ein einfacher Absatz                  eine Fassung für beide Antworten
@@ -21,6 +22,9 @@
 //   - <Text>                                   eine Zeile je Variante
 // Zeilen, die mit „>“ beginnen, sind Notizen und werden ignoriert. Ein einfacher Absatz darf über mehrere Zeilen gehen
 // (wird zu einer Zeile verbunden); „Andeutung:“, „Ja:“ und „Nein:“ stehen je in EINER Zeile.
+
+import { SONDER_ANLAESSE } from '../daten/inhalte.js';
+import { vorbereiteZeilen } from './md-bloecke.js';
 
 export const ABSCHNITTE = { geschichten: 'Geschichten', botschaften: 'Botschaften', mikro: 'Mikroquests', bossreaktionen: 'Bossreaktionen' };
 // Optionale Abschnitte: fehlen sie, ist das kein Fehler (daten.<abschnitt> bleibt null, das Werkzeug behält den alten Stand).
@@ -49,7 +53,7 @@ export function leseMarkdown(text) {
     const t = absatz.join(' ').replace(/\s+/g, ' ').trim();
     absatz = [];
     if (!t) return;
-    if (!teil) { fehler.push(`${story ? story.id : '?'}: Text ohne Teil-Überschrift („### 1 · Titel“) – „${t.slice(0, 40)}“`); return; }
+    if (!teil) { fehler.push(`${story ? story.id : '?'}: Text ohne Teil-Überschrift („### Titel“) – „${t.slice(0, 40)}“`); return; }
     if (teil.ja !== undefined || teil.nein !== undefined) { fehler.push(`${teil.wo}: entweder ein einfacher Text oder „Ja:“/„Nein:“, nicht beides (Fassungen je in EINER Zeile)`); return; }
     if (teil.einfach !== undefined) { fehler.push(`${teil.wo}: mehr als ein Textabsatz ohne „Ja:“/„Nein:“`); return; }
     teil.einfach = t;
@@ -78,8 +82,9 @@ export function leseMarkdown(text) {
     story = null;
   };
 
-  const zeilen = text.replace(/\r\n?/g, '\n').split('\n');
-  zeilen.forEach((roh, i) => {
+  const vorb = vorbereiteZeilen(text);
+  fehler.push(...vorb.fehler);
+  vorb.zeilen.forEach((roh, i) => {
     const z = roh.trim();
     if (z.startsWith('>')) return; // Notiz
     let m;
@@ -133,11 +138,9 @@ export function leseMarkdown(text) {
     if ((m = /^###\s+(.+)$/.exec(z))) {
       teilAbschliessen();
       if (!story) { fehler.push(`${zeileNr(i)}: Teil ohne Geschichte`); return; }
-      const t = /^(\d+)\s*·\s*(.+)$/.exec(m[1].trim());
+      // Nummer = Reihenfolge; Nummern in der Datei hat vorbereiteZeilen() schon entfernt.
       const erwartet = story.teile.length + 1;
-      if (!t) { fehler.push(`${story.id}, ${zeileNr(i)}: Teil braucht „### <nr> · <Titel>“`); teil = { wo: `${story.id}[${erwartet}]`, titel: m[1].trim() }; return; }
-      if (Number(t[1]) !== erwartet) fehler.push(`${story.id}: Teil ${t[1]} steht an Stelle ${erwartet}`);
-      teil = { wo: `${story.id}[${erwartet}]`, titel: t[2].trim() };
+      teil = { wo: `${story.id}[${erwartet}]`, titel: m[1].trim() };
       return;
     }
     if (!z) { absatzAbschliessen(); return; }
@@ -210,14 +213,16 @@ function pruefeInhalt(daten, fehler, warnungen) {
 }
 
 // Vergleich mit dem bisherigen Stand: verschwundene Mikroquest-IDs und Anlässe sind meist Versehen.
-export function vergleicheStand(alt, neu) {
+// bekannt: Anlässe, die eine Ansicht direkt nutzt (Rückblick, Lagerfeuer); ein neuer davon ist kein Fehler (02.11.2026).
+export function vergleicheStand(alt, neu, bekannt = SONDER_ANLAESSE) {
+  const sonder = new Set(Array.isArray(bekannt) ? bekannt : []);
   const hinweise = [];
   const altIds = new Set(Object.values(alt.mikro || {}).flat().map(x => x[0]));
   const neuIds = new Set(Object.values(neu.mikro || {}).flat().map(x => x[0]));
   for (const id of altIds) if (!neuIds.has(id)) hinweise.push(`Mikroquest „${id}“ fehlt jetzt (erledigte Haken dazu werden nicht mehr angezeigt)`);
   const altAnlass = new Set((alt.botschaften || []).map(b => b.anlass));
   for (const a of altAnlass) if (!(neu.botschaften || []).some(b => b.anlass === a)) hinweise.push(`Botschaften-Anlass „${a}“ fehlt jetzt (die App nutzt dann „sonst“)`);
-  for (const a of (neu.botschaften || []).map(b => b.anlass)) if (!altAnlass.has(a)) hinweise.push(`Neuer Anlass „${a}“: die App kennt ihn nicht und zeigt ihn nie (Anlässe kommen aus logik/inhalte.js)`);
+  for (const a of (neu.botschaften || []).map(b => b.anlass)) if (!altAnlass.has(a) && !sonder.has(a)) hinweise.push(`Neuer Anlass „${a}“: die App kennt ihn nicht und zeigt ihn nie (Anlässe kommen aus logik/inhalte.js)`);
   for (const id of Object.keys(alt.stories || {})) if (!(neu.stories || {})[id]) hinweise.push(`Geschichte „${id}“ fehlt jetzt (die Runde zeigt dann die allgemeine Woche)`);
   if (neu.bossreaktionen) {
     for (const [id, arten] of Object.entries(alt.bossreaktionen || {})) {

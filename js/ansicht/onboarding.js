@@ -2,13 +2,16 @@
 // auch für weitere Helden („Ein neues Abenteuer“, ui.neu). Reihenfolge der Schritte: REIHE in app.js.
 import { trackEvent } from '../analytics.js';
 import { RAMPE } from '../daten/rampe.js';
+import { hauptArtId } from '../logik/teilziele.js'; // Beständigkeit (04.11.2026)
 import { TABELLE } from '../daten/vorlagen.js';
 import * as EW from '../logik/einwilligung.js';
 import * as H from '../logik/helden.js';
 import * as K from '../logik/kern.js';
-import { einwKarte } from './einstellungen.js';
+import { einwKarte, startpaketKnopf } from './einstellungen.js';
+import { STARTPAKETE } from '../daten/startpakete.js'; // Startpaket (02.11.2026)
 import { akkusativ, esc, icon } from './helfer.js';
 import { kx } from './kontext.js';
+import { erreichenGewaehlt, pruefeZielWahl, tuerHtml, wegWahlHtml, zielVorschauHtml, zielWahlBereit, zielWahlHtml } from './zielquest.js'; // Ziel-Quests (31.10.2026)
 
 // Schritte der Fortschrittsanzeige und Zeilen der Analyse (ob4). Die Analyse zählt in app.js bis ANALYSE_ZEILEN.length.
 export const OB_SCHRITTE = 8;
@@ -41,13 +44,15 @@ export const ONBOARDING_SCREENS = {
         <p class="lead">${esc(T('ob.neuText'))}</p>`
         : `<h1>${esc(T('ob.willkommen'))}</h1>
         <p class="lead">${esc(T('ob.willkommenText'))}</p>`}
-        <p class="frage" id="f1">${esc(T('ob.bereichFrage'))}</p>
+        ${tuerHtml()}
+        <p class="frage" id="f1">${esc(T(erreichenGewaehlt() ? 'zq.bereichFrage' : 'ob.bereichFrage'))}</p>
         <div class="optionen" role="group" aria-labelledby="f1">
           ${bereiche.map(b => bereichBelegt(b.id)
             ? `<button class="opt belegt" disabled>${icon(b.icon)}<span>${esc(b.name)}<small>${esc(T('ob.heldSchonDabei'))}</small></span></button>`
             : `<button class="opt ${ui.bereich === b.id ? 'sel' : ''}" aria-pressed="${ui.bereich === b.id}" data-a="bereich" data-id="${b.id}">${icon(b.icon)}<span>${esc(b.name)}</span></button>`).join('')}
         </div>
         ${ui.neu ? '' : einwKarte(true)}
+        ${!ui.neu && kx.startpaketErlaubt() ? `<div class="karte spalte"><span class="eyebrow">${esc(T('einst.startpaket'))}</span>${Object.keys(STARTPAKETE).map(id => startpaketKnopf(id, 'btn')).join('')}</div>` : ''}
       </div>
       <div class="fuss"><button class="cta" data-a="weiter" ${ui.bereich && (ui.neu || !EW.istOffen(einw)) ? '' : 'disabled'}>${esc(T('ob.weiter'))}</button></div>
     </section>`;
@@ -58,6 +63,12 @@ export const ONBOARDING_SCREENS = {
     const b = TABELLE.gruppen.find(x => x.id === ui.bereich);
     const probleme = TABELLE.probleme[ui.bereich] || [];
     const anders = ui.problem === '*';
+    // Ziel-Quests (31.10.2026): Tür „Etwas erreichen“ wählt hier Ziel und Messwert statt einer Herausforderung
+    if (erreichenGewaehlt()) return `<section class="screen">
+      ${kopf(2)}
+      <div class="inhalt">${zielWahlHtml()}</div>
+      <div class="fuss"><button class="cta" data-a="weiter" ${zielWahlBereit() ? '' : 'disabled'}>${esc(T('ob.weiter'))}</button></div>
+    </section>`;
     return `<section class="screen">
       ${kopf(2)}
       <div class="inhalt">
@@ -81,12 +92,19 @@ export const ONBOARDING_SCREENS = {
     const p = (TABELLE.probleme[ui.bereich] || []).find(x => x.id === ui.problem);
     const ziele = p ? p.ziele : [];
     const eigen = ui.problem === '*';
+    // Ziel-Quests (31.10.2026): Tür „Etwas erreichen“ wählt hier den Weg (die Gewohnheit, die jede Runde zählt)
+    if (erreichenGewaehlt()) return `<section class="screen">
+      ${kopf(3)}
+      <div class="inhalt">${wegWahlHtml(problemBelegt)}${ui.problem ? warumFeld() : ''}</div>
+      <div class="fuss"><button class="cta" data-a="weiter" ${ui.problem ? '' : 'disabled'}>${esc(T('zq.wegKnopf'))}</button></div>
+    </section>`;
     return `<section class="screen">
       ${kopf(3)}
       <div class="inhalt">
         <h1 class="mittel">${esc(T('ob.zielTitel'))}</h1>
         ${eigen ? `<label class="feld"><span>${esc(T('ob.zielEigen'))}</span><input id="zieltext" maxlength="${K.ZIEL_MAX}" value="${esc(ui.ziel || '')}" placeholder="${esc(T('ob.zielBeispiel'))}" autocomplete="off"></label>`
           : `<div class="optionen" role="group" aria-label="${esc(T('ob.zielAria'))}">${ziele.map(z => `<button class="opt ${ui.ziel === z ? 'sel' : ''}" aria-pressed="${ui.ziel === z}" data-a="ziel" data-id="${esc(z)}">${ui.ziel === z ? icon('check') : ''}<span>${esc(z)}</span></button>`).join('')}</div>`}
+        ${ui.ziel && ui.ziel.trim() ? warumFeld() : ''}
         <div class="notiz">${icon('buch')}<p>${esc(T('ob.zielNotiz'))}</p></div>
       </div>
       <div class="fuss"><button class="cta" data-a="weiter" ${ui.ziel && ui.ziel.trim() ? '' : 'disabled'}>${esc(T('ob.zielKnopf'))}</button></div>
@@ -136,7 +154,7 @@ export const ONBOARDING_SCREENS = {
       ${kopf(6, true, true)}
       <div class="inhalt">
         <span class="chip schlecht">${esc(T('ob.hindernis'))}</span>
-        <div class="boss-bild">${img('boss-' + v.gegner, g.name, 'boss', 'cover', g.name)}</div>
+        <div class="boss-bild auftritt">${img('boss-' + v.gegner, g.name, 'boss', 'cover', g.name, 'auftritt')}</div>
         <h1 class="name">${esc(g.name)}</h1>
         <div class="kraft"><span>${esc(T('ob.kraft'))}</span><div class="balken boss"><i style="width:100%"></i></div></div>
         <p class="lead">${esc(g.text)}</p>
@@ -176,18 +194,23 @@ export const ONBOARDING_SCREENS = {
     const f = TABELLE.faehigkeiten[v.faehigkeit];
     const g = TABELLE.gegner[v.gegner];
     // Einstiegsrampe (30.10.2026): die erste Woche zeigt das Ziel des ersten Gegners; das eigene Ziel kommt schrittweise
-    const ziel = v.quest.anzahl;
-    const n = K.rundenZiel({ anzahl: ziel, rampe: RAMPE }, 0);
+    // Beständigkeit (04.11.2026): Art, Grenzen und Rampe der Vorlage (z. B. Wutwald 3 · 4 · 5 · 6 von 7)
+    const probe = K.questAnlegen(K.neuerStand('probe'), v, '', new Date(), RAMPE).quest;
+    const ziel = probe.anzahl;
+    const n = K.rundenZiel(probe, 0, 1);
+    const bst = hauptArtId(probe) === 'bestaendigkeit';
     return `<section class="screen">
       <div class="ob-bild mittel">${img('banner-' + v.held, T('ob.questBild'), 'szene', 'cover')}<div class="verlauf dunkel-oben"></div></div>
       ${kopf(8, true, true).replace('ob-kopf', 'ob-kopf ueber')}
       <div class="inhalt hoch">
         <div class="karte quest">
           <span class="eyebrow">${esc(wort('woche').toUpperCase())}</span>
-          <h1 class="mittel">${esc(T(n === 1 ? 'ob.questEinmal' : 'ob.questMehr', { faehigkeit: f.name, n }))}</h1>
+          <h1 class="mittel">${esc(bst ? T('bst.obQuest', { n }) : T(n === 1 ? 'ob.questEinmal' : 'ob.questMehr', { faehigkeit: f.name, n }))}</h1>
+          ${bst ? `<p class="klein mitte-text">${esc(T('bst.obText', { faehigkeit: f.name }))}</p>` : ''}
           <div class="siegel-reihe" aria-label="${esc(T('ob.siegelAria', { n }))}">${Array.from({ length: n }, (_, i) => `<span class="siegel">${i + 1}</span>`).join('')}</div>
-          <p class="klein mitte-text">${esc(T('ob.siegelStand', { n }))}</p>
-          ${ziel > n ? `<p class="klein mitte-text">${esc(T('ob.rampe', { ziel }))}</p>` : ''}
+          <p class="klein mitte-text">${esc(T(bst ? 'bst.obStand' : 'ob.siegelStand', { n }))}</p>
+          ${ziel > n ? `<p class="klein mitte-text">${esc(T(bst ? 'bst.obRampe' : 'ob.rampe', { ziel }))}</p>` : ''}
+          ${zielVorschauHtml()}
         </div>
         <p class="eyebrow">${esc(T('ob.belohnung'))}</p>
         <ul class="belohnung">
@@ -200,6 +223,13 @@ export const ONBOARDING_SCREENS = {
     </section>`;
   }
 };
+// Warum-Feld (Version 75): freiwillig, erscheint erst, wenn ein Ziel gewählt ist (eine Entscheidung nach der anderen).
+// Psychologie: Ein selbst formulierter Grund stärkt die eigene Motivation; Pflicht würde ihn zur Hürde machen.
+export function warumFeld() {
+  const { T, ui } = kx;
+  return `<label class="feld"><span>${esc(T('ob.warumFrage'))}</span><textarea id="warumtext" rows="2" maxlength="${K.WARUM_MAX}" placeholder="${esc(T('ob.warumBeispiel'))}">${esc(ui.warum || '')}</textarea></label>
+        <p class="klein">${esc(T('ob.warumHilfe'))}</p>`;
+}
 // Bereiche/Probleme, deren Held schon in der Crew ist, sind im Onboarding für weitere Helden gesperrt.
 export const heldBelegt = vorlage => { const { spiel, ui } = kx; return !!vorlage && ui.neu && !!H.heldVon(spiel, vorlage.held); };
 export const problemBelegt = (bereich, problem) => heldBelegt(K.vorlageFuer(TABELLE, bereich, problem));
@@ -208,7 +238,7 @@ export const bereichBelegt = b => [...(TABELLE.probleme[b] || []).map(p => p.id)
 // ---------- Klicks (Klick-Logik aufteilen, 30.10.2026) ----------
 // Aktion (data-a) → Funktion({ id, aktion, el }). Zusammengeführt und verteilt in app.js über logik/klicks.js.
 export const ONBOARDING_KLICKS = {
-  bereich({ id }) { const { render, ui } = kx; Object.assign(ui, { bereich: id, problem: null, ziel: null, freitext: '' }); render(); },
+  bereich({ id }) { const { render, ui } = kx; Object.assign(ui, { bereich: id, problem: null, ziel: null, freitext: '', warum: '', zq: null }); render(); },
   problem({ id }) {
     const { finde, render, ui } = kx;
     ui.problem = id; ui.ziel = null;
@@ -221,7 +251,7 @@ export const ONBOARDING_KLICKS = {
   beginnen() { const { beginnen } = kx; beginnen(); },
   'neues-abenteuer'() {
     const { geheZu, spiel, ui } = kx;
-    Object.assign(ui, { neu: true, bereich: null, problem: null, ziel: null, freitext: '', obStart: Date.now() });
+    Object.assign(ui, { heldenWahl: false, neu: true, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null, obStart: Date.now() });
     trackEvent('new_adventure_started', { helden: spiel.helden.length });
     geheZu('ob1');
   },
@@ -232,7 +262,7 @@ export const ONBOARDING_KLICKS = {
     if (!ui.neu) return;
     stoppeAnalyse();
     trackEvent('new_adventure_cancelled', { schritt: ui.screen });
-    Object.assign(ui, { neu: false, bereich: stand.onboarding.bereich, problem: stand.onboarding.problem, ziel: stand.onboarding.ziel, freitext: stand.onboarding.freitext || '' });
+    Object.assign(ui, { neu: false, bereich: stand.onboarding.bereich, problem: stand.onboarding.problem, ziel: stand.onboarding.ziel, freitext: stand.onboarding.freitext || '', warum: '', zielart: 'aendern', zq: null });
     geheZu('start');
   }
 };
@@ -249,5 +279,7 @@ export const ONBOARDING_FELDER = {
       weiterKnopf(ui.freitext.trim());
     }
   },
-  zieltext: { input({ wert }) { const { ui } = kx; ui.ziel = String(wert ?? '').slice(0, K.ZIEL_MAX); weiterKnopf(ui.ziel.trim()); } }
+  zieltext: { input({ wert }) { const { ui } = kx; ui.ziel = String(wert ?? '').slice(0, K.ZIEL_MAX); weiterKnopf(ui.ziel.trim()); } },
+  // Warum (Version 75): nur merken; bereinigt wird beim Anlegen der Quest (K.bereinigeWarum)
+  warumtext: { input({ wert }) { const { ui } = kx; ui.warum = String(wert ?? '').slice(0, K.WARUM_MAX); } }
 };

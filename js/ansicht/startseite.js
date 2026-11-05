@@ -3,26 +3,45 @@
 // (SCREENS.start fängt ihn ab, im Testprofil als roter Hinweis). Heldenkopf, Heldenwahl, Karten für Quest, Heldentat,
 // Duell, Bonus, Story, Welten, Angebot, Feedback und Premium.
 import { aktiveTage, hatFeedback, merke, merkmal, trackEvent } from '../analytics.js';
-import { FEEDBACK, PREMIUM } from '../daten/forschung.js';
+import { FEEDBACK } from '../daten/forschung.js';
 import { TABS } from '../daten/freischaltung.js';
 import { BOSS_REAKTION_EINSTELLUNG, BOSS_REAKTIONEN } from '../daten/boss-reaktionen.js';
 import { BOTSCHAFTEN, STORIES } from '../daten/inhalte.js';
 import { LEBENSBEREICHE } from '../daten/lebensbereiche.js';
 import { NEUIGKEITEN } from '../daten/neuigkeiten.js';
-import { BONUS, HELDENKOPF, START_ABSCHNITTE, WEG_FENSTER } from '../daten/startseite.js';
+import { BONUS, HELDENKOPF, KOPFLEISTE, NEU_PLATZ, START_ABSCHNITTE, TAGESLEISTE, WEG_FENSTER } from '../daten/startseite.js';
+import { ruhetagLink } from './ruhetag.js'; // Version 90
+import { LAGERFEUER } from '../daten/lagerfeuer.js'; // Etappe 3, Teil C
+import { heuteErledigt } from '../logik/lagerfeuer.js';
+import * as RT from '../logik/ruhetag.js';
+import { stuetzeBereitHtml, stuetzenHakenHtml } from './stuetzen.js'; // Schritt „Zähler“
+import { artSchluessel, artText, comebackHtml, erledigtIcon, erledigtText } from './bestaendigkeit.js'; // Beständigkeit (04.11.2026)
 import { TABELLE } from '../daten/vorlagen.js';
 import * as BR from '../logik/boss-reaktion.js';
 import * as EW from '../logik/einwilligung.js';
 import * as H from '../logik/helden.js';
 import * as I from '../logik/inhalte.js';
 import * as K from '../logik/kern.js';
-import { bonusAnsicht, erfolgGroesse, heldenKopf, klappUmschalten, klappZustand, naechsterOffener, neuAufStart, tagesfrage, vorziehen, wechselBanner, wennDann } from '../logik/startseite.js';
+import { abschnittZiel, bonusAnsicht, erfolgGroesse, heldenKopf, klappStandardKlein, klappUmschalten, klappZustand, nachWann, naechsterOffener, neuAufStart, neuPlatz, tagesfrage, vorziehen, wechselBanner, wegForm, wegText, wennDann, tagesleiste } from '../logik/startseite.js';
 import * as W from '../logik/weg.js';
 import { entw } from './blatt.js';
 import { einwKarte } from './einstellungen.js';
-import { blitzEbene, bwStil, esc, icon, kurzDatum, markiere, prozent } from './helfer.js';
+import { blitzEbene, bwStil, esc, fortschrittHier, fortschrittRegister, icon, kachelLeiste, kurzDatum, markiere, prozent } from './helfer.js';
+import { notizKarteHtml, notizKopfKnopf } from './notiz.js'; // Tagesnotiz (04.11.2026)
+import { wochenKarteHtml } from './wochenrunde.js'; // Wochenrunde (05.11.2026)
 import { kx } from './kontext.js';
-import { einstellungenKnopf, hinweisBox } from './rahmen.js';
+import { eintragLink } from './eintrag.js';
+import { notfallKnopf } from './notfall.js';
+import { probeHtml } from './probe.js'; // Version 81: Morgenprobe
+import { messzielKarte, messzielKurz } from './messziele.js';
+import { zielstandKarte, zielZeileHtml } from './zielquest.js'; // Ziel-Quests (31.10.2026)
+import { rueckblickKarte } from './rueckblick.js'; // Rundenrückblick (02.11.2026)
+import { hinweisBox, kopfRechts } from './rahmen.js';
+import { buehneHtml, lagerfeuerSichtbar } from './buehne.js'; // Kampfbühne (eigenes Modul seit 02.11.2026)
+import { pausiertHeute, rastHtml } from './heldenmodi.js'; // Heldenmodi (04.11.2026)
+import * as HM from '../logik/heldenmodi.js';
+import { nachtragHtml, nachtragKachel, nachtragModus, nachtragName, nachtragZeile, nachtragZusatz } from './nachtrag.js';
+export { buehneDauerMs, buehneLauf, buehneLesezeiten } from './buehne.js'; // app.js liest die Dauer weiter hier
 
 // Bis zur Wahl: ruhige Karte auf der Startseite. An einem späteren Tag öffnet sich die Weltenwahl einmal von selbst.
 export function weltenKarte() {
@@ -35,34 +54,80 @@ export function weltenKarte() {
 }
 // Siegtag mit neuem Gegner (Version 68): der Neue bleibt bis zum Kapitelwechsel beim nächsten Besuch verborgen.
 // Liefert die ID des heute besiegten Gegners oder null.
+// Version 84 (Stil-Kulisse): Licht und Funken der Arena über dem Gegnerbild, Farben je Stil (index.html --arena-*).
+// Lage und Dauer der Funken aus logik/symbole.js funkenListe (feste Werte, kein Zufall); „Bewegung reduzieren“ → keine.
+// 02.11.2026 (Entscheidung 25): o.stoss = { ablauf, vergangenMs } → Funken nur als kurzer Stoß im Ablauf nach „Ja“
+// (Zeiten aus daten/bewegung.js, Teil „funken“); ohne stoss nur bei funkenWann 'immer'. o.licht = false → ohne Fackelschein
+// (besiegter Gegner).
+export function arenaHtml(o = {}) {
+  const { arenaFunken } = kx;
+  const stoss = o && o.stoss ? o.stoss : null;
+  const f = arenaFunken(stoss);
+  const licht = o && o.licht === false ? '' : '<span class="arena-licht" aria-hidden="true"></span>';
+  const funke = x => (stoss
+    ? `<i style="left:${x.links}%;--dx:${x.dx}px;animation:${esc(`${x.keyframes} ${x.dauerMs}ms ${x.startMs}ms ${x.kurve} both`)}"></i>`
+    : `<i style="left:${x.links}%;--dx:${x.dx}px;animation-duration:${x.dauerS}s;animation-delay:-${x.versatzS}s"></i>`);
+  return `${licht}${f.length ? `<span class="arena-funken${stoss ? ' stoss' : ''}" aria-hidden="true">${f.map(funke).join('')}</span>` : ''}`;
+}
+// Version 115 (Einführung vor Anzeige): nur, solange die Vorstellung des Neuen nicht gesehen ist. Danach ist der Neue auch am
+// Siegtag überall offen („ab morgen“). Liefert den Besiegten (für die graue Anzeige) oder null.
 export function besiegtHeuteVorNeuem(a) {
-  const { stand } = kx;
+  const { gegnerVerhuellt, stand } = kx;
   if (!(a && a.siegHeute === true && a.neuerGegner === true && a.rundeTag < 0)) return null;
+  if (!gegnerVerhuellt(a)) return null;
   const id = ((stand.siege || []).filter(x => x && x.tag === a.heute).pop() || {}).gegner;
   return typeof id === 'string' && TABELLE.gegner[id] ? id : null;
+}
+// Hinweis nach „Später ansehen“ (Version 115): ruhig, ohne Zähler und ohne Drängen; Tipp zeigt die Vorstellung.
+export function vorstellungHinweisHtml() {
+  const { T, wort } = kx;
+  return `<button class="link vorstellung-hinweis" data-a="vorstellung-zeigen">${icon('stern')}<span>${esc(T('vorstellung.hinweis', { gegner: wort('gegner') }))} · <b>${esc(T('vorstellung.ansehen'))}</b></span></button>`;
 }
 // Boss-Reaktion (Version 68): Mini-Bossbild + eine Zeile direkt in der Heldentat-Karte, unter „Erledigt“ – dort, wo der
 // Blick nach dem Tippen ist (in der Duell-Karte lag sie unter dem Erfolgsbild außer Sicht). Die Duell-Karte zeigt
 // weiter das brechende Segment. Abgeleitet aus dem Stand (Texte: daten/boss-reaktionen.js); Fehler lassen nur die
 // Zeile weg, nie die Karte.
-export function bossReaktionHtml(v, a) {
-  const { img, jetzt, nameVon, stand, stilWerte, ui } = kx;
+// Kampfbühne (31.10.2026): Text und Art getrennt vom Aussehen, damit Sprechblase und Ruhezeile denselben Text nutzen.
+// Liefert { art, text } oder null.
+export function bossReaktion(v, a) {
+  const { jetzt, nameVon, stand, stilWerte } = kx;
   const gid = a.gegner || v.gegner;
   const art = BR.reaktionsArt({ antwort: a.heuteAntwort, kraft: a.anzahl - a.treffer, anzahl: a.anzahl, rundeTag: a.rundeTag, siegHeute: a.siegHeute, neuerGegner: a.neuerGegner }, BOSS_REAKTION_EINSTELLUNG.phaseAb);
-  if (!art) return '';
+  if (!art) return null;
   // „morgen“: Text nach dem besiegten Gegner, Bild = der Neue als Silhouette (Name bleibt verborgen)
   const textId = art === 'morgen' ? besiegtHeuteVorNeuem(a) || '_allgemein' : gid;
   const r = BR.waehleReaktion(BOSS_REAKTIONEN, textId, art, `${a.heute}|${textId}|${art}`);
+  if (!r) return null;
+  try { return { art: r.art, text: I.fuelle(r.text, I.werteFuer(stand, jetzt(), v, TABELLE, nameVon, stilWerte())) }; }
+  catch (e) { console.warn('Boss-Reaktion:', e.message); return null; }
+}
+export function bossReaktionHtml(v, a) {
+  const { img, ui } = kx;
+  const gid = a.gegner || v.gegner;
+  const r = bossReaktion(v, a);
   if (!r) return '';
-  let text = '';
-  try { text = I.fuelle(r.text, I.werteFuer(stand, jetzt(), v, TABELLE, nameVon, stilWerte())); }
-  catch (e) { console.warn('Boss-Reaktion:', e.message); return ''; }
+  const text = r.text;
   const g = TABELLE.gegner[gid];
   const treffer = ui.einmal.has('treffer'); // Bewegung nur direkt nach dem eigenen Treffer (Ablauf „tagesCheck“)
   const bild = r.art === 'morgen'
     ? '<span class="boss-reaktion-siegel" aria-hidden="true">?</span>' // Silhouette im runden Ausschnitt wäre nur eine dunkle Scheibe
     : `<span class="boss-reaktion-rahmen"${bwStil('tagesCheck', 'reaktionBild', treffer)}>${img('boss-' + gid, g ? g.name : '', 'boss', 'boss-reaktion-bild', '', 'rund')}${blitzEbene('tagesCheck', 'reaktionBlitz', treffer)}</span>`;
   return `<div class="boss-reaktion art-${r.art}" role="status"${bwStil('tagesCheck', 'reaktion', ui.einmal.has('check'))}>${bild}<p>${esc(text)}</p></div>`;
+}
+// Kopfleiste kompakt (Etappe 3, Teil A, 02.11.2026): Warum und Zahl der Anwendungen in EINER Zeile. Das Warum bleibt
+// wörtlich (eigene Worte stärken die eigene Motivation), wird aber bei Länge gekürzt; der volle Lebens-Satz steht im
+// aria-label der Zahl. Ohne Anwendungen nur das Warum.
+export function warumZeile(v, warum) {
+  const { T, ui, wort } = kx;
+  const max = Number(KOPFLEISTE && KOPFLEISTE.warumZeichen) || 0;
+  const lang = max > 0 && String(warum).length > max;
+  const auf = lang && ui.klWarumAuf === true;
+  const e = entw();
+  const f = TABELLE.faehigkeiten[v.faehigkeit];
+  const voll = e && e.anwendungen && f ? `${T('leben.anwendungen', { n: e.anwendungen, verb: f.verb })} ${T('leben.seit', { datum: kurzDatum(e.start) })}${e.siege ? ` · ${T('leben.siege', { n: e.siege, sieg: wort('sieg') })}` : ''}` : '';
+  const zahl = voll && fortschrittHier('anwendungen', 'kopfleiste') ? `<span class="kl-zahl" role="img" aria-label="${esc(voll)}" title="${esc(voll)}">${icon('check')}${esc(T('leben.kurz', { n: e.anwendungen }))}</span>` : '';
+  const knopf = lang ? `<button class="icbtn kl-warum-knopf" data-a="kl-warum" aria-expanded="${auf}" aria-label="${esc(T(auf ? 'kopf.warumZu' : 'kopf.warumAuf'))}">${icon(auf ? 'hoch' : 'runter')}</button>` : '';
+  return `<p class="kl-zeile${auf ? ' auf' : ''}"><span class="quest-warum">${esc(T('quest.warum', { warum }))}</span>${zahl}${knopf}</p>`;
 }
 export function lebenZeile(v) {
   const { T, wort } = kx;
@@ -75,12 +140,79 @@ export function lebenZeile(v) {
 // 30.10.2026: Der Held ist eine eigene Figur ÜBER dem Weg (Punkt auf dem Pfad markiert die Stelle), damit er keine
 // Station mehr verdeckt; links bleiben WEG_FENSTER.zurueck besiegte Gegner sichtbar (kleiner, ruhig, mit Haken).
 const WEG_HELD_HOEHE = 30; // Abstand der Heldenfigur über dem Pfad (Einheiten des 300×92-Rasters)
-// Knopf „Karte öffnen“ unter dem Weg (30.10.2026): nur wenn der Tab Karte nutzbar ist; nutzt die Tab-Aktion.
-function karteKnopfHtml() {
-  const { T, tabAktiv, tabLabel, tabSichtbar } = kx;
+// Weg antippbar (31.10.2026, ersetzt den Knopf „Karte öffnen“ von 30.10.): Ist der Tab Karte nutzbar, werden Weg und
+// Statuszeile EIN Knopf mit der Tab-Aktion, ein kleines Karten-Symbol am Ende der Zeile zeigt das an. Sonst bleibt
+// der Weg reine Anzeige (kein Schloss, kein Hinweis). bild = Weg-HTML ohne Rolle, text = Statuszeile.
+function karteTab() {
+  const { tabAktiv, tabSichtbar } = kx;
   const t = TABS.find(x => x.screen === 'karte');
-  try { if (!t || !tabSichtbar(t) || !tabAktiv(t)) return ''; } catch (e) { console.warn('Weg (Karte):', e.message); return ''; }
-  return `<button class="link weg-karte" data-a="tab" data-id="karte">${icon('karte')} ${esc(T('karte.oeffnen', { bereich: tabLabel(t) }))}</button>`;
+  try { return t && tabSichtbar(t) && tabAktiv(t) ? t : null; } catch (e) { console.warn('Weg (Karte):', e.message); return null; }
+}
+function wegRahmen(bild, text, v) {
+  const { T, nameVon, tabLabel } = kx;
+  const aria = T('weg.aria', { held: nameVon(v.held), text });
+  const t = karteTab();
+  if (!t) return `<span class="weg-bild" role="img" aria-label="${esc(aria)}">${bild}</span><span class="mini gut-text">${esc(text)}</span>`;
+  const ziel = T('karte.oeffnen', { bereich: tabLabel(t) });
+  return `<button class="weg-tipp" data-a="tab" data-id="karte" aria-label="${esc(`${aria}. ${ziel}`)}"><span class="weg-bild" aria-hidden="true">${bild}</span><span class="mini gut-text weg-zeile"><span>${esc(text)}</span>${icon('karte', 'ic weg-karte-ic')}</span></button>`;
+}
+// Weg als kleine Kette in einer Zeile (31.10.2026, Entwurf Version 15): besiegte Gegner klein mit Haken, der Held direkt
+// vor dem Gegner, gegen den er gerade kämpft, dahinter Schatten und Nebel. Gleiche Daten wie der Pfad (logik/weg.js).
+function wegKetteHtml(a, v, g, w, text, neuVerborgen) {
+  const { T, img, nameVon } = kx;
+  const held = `<span class="kette-held" title="${esc(T('weg.hier'))}">${img(v.held, nameVon(v.held), 'held', 'kette-bild', '', 'rund')}</span>`;
+  const glieder = [];
+  let heldDa = false;
+  for (const st of w.stationen) {
+    if (st.status === W.STATION.start) continue;
+    if (st.status === W.STATION.nebel) { glieder.push('<span class="kette-st nebel" aria-hidden="true"></span>'); continue; }
+    const gg = TABELLE.gegner[st.gegner] || g;
+    const verbergen = st.status === W.STATION.verborgen || (st.status === W.STATION.aktuell && neuVerborgen);
+    if (st.status === W.STATION.aktuell && !heldDa) { glieder.push(held); heldDa = true; }
+    const cls = verbergen ? 'cover schatten' : st.status === W.STATION.besiegt ? 'cover grau' : 'cover';
+    glieder.push(`<span class="kette-st ${st.status}">${img('boss-' + st.gegner, verbergen ? '?' : gg.name, 'boss', cls, '', 'rund')}${st.status === W.STATION.besiegt ? `<i class="station-haken">${icon('check')}</i>` : ''}</span>`);
+  }
+  if (!heldDa) glieder.push(held);
+  return wegRahmen(`<span class="weg-kette">${glieder.join('<span class="kette-linie" aria-hidden="true"></span>')}</span>`, text, v);
+}
+// Weg als Streifen (Version 135, Entscheidung 04.11.2026): eingeklappt aktueller Gegner, Balken und Statuszeile in
+// einer Zeile; aufgeklappt eine wischbare Reihe großer Bilder (besiegt · aktuell mit Held · Silhouette · Nebel).
+// Auf/zu je Gerät im Merkmal weg_offen (wie „Kleiner“ bei den Karten). Ohne Merkmal: eingeklappt.
+// Der Tab Karte bleibt aufgeklappt über „Ganze Karte“ erreichbar, wenn er nutzbar ist.
+const wegOffen = () => merkmal('weg_offen') === true;
+function wegStreifenHtml(a, v, g, w, text, neuVerborgen) {
+  const { T, img, nameVon, wort } = kx;
+  const offen = wegOffen();
+  const iA = w.stationen.findIndex(st => st.status === W.STATION.aktuell);
+  const kapitelVon = i => w.kapitel + (i - (iA < 0 ? 0 : iA));
+  const anteil = !neuVerborgen && a.rundeTag >= 0 && a.anzahl > 0 ? Math.min(1, Math.max(0, a.treffer / a.anzahl)) : 0;
+  const akt = iA >= 0 ? w.stationen[iA].gegner : v.gegner;
+  const ga = TABELLE.gegner[akt] || g;
+  const bossBild = img('boss-' + akt, neuVerborgen ? '?' : ga.name, 'boss', neuVerborgen ? 'cover schatten' : 'cover', '', 'rund');
+  const zeile = `<button class="weg-streifen" data-a="weg-klapp" aria-expanded="${offen}" aria-controls="weg-reihe" aria-label="${esc(offen ? T('weg.streifenZu') : T('weg.streifenAuf', { text }))}">
+      <span class="ws-boss" aria-hidden="true">${bossBild}</span>
+      <span class="ws-mitte"><span class="mini gut-text ws-zeile">${esc(text)}</span><span class="ws-balken" aria-hidden="true"><i style="width:${Math.round(anteil * 100)}%"></i></span></span>
+      ${icon('runter', 'ic ws-pfeil')}
+    </button>`;
+  if (!offen) return zeile;
+  const haken = `<i class="station-haken">${icon('check')}</i>`;
+  const kacheln = w.stationen.map((st, i) => {
+    if (st.status === W.STATION.start) return '';
+    if (st.status === W.STATION.nebel) return `<li class="ws-kachel nebel"><span class="ws-bild"><span class="klein">${esc(T('karte.nebel'))}</span></span></li>`;
+    const gg = TABELLE.gegner[st.gegner] || g;
+    const nr = kapitelVon(i);
+    const kap = T('weg.kapitel', { kapitel: wort('kapitel'), nr });
+    if (st.status === W.STATION.besiegt) return `<li class="ws-kachel besiegt"><span class="ws-bild">${img('boss-' + st.gegner, gg.name, 'boss', 'cover grau', '', 'quadrat')}${haken}</span><b>${esc(gg.name)}</b><span class="klein">${esc(T('weg.besiegt'))}</span></li>`;
+    const verbergen = st.status === W.STATION.verborgen || neuVerborgen;
+    if (verbergen) return `<li class="ws-kachel verborgen${st.status === W.STATION.aktuell ? ' aktuell' : ''}"><span class="ws-bild">${img('boss-' + st.gegner, '?', 'boss', 'cover schatten', '', 'quadrat')}</span><b>${esc(kap)}</b><span class="klein">${esc(T('weg.unbekannt'))}</span></li>`;
+    return `<li class="ws-kachel aktuell"><span class="ws-bild">${img('boss-' + st.gegner, gg.name, 'boss', 'cover', '', 'quadrat')}<span class="ws-held" title="${esc(T('weg.hier'))}">${img(v.held, nameVon(v.held), 'held', 'cover', '', 'rund')}</span></span><b>${esc(`${kap}: ${gg.kurz || gg.name}`)}</b><span class="klein">${esc(T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }))}</span></li>`;
+  }).join('');
+  const t = karteTab();
+  const karte = t ? `<button class="link ws-karte" data-a="tab" data-id="karte">${icon('karte')} ${esc(T('weg.ganzeKarte'))}</button>` : '';
+  return `${zeile}<div class="ws-offen" id="weg-reihe">
+      <ol class="ws-reihe" tabindex="0" aria-label="${esc(T('weg.reihe'))}">${kacheln}</ol>
+      <div class="ws-fuss"><span class="klein">${esc(T('weg.wisch'))}</span>${karte}</div>
+    </div>`;
 }
 export function wegHtml(a, v, g) {
   const { T, img, nameVon, stand, wort } = kx;
@@ -106,14 +238,19 @@ export function wegHtml(a, v, g) {
   };
   const text = neuVerborgen ? T('weg.morgenNeu', { kapitel: wort('kapitel') })
     : a.rundeTag < 0 ? T('weg.morgen', { kapitel: wort('kapitel'), gegner: g.kurz })
-    : [T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }), rest ? T('weg.rest', { rest, gegner: g.kurz }) : '', T('weg.kapitel', { kapitel: wort('kapitel'), nr: w.kapitel })].filter(Boolean).join(' · ');
-  return `<div class="weg" role="img" aria-label="${esc(T('weg.aria', { held: nameVon(v.held), text }))}">
+    : wegText(fortschrittRegister(), 'kopfleiste', { // Version 140: welche Teile hier stehen, sagt FORTSCHRITT
+      rundeStand: T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }),
+      rest: rest ? T('weg.rest', { rest, gegner: g.kurz }) : '',
+      kapitel: T('weg.kapitel', { kapitel: wort('kapitel'), nr: w.kapitel })
+    }, T('weg.rundeGeschafft', { gegner: g.kurz, sieg: wort('sieg') }));
+  if (wegForm(KOPFLEISTE) === 'kette') return wegKetteHtml(a, v, g, w, text, neuVerborgen);
+  if (wegForm(KOPFLEISTE) === 'streifen') return wegStreifenHtml(a, v, g, w, text, neuVerborgen);
+  return wegRahmen(`<span class="weg">
       <svg viewBox="0 0 300 92" preserveAspectRatio="none" aria-hidden="true"><path class="weg-rest" d="${linie(pkt)}"/><path class="weg-geschafft" d="${linie(geschafft)}"/></svg>
       ${w.stationen.map(stationHtml).join('')}
       <span class="weg-held-fuss" style="left:${prozent(held.x, 300)};top:${prozent(held.y, 92)}"></span>
       <span class="weg-held" style="left:${prozent(held.x, 300)};top:${prozent(held.y - WEG_HELD_HOEHE, 92)}">${img(v.held, nameVon(v.held), 'held', 'cover', '', 'rund')}</span>
-    </div>
-    <span class="mini gut-text">${esc(text)}</span>${karteKnopfHtml()}`;
+    </span>`, text, v);
 }
 // Heldenkopf (Version 43): aktiver Held groß, daneben „Helden wechseln“ mit Mini-Porträts und Zahl offener Checks.
 // Ersetzt Crew-Leiste und „Weitere Helden“. Feste Reihenfolge der Crew (kein Umsortieren), Logik in logik/startseite.js.
@@ -121,8 +258,27 @@ export const bereichName = domainId => (LEBENSBEREICHE.find(d => d.id === domain
 export function heldenKopfDaten() {
   const { heldenAnsichten, jetzt, spiel } = kx;
   const ansichten = heldenAnsichten().map(h => ({ ...h, x: K.auswertung(h.a, jetzt()) }));
-  const k = heldenKopf(ansichten.map(h => ({ id: h.id, erledigt: !!h.x.heuteAntwort })), spiel.fokus, HELDENKOPF.stapelMax);
+  const tag = K.tagKey(jetzt());
+  for (const h of ansichten) h.wartet = K.vorBeginn(h.a, tag); // Startpaket (18a): Quest beginnt erst später
+  // Heldenmodi (04.11.2026): wer heute pausiert (Erhalt, Ruhe), hat nichts offen und fehlt in Tagesleiste und Lagerfeuer
+  for (const h of ansichten) { h.modus = HM.modusAm(spiel, h.id, tag); h.pausiert = HM.istPausiert(h.modus); }
+  // Zählweisen (04.11.2026): Rhythmus und Wache fragen nicht täglich; sie sind nie „offen“ und fehlen in Tagesleiste und
+  // Lagerfeuer (wie pausierte Helden), bleiben aber über die Heldenwahl erreichbar
+  for (const h of ansichten) h.ohneFrage = !!h.x.ohneFrage;
+  const k = heldenKopf(ansichten.map(h => ({ id: h.id, erledigt: !!h.x.heuteAntwort || h.wartet || h.pausiert || h.ohneFrage })), spiel.fokus, HELDENKOPF.stapelMax);
   return { k, ansichten };
+}
+// Etappe 3, Teil C (02.11.2026): Antwort und Ruhetag je Held für heute. Eine Quelle für Tagesleiste, „Weiter zu …“ und
+// Lagerfeuer, damit „fertig“ überall dasselbe heißt (ein Ruhetag zählt mit, LAGERFEUER.ruhetagZaehlt). Wirft nie je Held.
+export function heldenHeute(d = heldenKopfDaten()) {
+  const { jetzt, spiel } = kx;
+  const tag = K.tagKey(jetzt());
+  return d.ansichten.filter(h => !h.pausiert && !h.ohneFrage).map(h => { // Heldenmodi: pausierte Helden zählen heute nicht mit; Zählweisen: ohne Tagesfrage ebenso
+    let ruhetag = false;
+    try { ruhetag = RT.ruhetageVon(spiel, h.id, tag)[0] === tag; } catch (e) { console.warn('Ruhetag heute:', e.message); }
+    const e = { id: h.id, antwort: h.x.heuteAntwort || null, ruhetag, wartet: !!h.wartet };
+    return { ...e, erledigt: heuteErledigt(e, LAGERFEUER) };
+  });
 }
 // „Neu für dich“ (Version 50): ruhiger Hinweis nach einer Freischaltung statt stiller Änderung der Leiste.
 export function neuKarte() {
@@ -158,36 +314,157 @@ export function wechselBannerHtml(h) {
   return `<div class="wechsel-banner" role="status" style="--dauer:${SM.wechsel.dauerMs}ms">${img('banner-' + h.id, name, 'szene', 'cover', '')}<span class="erfolg-verlauf" aria-hidden="true"></span>
     <span class="wechsel-text"><span class="eyebrow">${esc(T('wechsel.eyebrow'))}</span><span class="wechsel-name">${esc(name)}</span><span class="klein">${esc(zeile)}</span></span></div>`;
 }
+// Heldenkopf (nur noch auf der Karte, seit 31.10.2026): Porträt, Name, Bereich · Stufe. Wechsel und XP-Leiste sind weg:
+// gewechselt wird oben über heldenStapelKnopf(), die XP stehen im Heldenblatt.
 export function heldenkopfHtml() {
-  const { T, img, nameVon, ui, wort } = kx;
+  const { T, img, nameVon, wort } = kx;
   const { k, ansichten } = heldenKopfDaten();
   const h = ansichten.find(x => x.id === k.aktiv);
   if (!h) return '';
-  const banner = wechselBannerHtml(h);
   const name = nameVon(h.id);
-  const bereich = bereichName(h.domainId);
-  const knopf = k.mitWechsel ? `<button class="wechsel-knopf" data-a="helden-wahl" aria-haspopup="dialog" aria-expanded="${!!ui.heldenWahl}" aria-label="${esc(T('kopf.wechseln'))}${k.offen ? esc(', ' + T('kopf.offen', { n: k.offen })) : ''}">
-      <span class="stapel" aria-hidden="true">${k.stapel.map(id => img(id, nameVon(id), 'held', 'stapel-bild')).join('')}</span>
-      ${k.offen ? `<span class="offen-zahl" aria-hidden="true">${k.offen}</span>` : ''}${icon('runter')}</button>` : '';
-  // Version 45: Porträt öffnet die Heldenseite (Detailblatt „crew“), XP-Balken aus der früheren Verbündeten-Karte.
-  const x = h.x;
-  const xpProzent = x.proLevel > 0 ? Math.round(100 * x.imLevel / x.proLevel) : 0;
-  return `${banner}<div class="heldenkopf">
+  return `<div class="heldenkopf">
     <button class="kopf-portraet" data-a="blatt" data-id="crew" aria-label="${esc(T('kopf.ansehen', { held: name }))}">${img(h.id, name, 'held', 'kopf-bild', '')}<span class="kopf-info" aria-hidden="true">i</span></button>
-    <div class="kopf-text"><span class="eyebrow">${esc(T('kopf.aktiv'))}</span><span class="kopf-name">${esc(name)}</span><span class="klein">${esc([bereich, `${wort('stufe')} ${x.level}`].filter(Boolean).join(' · '))}</span>
-      <div class="balken xp kopf-xp" role="img" aria-label="${esc(`${x.imLevel} von ${x.proLevel} XP bis ${wort('stufe')} ${x.level + 1}`)}"><i style="width:${xpProzent}%"></i></div></div>
-    ${knopf}
-    </div>`; // XP-Rückmeldung zeichnet seit 30.10.2026 renderJetzt() über dem sichtbaren Ausschnitt
+    <div class="kopf-text"><span class="eyebrow">${esc(T('kopf.aktiv'))}</span><span class="kopf-name">${esc(name)}</span><span class="klein">${esc([bereichName(h.domainId), `${wort('stufe')} ${h.x.level}`].filter(Boolean).join(' · '))}</span></div>
+    </div>`;
+}
+// Helden wechseln (31.10.2026): Porträtstapel oben neben den Einstellungen, auf Startseite und Karte (HELDENWAHL_SCREENS).
+// Klasse wechsel-knopf bleibt: app.js setzt nach dem Schließen der Heldenwahl den Fokus darauf zurück.
+export function heldenStapelKnopf() {
+  const { T, img, nameVon, ui } = kx;
+  if (!HELDENWAHL_SCREENS.includes(ui.screen)) return '';
+  let d;
+  try { d = heldenKopfDaten(); } catch (e) { console.warn('Heldenstapel:', e.message); return ''; }
+  const { k } = d;
+  if (!k.mitWechsel) return '';
+  if (ui.screen === 'start' && tagesleisteDaten(d).zeigen) return ''; // Startseite: Tagesleiste statt Stapel (Etappe 3, Teil B)
+  return `<button class="wechsel-knopf oben" data-a="helden-wahl" aria-haspopup="dialog" aria-expanded="${!!ui.heldenWahl}" aria-label="${esc(T('kopf.wechseln'))}${k.offen ? esc(', ' + T('kopf.offen', { n: k.offen })) : ''}">
+      <span class="stapel" aria-hidden="true">${k.stapel.map(id => img(id, nameVon(id), 'held', 'stapel-bild')).join('')}</span>
+      ${k.offen ? `<span class="offen-zahl" aria-hidden="true">${k.offen}</span>` : ''}${icon('runter')}</button>`;
+}
+// Tagesleiste (Etappe 3, Teil B, 02.11.2026): „Heute x von n“ und die Porträts in fester Reihenfolge, Haken bei erledigt,
+// der gewählte Held mit Rahmen. Ein Tipp wechselt den Helden (gleiche Aktion „fokus“ wie die Heldenwahl). Kein Hinweis auf
+// Offenes in Rot und keine Zahl offener Checks: die Leiste zeigt den Tag, sie mahnt nicht. Offene Helden tragen einen
+// kleinen Punkt in der Akzentfarbe des Stils (Entscheidung 02.11.2026, Punkt 1b: bewusste Ausnahme von „Punkte nie für
+// offene Aufgaben“, weil die Leiste eine Tagesübersicht ist, kein Benachrichtigungspunkt; nie Rot).
+function tagesleisteDaten(d = heldenKopfDaten()) {
+  const { spiel } = kx;
+  return tagesleiste(heldenHeute(d), spiel.fokus, TAGESLEISTE); // seit Teil C: Ruhetag zählt als fertig
+}
+export function tagesleisteHtml() {
+  const { T, img, nameVon } = kx;
+  const tl = tagesleisteDaten();
+  if (!tl.zeigen) return '';
+  const knopf = e => {
+    const name = nameVon(e.id);
+    const aria = T(e.aktiv ? 'tl.heldAktiv' : e.erledigt ? 'tl.heldErledigt' : 'tl.held', { held: name });
+    return `<button class="tl-held${e.aktiv ? ' an' : ''}${e.erledigt ? ' fertig' : ''}" data-a="fokus" data-id="${esc(e.id)}" aria-label="${esc(aria)}"${e.aktiv ? ' aria-current="true"' : ''}>${img(e.id, name, 'held', 'tl-bild', '')}${e.erledigt ? `<span class="tl-haken" aria-hidden="true">${icon('check')}</span>` : '<span class="tl-offen" aria-hidden="true"></span>'}</button>`;
+  };
+  return `<div class="karte tagesleiste" role="group" aria-label="${esc(T('tl.aria', { n: tl.erledigt, gesamt: tl.gesamt }))}">
+    <span class="tl-text" aria-hidden="true"><span class="eyebrow">${esc(T('tl.heute'))}</span><b>${esc(T('tl.zahl', { n: tl.erledigt, gesamt: tl.gesamt }))}</b></span>
+    <span class="tl-helden">${tl.eintraege.map(knopf).join('')}${pausierteKnopf()}</span>
+  </div>`;
+}
+// Heldenmodi (04.11.2026): pausierte Helden (Erhalt, Ruhe) stehen nicht in der Tagesleiste; ein kleiner Stapel daneben
+// öffnet die Heldenwahl, damit sie erreichbar bleiben. Ohne pausierte Helden: ''.
+function pausierteKnopf() {
+  const { T, img, nameVon } = kx;
+  let ids = [];
+  let ruhen = 0;
+  try {
+    const l = heldenKopfDaten().ansichten.filter(h => h.pausiert || h.ohneFrage); // Zählweisen: auch Rhythmus und Wache
+    ids = l.map(h => h.id);
+    ruhen = l.filter(h => h.pausiert).length;
+  } catch (e) { console.warn('Tagesleiste (Pausen):', e.message); }
+  if (!ids.length) return '';
+  const aria = ruhen === ids.length ? T('tl.pausiert', { n: ids.length }) : T('tl.weitere', { n: ids.length });
+  return `<button class="tl-pausiert" data-a="helden-wahl" aria-haspopup="dialog" aria-label="${esc(aria)}"><span class="stapel" aria-hidden="true">${ids.slice(0, HELDENKOPF.stapelMax).map(id => img(id, nameVon(id), 'held', 'stapel-bild')).join('')}</span></button>`;
+}
+// Kopfzeile der Seiten mit Kulisse: Datum links, rechts Schnellweg „Gerade schwer“ (Version 139), Heldenstapel (falls die
+// Seite wechseln kann), Tagesnotiz und Einstellungen.
+export function kopfZeile(datum) {
+  return `<div class="start-kopf"><span class="datum">${esc(datum)}</span>${kopfRechts(heldenStapelKnopf() + notizKopfKnopf())}</div>`;
+}
+// Kopfleiste (31.10.2026, Entscheidungen Abschnitt 18): Held und Hauptquest in EINER Karte. Porträt mit ⓘ (öffnet das
+// Heldenblatt) und Stufe darunter; daneben Held · Bereich · Kapitel, Questtitel mit Stift, Warum und (seit Version 89)
+// die Lebenszeile „n-mal …“: sie nutzt den freien Platz neben dem Porträt und gehört zur Quest. Darunter der Weg mit
+// Statuszeile über die ganze Breite (bleibt zusammen, weil „noch n bis …“ den Weg erklärt). Keine XP-Leiste (eine
+// leere Leiste am Anfang wirkt wie ein Mangel).
+export function kopfleisteHtml({ v, g, a }) {
+  const { T, funktionFrei, img, nameVon, stand, wort } = kx;
+  const { k, ansichten } = heldenKopfDaten();
+  const h = ansichten.find(x => x.id === k.aktiv);
+  if (!h || !stand.quest) return '';
+  const name = nameVon(h.id);
+  const kapitelHier = a.gegnerAnzahl > 1 && fortschrittHier('kapitel', 'kopfleiste'); // Version 140
+  const zeile = [name, bereichName(h.domainId), kapitelHier ? `${wort('kapitel')} ${a.gegnerNr}` : ''].filter(Boolean).join(' · ');
+  const stift = funktionFrei('quests_bearbeiten')
+    ? `<button class="icbtn kl-stift" data-a="quest-bearbeiten" aria-label="${esc(T('qe.titel', { quest: wort('quest') }))}">${icon('stift')}</button>` : '';
+  return `${wechselBannerHtml(h)}<div class="karte kopfleiste" role="group" aria-label="${esc(T('kopf.leisteAria', { held: name, quest: wort('quest') }))}">
+    <div class="kl-oben">
+      <div class="kl-portraet">
+        <button class="kopf-portraet" data-a="blatt" data-id="crew" aria-label="${esc(T('kopf.ansehen', { held: name }))}">${img(h.id, name, 'held', 'kopf-bild', '')}<span class="kopf-info" aria-hidden="true">i</span></button>
+        ${fortschrittHier('stufe', 'kopfleiste') ? `<span class="kl-stufe">${esc(`${wort('stufe')} ${h.x.level}`)}</span>` : ''}
+      </div>
+      <div class="kopf-text">
+        <span class="eyebrow">${esc(zeile)}</span>
+        <div class="quest-zeile"><span class="questtitel">${esc(stand.quest.ziel)}</span>${stift}</div>
+        ${stand.quest.warum ? warumZeile(v, stand.quest.warum) : ''}
+        ${zielZeileHtml()}
+        ${stand.quest.warum || !fortschrittHier('anwendungen', 'kopfleiste') ? '' : lebenZeile(v)}
+      </div>
+    </div>
+    ${wegHtml(a, v, g)}
+  </div>`; // XP-Rückmeldung zeichnet seit 30.10.2026 renderJetzt() über dem sichtbaren Ausschnitt
+}
+// Neuigkeiten am festen Platz (31.10.2026): Karten nach NEU_PLATZ.vorrang, höchstens NEU_PLATZ.max verschiedene am Tag
+// (logik/startseite.js neuPlatz, je Gerät gemerkt im Merkmal neu_platz). Jede Karte trägt data-neu=<id>, damit der Glanz
+// genau sie trifft. Eine kaputte Karte fällt allein weg, nie der ganze Platz.
+const NEU_KARTEN = {
+  einwilligung: () => { const { einw } = kx; return EW.istOffen(einw) ? einwKarte(false) : ''; },
+  freigabe: () => neuKarte(),
+  angebot: () => angebotKarte(),
+  welten: () => weltenKarte(),
+  zielstand: () => zielstandKarte(), // Ziel-Quests (31.10.2026): Ziel erreicht oder Stichtag vorbei
+  rueckblick: () => rueckblickKarte() // Rundenrückblick (02.11.2026): Runde vorbei, Brief des Helden
+};
+const NEU_IDS = (NEU_PLATZ && Array.isArray(NEU_PLATZ.vorrang) ? NEU_PLATZ.vorrang : []).filter(id => {
+  if (Object.prototype.hasOwnProperty.call(NEU_KARTEN, id)) return true;
+  console.warn(`Startseite: unbekannte Neuigkeit „${id}“ in NEU_PLATZ.vorrang`);
+  return false;
+});
+export function neuigkeitenHtml() {
+  const { T, jetzt } = kx;
+  const html = {};
+  for (const id of NEU_IDS) {
+    try { html[id] = NEU_KARTEN[id]() || ''; } catch (e) { console.warn(`Neuigkeit ${id}:`, e.message); html[id] = ''; }
+  }
+  const p = neuPlatz(NEU_IDS.filter(id => String(html[id]).trim()), merkmal('neu_platz'), K.tagKey(jetzt()), NEU_PLATZ && NEU_PLATZ.max);
+  if (p.merken) merke('neu_platz', p.merken);
+  if (!p.sichtbar.length && !p.warten.length) return '';
+  const n = p.warten.length;
+  return `<div class="neuigkeiten" data-neu-platz>${p.sichtbar.map(id => markiere(html[id], id, 'neu')).join('')}${n ? `<p class="neu-wartet">${esc(T(n === 1 ? 'neu.wartetEine' : 'neu.wartenMehr', { n }))}</p>` : ''}</div>`;
+}
+// „Beginnt morgen“ bzw. „Beginnt am …“ für eine Quest, die erst später startet (Startpaket, 18a). Wirft nie.
+export function beginntText(a) {
+  const { T, jetzt } = kx;
+  const start = a && a.quest && a.quest.start;
+  const d = jetzt();
+  const morgen = K.tagKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 12));
+  return start === morgen || !start ? T('beginn.morgen') : T('beginn.am', { tag: kurzDatum(start) });
 }
 // „Weiter zu …“ (Version 45): nach dem Check des aktiven Helden der nächste mit offenem Check (feste Reihenfolge).
 export function weiterZuHtml() {
   const { T, img, nameVon, spiel, ui } = kx;
   if (spiel.helden.length < 2) return '';
   const { k, ansichten } = heldenKopfDaten();
-  const id = naechsterOffener(ansichten.map(h => ({ id: h.id, erledigt: !!h.x.heuteAntwort })), k.aktiv);
+  const id = naechsterOffener(ansichten.map(h => ({ id: h.id, erledigt: !!h.x.heuteAntwort || h.wartet || h.pausiert || h.ohneFrage })), k.aktiv);
   if (!id) return `<p class="tat-alle${ui.einmal.has('check') ? ' neu' : ''}" role="status">${esc(T('tat.alleErledigt'))}</p>`;
+  return weiterZuKnopf(id, ui.einmal.has('check'));
+}
+export function weiterZuKnopf(id, neu = false) {
+  const { T, img, nameVon } = kx;
   const name = nameVon(id);
-  return `<button class="weiter-zu${ui.einmal.has('check') ? ' neu' : ''}" data-a="fokus" data-id="${esc(id)}">${img(id, name, 'held', 'weiter-bild', '')}<span class="spalte"><span class="klein">${esc(T('tat.naechster'))}</span><span class="nm">${esc(T('tat.weiter', { held: name }))}</span></span>${icon('pfeilRechts')}</button>`;
+  return `<button class="weiter-zu${neu ? ' neu' : ''}" data-a="fokus" data-id="${esc(id)}">${img(id, name, 'held', 'weiter-bild', '')}<span class="spalte"><span class="klein">${esc(T('tat.naechster'))}</span><span class="nm">${esc(T('tat.weiter', { held: name }))}</span></span>${icon('pfeilRechts')}</button>`;
 }
 // Bildschirme mit Heldenkopf und Wechsel (Karte seit 30.10.2026: eine Karte je Held)
 const HELDENWAHL_SCREENS = ['start', 'karte'];
@@ -197,21 +474,24 @@ export function heldenWahlHtml() {
   if (!ui.heldenWahl || !HELDENWAHL_SCREENS.includes(ui.screen)) return '';
   const { k, ansichten } = heldenKopfDaten();
   if (!k.mitWechsel) { ui.heldenWahl = false; return ''; }
-  const zeilen = ansichten.map(({ id, domainId, v, x }) => {
+  const zeilen = ansichten.map(({ id, domainId, v, x, a, wartet, modus, pausiert, ohneFrage }) => {
     const aktiv = id === k.aktiv;
     const name = nameVon(id);
-    const status = aktiv ? T('kopf.statusAktiv') : x.heuteAntwort ? T('kopf.statusErledigt') : T('kopf.statusOffen');
+    // Heldenmodi: pausierte Helden zeigen ihren Modus statt „Check offen“, ohne Schnell-Haken
+    // Zählweisen: ohne Tagesfrage steht der Name der Zählweise statt „Check offen“ (der Schnell-Haken bleibt)
+    const zwStatus = ohneFrage ? T((K.zaehlweiseHeute(a, K.tagKey(kx.jetzt())).texte || {}).status || 'kopf.statusOffen') : null;
+    const status = aktiv ? T('kopf.statusAktiv') : pausiert ? wort(`modus_${modus}`) : x.heuteAntwort ? T('kopf.statusErledigt') : wartet ? beginntText(a) : zwStatus || T('kopf.statusOffen');
     const f = TABELLE.faehigkeiten[v.faehigkeit];
-    const schnell = !aktiv && !x.heuteAntwort && f
+    const schnell = !aktiv && !pausiert && !x.heuteAntwort && !wartet && f
       ? `<button class="schnell" data-a="schnell" data-id="${esc(id)}" aria-label="${esc(name)}: heute ${esc(f.verb)}">${icon('check')}</button>` : '';
     return `<div class="wahl-zeile${aktiv ? ' an' : ''}">
       <button class="wahl-info" data-a="fokus" data-id="${esc(id)}" ${aktiv ? 'aria-current="true"' : ''}>${img(id, name, 'held', 'wahl-bild')}
         <span class="spalte"><span class="nm">${esc(name)}</span><span class="klein">${esc([bereichName(domainId), `${wort('stufe')} ${x.level}`].filter(Boolean).join(' · '))}</span></span>
-        <span class="wahl-status ${aktiv ? 'akzent-text' : x.heuteAntwort ? 'gut-text' : 'offen-text'}">${esc(status)}</span></button>${schnell}</div>`;
+        <span class="wahl-status ${aktiv ? 'akzent-text' : pausiert || ohneFrage && !x.heuteAntwort ? 'ruhig-text' : x.heuteAntwort || wartet ? 'gut-text' : 'offen-text'}">${esc(status)}</span></button>${schnell}</div>`;
   }).join('');
   return `<div class="feier unten" role="dialog" aria-modal="true" aria-labelledby="wahl-t">
     <button class="hintergrund" data-a="helden-wahl-zu" aria-label="${esc(T('nav.schliessen'))}" tabindex="-1"></button>
-    <div class="blatt erscheint"><div class="blatt-inhalt"><h2 id="wahl-t">${esc(T('kopf.wahlTitel', { crew: wort('crew') }))}</h2>${zeilen}<button class="cta" data-a="helden-wahl-zu">${esc(T('nav.schliessen'))}</button></div></div>
+    <div class="blatt erscheint"><div class="blatt-inhalt"><h2 id="wahl-t">${esc(T('kopf.wahlTitel', { crew: wort('crew') }))}</h2>${zeilen}${H.heldFrei(kx.spiel) ? `<button class="btn wahl-neu" data-a="neues-abenteuer">${esc(T('kopf.neuerHeld'))}</button>` : ''}<button class="cta" data-a="helden-wahl-zu">${esc(T('nav.schliessen'))}</button></div></div>
   </div>`;
 }
 export function angebotKarte() {
@@ -224,25 +504,45 @@ export function angebotKarte() {
     <p class="klein">${esc(T('angebot.text', { max: H.MAX_HELDEN }))}</p>
     <div class="zwei"><button class="btn voll" data-a="neues-abenteuer">${esc(T('angebot.ja'))}</button><button class="btn" data-a="angebot-spaeter">${esc(T('angebot.spaeter'))}</button></div></div>`;
 }
-export function crewKarte() {
-  const { START_IDS, T, aktuelleVorlage, img, jetzt, nameVon, spiel, stand, stilWerte, ui } = kx;
+// Crew-Botschaft des Tages (aus crewKarte herausgelöst, 31.10.2026, für die Sprechblase der Kampfbühne).
+// Liefert { v, b, tag, gelesen } oder null, wenn heute nichts zu sagen ist.
+export function botschaftHeute() {
+  const { aktuelleVorlage, jetzt, nameVon, spiel, stand, stilWerte } = kx;
   const v = aktuelleVorlage();
   // Version 68: am Siegtag mit neuem Gegner spricht die Crew über den Besiegten (der Neue bleibt bis zum Kapitelwechsel verborgen)
   const bid = besiegtHeuteVorNeuem(K.auswertung(stand, jetzt()));
   const b = bid ? I.botschaft(stand, jetzt(), { ...v, gegner: bid }, TABELLE, BOTSCHAFTEN, nameVon, stilWerte(), 'besiegt')
     : I.botschaft(stand, jetzt(), v, TABELLE, BOTSCHAFTEN, nameVon, stilWerte());
   // Am ersten Tag nicht zeigen: das Onboarding hat Verbündeten und Gegner gerade erst vorgestellt.
-  if (!b.text || b.anlass === 'erster_tag') return '';
+  if (!b.text || b.anlass === 'erster_tag') return null;
   const tag = K.tagKey(jetzt());
-  const gelesen = H.istGelesen(spiel, spiel.fokus, tag);
+  return { v, b, tag, gelesen: H.istGelesen(spiel, spiel.fokus, tag) };
+}
+// „Gesehen“ der Crew-Botschaft höchstens einmal am Tag zählen
+export function botschaftGesehen(b, tag) { if (merkmal('crew_msg_tag') !== tag) { merke('crew_msg_tag', tag); trackEvent('crew_message_seen', { anlass: b.anlass }); } }
+export function crewKarte() {
+  const { START_IDS, T, img, jetzt, nameVon, stand, ui } = kx;
+  const d = botschaftHeute();
+  if (!d) return '';
+  const { v, b, tag, gelesen } = d;
   const klein = !ui.botschaftOffen && (gelesen || K.auswertung(stand, jetzt()).heuteAntwort);
   // Version 57: ungelesen → hervorgehoben (größeres Porträt, Akzentrahmen, „neu“); gelesen → ruhig wie bisher. Wippen: daten/neuigkeiten.js
   if (klein && gelesen) return `<button class="botschaft-klein" data-a="botschaft-auf">${img(v.held, nameVon(v.held), 'held', 'rund-klein')}<span>${esc(T('botschaft.klein', { held: nameVon(v.held) }))}</span></button>`;
   if (klein) return `<button class="botschaft-klein botschaft-neu" data-a="botschaft-auf">${img(v.held, nameVon(v.held), 'held', 'rund-klein')}<span>${esc(T('botschaft.ungelesen', { held: nameVon(v.held) }))}</span><span class="neu">${esc(T('botschaft.neu'))}</span></button>`;
-  if (merkmal('crew_msg_tag') !== tag) { merke('crew_msg_tag', tag); trackEvent('crew_message_seen', { anlass: b.anlass }); }
+  botschaftGesehen(b, tag);
   // Version 68: Porträt weglassen, wenn der Heldenkopf (gleicher Held, gleiches Bild) direkt darüber steht – Name genügt
-  const mitBild = !START_IDS.includes('heldenkopf');
+  const mitBild = !START_IDS.includes('kopfleiste');
   return `<div class="botschaft">${mitBild ? img(v.held, nameVon(v.held), 'held', 'rund gut-rand-b') : ''}<p class="blase${mitBild ? '' : ' ohne-bild'}"><b>${esc(nameVon(v.held))}</b>${esc(b.text)}<button class="link botschaft-ok" data-a="botschaft-zu">${esc(T('botschaft.ok'))}</button></p></div>`;
+}
+// Gekürzte Crew-Blase aufklappen (Version 142). true = aufgeklappt, der Tipp ist damit erledigt. Wirft nie.
+export function blaseAufklappen(el) {
+  try {
+    if (!el || !el.classList || !el.classList.contains('crew-blase') || el.classList.contains('ganz')) return false;
+    const satz = typeof el.querySelector === 'function' ? el.querySelector('.blase-satz') : null;
+    if (!satz || !(satz.scrollHeight > satz.clientHeight + 1)) return false;
+    el.classList.add('ganz');
+    return true;
+  } catch (e) { console.warn('Sprechblase:', e.message); return false; }
 }
 // Andeutung: Welcher Story-Teil wird morgen frei? (nur wenn heute schon eingecheckt; berücksichtigt Runden- und Gegnerwechsel)
 export function storyMorgen() {
@@ -264,16 +564,19 @@ export function mikroKarte() {
   const b = bonusAnsicht(liste, BONUS.sichtbar, ui.bonusMehr);
   const umschalten = b.umschaltbar ? `<button class="link bonus-mehr" data-a="bonus-mehr" aria-expanded="${!!ui.bonusMehr}">${esc(ui.bonusMehr ? T('bonus.weniger') : T('bonus.mehr', { n: b.weitere }))}</button>` : '';
   return `<div class="karte spalte mikro">
-    <div class="zeile"><span class="eyebrow">${esc(T('bonus.titel'))}</span><span class="mini rechts-oben">${fertig} von ${liste.length} · je +${K.XP.mikro} XP</span></div>
+    <div class="zeile"><span class="eyebrow">${esc(T('bonus.titel'))}</span><span class="mini rechts-oben">${fertig} von ${liste.length}</span></div>
     ${b.sichtbar.map((m, i) => `<button class="mikro-zeile ${m.erledigt ? 'fertig' : ''}${ui.einmal.has('bonus') && i >= BONUS.sichtbar ? ' neu' : ''}" style="--i:${Math.max(0, i - BONUS.sichtbar)}" data-a="mikro" data-id="${esc(m.held + '|' + m.id)}" aria-pressed="${m.erledigt}"><span class="haken-kreis">${m.erledigt ? icon('check') : ''}</span><span class="mikro-text">${esc(m.text)}</span>${spiel.helden.length > 1 ? img(m.held, nameVon(m.held), 'held', 'mikro-held', nameVon(m.held)) : ''}</button>`).join('')}
     ${umschalten}
   </div>`;
 }
 // Story-Karte (Version 48, „Story nur, wenn neu“): groß nur, wenn ein Siegel wartet; sonst eine ruhige Hinweiszeile.
 export function storyKarte() {
-  const { T, andeutungGesehen, story } = kx;
+  const { START_IDS, T, andeutungGesehen, jetzt, stand, story } = kx;
   const st = story();
   const siegel = I.storyZustaende(st).find(z => z.zustand === 'siegel');
+  // Kampfbühne (31.10.2026): die Geschichte gehört zur Rückmeldung (Ruhezustand der Bühne). Eigene Karte nur noch,
+  // wenn VOR dem Check ein Siegel wartet (z. B. von gestern), damit es nicht bis nach dem Check versteckt bleibt.
+  if (START_IDS.includes('buehne') && (!siegel || K.auswertung(stand, jetzt()).heuteAntwort)) return '';
   if (siegel) {
     const teil = st.teile[siegel.nr - 1] || {};
     andeutungGesehen('story_siegel');
@@ -301,15 +604,6 @@ export function extraKarten() {
   }
   return teile.join('');
 }
-// Premium-Angebot (Version 63): eigener Abschnitt, Einklappen über den allgemeinen Klapp-Weg (START_KURZ.premium).
-// 'premium_viewed' zählt auch, wenn die Karte eingeklappt ist (das Angebot ist dann als Zeile sichtbar).
-export function premiumKarte() {
-  const { ui } = kx;
-  if (aktiveTage() < PREMIUM.ab) return '';
-  if (!ui.premiumGesehen) { ui.premiumGesehen = true; trackEvent('premium_viewed', {}); }
-  return `<button class="karte premium tippbar" data-a="premium"><span class="stern-klein" aria-hidden="true">${icon('stern')}</span><span class="spalte"><span class="nm">${esc(PREMIUM.titel)}</span><span class="klein">${PREMIUM.punkte.map(esc).join(' · ')}</span><span class="preis">${esc(PREMIUM.preis)}</span></span></button>`;
-}
-
 export const START_SCREENS = {
   start() {
     const { NEU_QUELLEN, START_IDS, T, VERSION, aktuelleVorlage, istTest, jetzt, setzeStartGlanz, stand, weltenFrei } = kx;
@@ -323,9 +617,21 @@ export const START_SCREENS = {
     const k = klapp();
     // Version 59: Neuigkeiten aus EINER Quelle (daten/neuigkeiten.js): höchstens eine rückt vor, alle glänzen einmal.
     const neu = neuAufStart(NEUIGKEITEN, NEU_QUELLEN);
-    setzeStartGlanz(neu.glanz);
-    const reihe = neu.vor ? vorziehen(START_IDS, [{ id: neu.vor.abschnitt, vorziehen: { nach: neu.vor.nach } }], { [neu.vor.abschnitt]: true }) : { ids: START_IDS };
-    const teile = reihe.ids.map(id => {
+    // 31.10.2026: Verweise auf ersetzte Abschnitte (heldentat, duell, botschaft) zeigen auf die Kampfbühne
+    const ziel = id => abschnittZiel(id, START_ABSCHNITTE, START_IDS);
+    setzeStartGlanz(neu.glanz.map(x => ({ ...x, abschnitt: ziel(x.abschnitt) })));
+    const vor = neu.vor ? { abschnitt: ziel(neu.vor.abschnitt), nach: ziel(neu.vor.nach) } : null;
+    const reihe0 = vor && vor.abschnitt !== vor.nach ? vorziehen(START_IDS, [{ id: vor.abschnitt, vorziehen: { nach: vor.nach } }], { [vor.abschnitt]: true }) : { ids: START_IDS };
+    // 31.10.2026: Merkmal „wann“ (vor / nach dem Check) aus daten/startseite.js
+    // Etappe 3, Teil C: brennt das Lagerfeuer, fallen Abschnitte mit wann 'vorFeuer' weg (Bonus, Messziele)
+    let feuer = false;
+    try { feuer = lagerfeuerSichtbar(a); } catch (e) { console.warn('Lagerfeuer:', e.message); }
+    // Tagesnotiz (04.11.2026): nach dem Check oder bei brennendem Feuer direkt unter die Bühne (vorziehen in den Daten)
+    const tagFertig = !!a.heuteAntwort || feuer;
+    const zug = vorziehen(reihe0.ids, START_ABSCHNITTE.filter(z => z && z.vorziehen), { tagesnotiz: tagFertig });
+    zug.fehler.forEach(m => console.warn(m));
+    const reihe = { ids: zug.ids };
+    const teile = nachWann(reihe.ids, START_ABSCHNITTE, !!a.heuteAntwort, feuer).map(id => {
       try { return markiere(mitKlappe(id, START_TEILE[id](ctx), ctx, k), id); }
       catch (e) {
         console.warn(`Startseite: Abschnitt ${id}:`, e.message);
@@ -334,7 +640,7 @@ export const START_SCREENS = {
       }
     }).join('');
     return `<section class="screen start">
-      <div class="start-kopf"><span class="datum">${esc(datum)}</span>${einstellungenKnopf()}</div>
+      ${kopfZeile(datum)}
       <div class="inhalt start-inhalt">${teile}</div>
       <div class="start-fuss">${weltenFrei() ? `<button class="link" data-a="stilwahl">${icon('stern')} ${esc(T('start.weltenFrei'))}</button>` : esc(T('start.bereicheSpaeter'))}<span class="version">${esc(T('start.version', { nr: VERSION.nr, datum: VERSION.datum }))}</span></div>
     </section>`;
@@ -342,36 +648,35 @@ export const START_SCREENS = {
 };
 // Abschnitte der Startseite (Version 43). Reihenfolge und Ein/Aus: daten/startseite.js.
 export const START_TEILE = {
-  hinweise: () => { const { T, einw, ui } = kx; return `${neuKarte()}${hinweisBox()}${EW.istOffen(einw) ? einwKarte(false) : ''}${ui.fbDanke ? `<div class="hinweis gut-rand" role="status"><span>${esc(T('fb.danke'))}</span><button class="link" data-a="danke-weg">${esc(T('rahmen.hinweisOk'))}</button></div>` : ''}`; },
-  heldenkopf: () => heldenkopfHtml(),
-  angebot: () => angebotKarte(),
+  hinweise: () => { const { T, ui } = kx; return `${hinweisBox()}${ui.fbDanke ? `<div class="hinweis gut-rand" role="status"><span>${esc(T('fb.danke'))}</span><button class="link" data-a="danke-weg">${esc(T('rahmen.hinweisOk'))}</button></div>` : ''}`; },
+  tagesleiste: () => tagesleisteHtml(), // Etappe 3, Teil B
+  kopfleiste: ctx => kopfleisteHtml(ctx),
+  neuigkeiten: () => neuigkeitenHtml(),
+  // Kampfbühne (31.10.2026); pausiert der Held heute (Erhalt, Ruhe), steht dort seine Rastkarte (Heldenmodi, 04.11.2026)
+  buehne: ctx => (pausiertHeute(kx.spiel.fokus) ? rastHtml(ctx) : buehneHtml(ctx)),
   botschaft: () => crewKarte(),
-  quest: ({ v, g, a }) => { const { T, funktionFrei, stand, wort } = kx; return `<div class="karte haupt">
-      <span class="eyebrow akzent">${esc(T('quest.meine', { QUEST: wort('quest').toUpperCase() }))}</span>
-      <div class="quest-zeile"><span class="questtitel">${esc(stand.quest.ziel)}</span>${funktionFrei('quests_bearbeiten') ? `<button class="link qe-knopf" data-a="quest-bearbeiten" aria-label="${esc(T('qe.titel', { quest: wort('quest') }))}">${icon('stift')}${esc(T('qe.knopf'))}</button>` : ''}</div>
-      ${wegHtml(a, v, g)}
-      ${lebenZeile(v)}
-    </div>`; },
   // Version 44: Heutige Heldentat (ersetzt „Nächste Aufgabe“ und die Fähigkeits-Karte). Check-Logik unverändert (check()).
   // Version 44/45: Heutige Heldentat. Check-Logik unverändert (check()). Wochenstand zeigt seit 45 die Duell-Karte.
   heldentat: ({ v, f, a }) => {
     const { SM, T, img, jetzt, nameVon, spiel, stil, ui } = kx;
     const antw = a.heuteAntwort;
-    const frage = tagesfrage(v, f, T('tat.frage', { faehigkeit: f.name }));
+    const frage = tagesfrage(v, f, T(artSchluessel('frage', 'tat.frage'), { faehigkeit: f.name }));
     // Version 61 (Variante A „Auftragskarte“, Entscheidung 29.10.2026): Rahmen je Welt (CSS je data-stil),
     // Medaille mit Fähigkeits-Symbol, kleines Heldenporträt, Wenn-dann in zwei Feldern, „Ja“ groß, „nicht gebraucht“ schlichter.
     const wd = wennDann(f);
     const marke = (stil().wort && stil().wort.marke) || ''; // nur je Stil, kein Rückfall auf Fantasy
-    return `<div class="karte heldentat${antw ? ' fertig' : ''}">
+    const nt = nachtragModus();
+    return `<div class="karte heldentat${antw && !nt ? ' fertig' : ''}${nt ? ' nachtrag' : ''}">
       ${String(marke).trim() ? `<span class="tat-marke" aria-hidden="true">${esc(marke)}</span>` : ''}
       <div class="tat-kopf"><span class="tat-medaille" aria-hidden="true">${icon(f.icon || 'stern')}</span>
-        <span class="spalte"><span class="eyebrow tat-eyebrow">${esc(T('tat.eyebrow'))}</span>
+        <span class="spalte"><span class="eyebrow tat-eyebrow">${esc(nt ? T('nachtrag.eyebrow', { tag: nachtragName(nt).toUpperCase() }) : T('tat.eyebrow'))}</span>
         <button class="tat-name tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(T('tat.ansehen', { faehigkeit: f.name }))}">${esc(f.name)}</button></span>
         ${img(v.held, nameVon(v.held), 'held', 'tat-held', '')}</div>
       ${wd.wenn || wd.dann ? `<div class="tat-wd">${wd.wenn ? `<p class="tat-feld wenn"><b>${esc(T('tat.wenn'))}</b>${esc(wd.wenn)}</p>` : ''}${wd.wenn && wd.dann ? '<span class="tat-pfeil" aria-hidden="true">↓</span>' : ''}${wd.dann ? `<p class="tat-feld dann"><b>${esc(T('tat.dannLabel'))}</b>${esc(wd.dann)}</p>` : ''}</div>` : ''}
-      ${antw ? `${erfolgHtml(antw)}<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}" role="status">${erfolgGroesse(antw, ui.erfolgFrisch, spiel.fokus, K.tagKey(jetzt()), SM.erfolg.an) === 'klein' ? img(v.held, nameVon(v.held), 'held', 'erfolg-mini', '') : icon('check')}<span>${antw === 'ja' ? esc(T('tat.erledigtJa', { verb: f.verb })) : esc(T('tat.erledigtNein'))}</span><button class="link" data-a="check" data-id="">${esc(T('tat.aendern'))}</button></div>${bossReaktionHtml(v, a)}${weiterZuHtml()}`
-        : `<p class="tat-frage">${esc(frage)}</p>
-      <div class="tat-knoepfe"><button class="btn voll tat-ja" data-a="check" data-id="ja">${icon('check')} ${esc(T('tat.ja'))}</button><button class="btn tat-nein" data-a="check" data-id="nein">${esc(T('tat.nein'))}</button></div>`}
+      ${nt ? nachtragHtml(nt, f) : antw ? `${erfolgHtml(antw)}<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}" role="status">${erfolgGroesse(antw, ui.erfolgFrisch, spiel.fokus, K.tagKey(jetzt()), SM.erfolg.an) === 'klein' ? img(v.held, nameVon(v.held), 'held', 'erfolg-mini', '') : erledigtIcon(antw)}<span>${esc(erledigtText(antw, f))}</span><button class="link" data-a="check" data-id="">${esc(T('tat.aendern'))}</button></div>${stuetzenHakenHtml()}${stuetzeBereitHtml(a)}${eintragLinks(antw, { nachtrag: true })}${comebackHtml()}${bossReaktionHtml(v, a)}${nachtragZusatz()}${weiterZuHtml()}`
+        : `${probeHtml(wd)}<p class="tat-frage">${esc(frage)}</p>
+      <div class="tat-knoepfe"><button class="btn voll tat-ja" data-a="check" data-id="ja">${icon('check')} ${esc(T('tat.ja'))}</button><button class="btn tat-nein" data-a="check" data-id="nein">${esc(T('tat.nein'))}</button><button class="btn tat-schwer" data-a="check" data-id="schwer">${esc(T('siegel.schwer'))}</button></div>
+      ${eintragLinks(null)}${nachtragZeile()}`}
     </div>`;
   },
   // Version 45: eine Duell-Karte statt Verbündeter + Gegner. Tipp öffnet die Gegnerseite.
@@ -383,20 +688,22 @@ export const START_TEILE = {
     const bid = besiegtHeuteVorNeuem(a);
     if (bid) {
       const gb = TABELLE.gegner[bid];
+      const anzahl = K.siegRundenZiel(kx.stand, a.heute) ?? a.anzahl; // Ziel der gewonnenen Runde (02.11.2026)
       return `<div class="karte duell besiegt" role="group" aria-label="${esc(T('duell.besiegtAria', { gegner: gb.name, sieg: wort('sieg') }))}">
       <span class="duell-bildrahmen">${img('boss-' + bid, gb.name, 'boss', 'duell-bild', '')}
         <span class="duell-titel">${esc(held)} <span class="duell-vs">${esc(T('duell.vs'))}</span> ${esc(gb.kurz)}</span></span>
       <span class="duell-text">
-        <span class="duell-zeile"><span>${esc(T('duell.kraft', { gegner: gb.kurz }))}</span><span>0 / ${a.anzahl}</span></span>
-        <span class="segmente" aria-hidden="true">${Array.from({ length: a.anzahl }, () => '<i></i>').join('')}</span>
+        <span class="duell-zeile"><span>${esc(T('duell.kraft', { gegner: gb.kurz }))}</span><span>0 / ${anzahl}</span></span>
+        <span class="segmente" aria-hidden="true">${Array.from({ length: anzahl }, () => '<i></i>').join('')}</span>
         <span class="klein">${esc(T('duell.besiegtMorgen', { sieg: wort('sieg') }))}</span>
+        ${ui.feier ? '' : vorstellungHinweisHtml()}
       </span>
     </div>`;
     }
     const kraft = a.anzahl - a.treffer;
     const unter = a.gegnerAnzahl > 1 ? T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr }) : a.siege ? T('gegner.siege', { n: a.siege, sieg: wort('sieg') }) : T('gegner.unbesiegt');
     return `<button class="karte duell tippbar ${ui.wackeln ? 'wackelt' : ''} ${a.bossKraft === 0 ? 'besiegt' : ''}" data-a="blatt" data-id="boss" aria-label="${esc(T('duell.ansehen', { gegner: g.name }))}">
-      <span class="duell-bildrahmen"${bwStil('tagesCheck', 'duellBild', ui.einmal.has('treffer'))}>${img('boss-' + v.gegner, g.name, 'boss', 'duell-bild', '')}${blitzEbene('tagesCheck', 'duellBlitz', ui.einmal.has('treffer'))}
+      <span class="duell-bildrahmen"${bwStil('tagesCheck', 'duellBild', ui.einmal.has('treffer'))}>${img('boss-' + v.gegner, g.name, 'boss', 'duell-bild', '')}${arenaHtml()}${blitzEbene('tagesCheck', 'duellBlitz', ui.einmal.has('treffer'))}
         <span class="duell-titel">${esc(held)} <span class="duell-vs">${esc(T('duell.vs'))}</span> ${esc(g.kurz)}</span></span>
       <span class="duell-text">
         <span class="duell-zeile"><span>${esc(T('duell.kraft', { gegner: g.kurz }))}</span><span>${kraft} / ${a.anzahl}</span></span>
@@ -405,22 +712,28 @@ export const START_TEILE = {
       </span>
     </button>`;
   },
+  messziele: () => messzielKarte(), // Version 76
   bonus: () => mikroKarte(),
   story: () => storyKarte(),
-  welten: () => weltenKarte(),
-  extra: () => extraKarten(),
-  premium: () => premiumKarte()
+  tagesnotiz: () => notizKarteHtml(), // Tagesnotiz (04.11.2026): abends „Wie war dein Tag?“
+  wochenrunde: () => wochenKarteHtml(), // Wochenrunde (05.11.2026): am Rundentag „Wie war deine Woche?“
+  extra: () => extraKarten()
 };
 // Kurzzeilen eingeklappter Abschnitte (Version 52). Neue klappbare Karte = Eintrag hier + `klappbar: true` in den Daten.
 export const START_KURZ = {
-  premium: () => `<span class="spalte-zeile"><span class="stern-mini" aria-hidden="true">${icon('stern')}</span><span class="nm">${esc(PREMIUM.titel)} · ${esc(PREMIUM.preis)}</span></span>`,
-  quest: ({ a }) => { const { T, stand, wort } = kx; return `<span class="eyebrow akzent">${esc(T('quest.meine', { QUEST: wort('quest').toUpperCase() }))}</span><span class="nm">${esc(stand.quest.ziel)}</span><span class="klein">${esc([T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }), a.gegnerAnzahl > 1 ? T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr }) : ''].filter(Boolean).join(' · '))}</span>`; }
+  messziele: () => messzielKurz(),
+  bonus: () => bonusKurz() // 31.10.2026: eingeklappt als Standard
 };
+function bonusKurz() {
+  const { T, mikroListe } = kx;
+  const liste = mikroListe();
+  return `<span class="nm">${esc(T('bonus.kurzTitel'))}</span><span class="klein">${esc(T('bonus.kurz', { fertig: liste.filter(m => m.erledigt).length, anzahl: liste.length }))}</span>`;
+}
 export const klapp = () => klappZustand(START_ABSCHNITTE, Object.keys(START_KURZ), merkmal('start_klein'));
 // Abschnitt mit Klapp-Knopf: klein → Kurzzeile (tippbar zum Aufklappen), offen → normale Karte + „Kleiner“.
 export function mitKlappe(id, html, ctx, k) {
   const { T } = kx;
-  if (!k.klappbar.includes(id) || !html) return html;
+  if (!k.klappbar.includes(id) || !html || !String(html).trim()) return html;
   if (k.klein.includes(id)) return `<button class="karte klapp-zeile tippbar" data-a="klapp-auf" data-id="${esc(id)}" aria-expanded="false"><span class="spalte">${START_KURZ[id](ctx)}</span><span class="klapp-mehr">${esc(T('klapp.mehr'))}</span></button>`;
   return `<div class="klapp-rahmen">${html}<button class="klein-knopf" data-a="klapp-zu" data-id="${esc(id)}" aria-expanded="true">${esc(T('klapp.kleiner'))}</button></div>`;
 }
@@ -431,19 +744,45 @@ function klappen({ id, aktion }) {
   const { render } = kx;
   const zu = aktion === 'klapp-zu';
   if (klapp().klappbar.includes(id)) {
-    merke('start_klein', klappUmschalten(merkmal('start_klein'), id, zu));
+    merke('start_klein', klappUmschalten(merkmal('start_klein'), id, zu, klappStandardKlein(START_ABSCHNITTE).includes(id)));
     trackEvent(zu ? 'section_collapsed' : 'section_expanded', { abschnitt: id });
   }
   render();
 }
+// Eigene Einträge (Version 75): leise Links unter der Heldentat. Vor dem Check nur „schwer“; nach „Ja“ eingeklappt
+// „festhalten“ und „schwer“; nach „nicht gebraucht“ ein sanftes Angebot, falls es doch einen schwierigen Moment gab.
+// Version 93: Schnellleiste statt Linkliste (Kacheln aus ansicht/helfer.js). Reihenfolge: Notfallkarte, sobald frei;
+// festhalten / schwerer Tag; Ruhetag; mit nachtrag zuletzt „Nachtragen“ (die Tageswahl erscheint darunter, nachtragZusatz).
+export function eintragLinks(antw, { nachtrag = false } = {}) {
+  const k = { alsKachel: true };
+  const teile = antw === 'ja' ? [eintragLink('geschafft', 'eintrag.link.geschafft', k), eintragLink('schwer', 'eintrag.link.schwer', k)]
+    : antw === 'nein' ? [eintragLink('schwer', 'eintrag.link.schwerNein', k)]
+    : antw === 'schwer' ? [eintragLink('schwer', 'eintrag.link.schwerFesthalten', k)] // Version 141: Eintrag nachholen
+    : [eintragLink('schwer', 'eintrag.link.schwer', k)];
+  return kachelLeiste([notfallKnopf('', k), ...teile, ruhetagLink(k), nachtrag ? nachtragKachel() : '']);
+}
+
 export const START_KLICKS = {
-  check({ id }) { const { check } = kx; check(id === 'ja' || id === 'nein' ? id : null); },
   'neu-ok'() { const { alsGesehen, neuBereiche, render } = kx; const ids = neuBereiche(); alsGesehen(ids); trackEvent('unlock_later', { anzahl: ids.length }); render(); },
   'klapp-zu': klappen,
+  'weiter-spaeter'() { const { render, spiel, ui } = kx; ui.weiterSpaeter = spiel.fokus; render(); }, // Etappe 3, Teil B: nur diese Sitzung
+  'kl-warum'() { const { render, ui } = kx; ui.klWarumAuf = !ui.klWarumAuf; render(); }, // Etappe 3, Teil A
   'klapp-auf': klappen,
+  // Weg als Streifen (Version 135): auf/zu je Gerät; beim Öffnen den aktuellen Gegner in den Blick holen
+  'weg-klapp'() {
+    const { finde, render } = kx;
+    const auf = !wegOffen();
+    merke('weg_offen', auf);
+    trackEvent(auf ? 'section_expanded' : 'section_collapsed', { abschnitt: 'weg' });
+    render();
+    if (auf) { try { finde('.ws-kachel.aktuell')?.scrollIntoView?.({ inline: 'center', block: 'nearest' }); } catch (e) { /* nur Komfort */ } }
+  },
   'feedback-spaeter'() { const { jetzt, render } = kx; merke('feedback_spaeter', K.tagKey(jetzt())); render(); },
-  'botschaft-zu'() {
+  'botschaft-zu'({ el } = {}) {
     const { jetzt, render, setzeSpiel, speichere, spiel, ui } = kx;
+    // Version 142: Die Crew-Blase in der Arena zeigt höchstens 3 Zeilen. Ist sie gekürzt, zeigt der erste Tipp den
+    // ganzen Text (ohne neu zu zeichnen), erst der nächste blendet sie aus. Ohne echtes DOM: wie bisher ausblenden.
+    if (blaseAufklappen(el)) return;
     ui.botschaftOffen = false;
     try { setzeSpiel(H.botschaftGelesen(spiel, spiel.fokus, K.tagKey(jetzt()))); speichere(); } catch (e) { console.warn('Botschaft:', e.message); }
     render();

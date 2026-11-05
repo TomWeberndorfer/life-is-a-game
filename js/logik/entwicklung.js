@@ -1,7 +1,17 @@
 // Entwicklung eines Helden (Version 21): echtes Verhalten statt nur Spielzahlen. Reine Ableitung, nichts gespeichert.
 import * as K from './kern.js';
 
-export const MAX_RUNDEN_VERLAUF = 6;
+// Charakterbogen (Etappe 3, Teil E, 02.11.2026): 12 statt 6 Runden, dazu „insgesamt“ (rundenGesamt).
+export const MAX_RUNDEN_VERLAUF = 12;
+
+// Zustand einer Runde für den Charakterbogen: 'sieg' (Gold), 'laufend' (schraffiert), 'offen' (beendet ohne Sieg,
+// neutral, nie rot). Laufend = heute liegt in der Runde, sie ist weder gewonnen noch durch Neuanfang beendet.
+export function rundenStatus(r, heuteK) {
+  if (!r) return 'offen';
+  if (r.sieg) return 'sieg';
+  if (!r.neustart && r.von <= heuteK && r.bis >= heuteK) return 'laufend';
+  return 'offen';
+}
 
 export function entwicklung(stand, heute) {
   if (!stand || !stand.quest) throw new Error('entwicklung: keine Quest');
@@ -13,12 +23,12 @@ export function entwicklung(stand, heute) {
   // Nur begonnene Runden (nach einem Sieg heute beginnt die nächste erst morgen)
   const alle = K.runden(stand, heuteK).runden.filter(r => r.von <= heuteK);
   // ziel je Runde (Einstiegsrampe, 30.10.2026): was diese Runde gebraucht hat; ohne Rampe überall quest.anzahl
-  const verlauf = alle.slice(-MAX_RUNDEN_VERLAUF).map(r => ({ nr: r.nr, von: r.von, anwendungen: r.anwendungen, ziel: K.rundenZiel(stand.quest, r.siegeVorher), sieg: !!r.sieg, gegner: r.gegner }));
+  const verlauf = alle.slice(-MAX_RUNDEN_VERLAUF).map(r => ({ nr: r.nr, von: r.von, bis: r.bis, anwendungen: r.anwendungen, ziel: K.rundenZiel(stand.quest, r.siegeVorher, r.nr), sieg: !!r.sieg, status: rundenStatus(r, heuteK), gegner: r.gegner }));
   const naechsterTitel = a.level < K.TITEL.length ? { titel: K.TITEL[a.level], abStufe: a.level + 1 } : null;
   return {
     start, anwendungen, eintraege, siege: a.siege, kapitel: a.gegnerNr, ziel: a.zielAnzahl,
     tageSeitStart: Math.max(0, Math.round((K.ausTagKey(heuteK) - K.ausTagKey(start)) / 864e5)) + 1,
     level: a.level, titel: a.titel, xp: a.xp, imLevel: a.imLevel, proLevel: a.proLevel,
-    naechsterTitel, verlauf
+    naechsterTitel, verlauf, rundenGesamt: alle.length
   };
 }

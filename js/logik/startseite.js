@@ -1,4 +1,5 @@
 // Startseite (Version 43): reine Funktionen, nichts im DOM.
+import { istAntwort } from './antworten.js'; // Version 141: Antwort-Register
 
 // Abschnitte prüfen und ordnen. liste = START_ABSCHNITTE, bekannt = IDs, für die app.js eine Ansicht hat.
 // Liefert { ids, fehler }: ids in Reihenfolge der Liste, ohne ausgeschaltete, unbekannte und doppelte.
@@ -13,10 +14,50 @@ export function ordneAbschnitte(liste, bekannt) {
     if (typeof id !== 'string' || !id) { fehler.push(`Startseite: Zeile ${i + 1} ohne gültige id`); return; }
     if (!erlaubt.has(id)) { fehler.push(`Startseite: unbekannter Abschnitt „${id}“`); return; }
     if (ids.includes(id)) { fehler.push(`Startseite: Abschnitt „${id}“ doppelt`); return; }
+    if (z.wann !== undefined && !WANN.includes(z.wann)) fehler.push(`Startseite: „${id}“ hat unbekanntes wann „${z.wann}“ (gilt als immer)`);
     if (z.aus === true) return;
     ids.push(id);
   });
   return { ids, fehler };
+}
+
+// Merkmal „wann“ (Startseite als Kampfbühne, Schritt Kopfleiste und Neuigkeiten, 31.10.2026): wann ein Abschnitt
+// erscheint, gemessen am Tages-Check des aktiven Helden. Ersetzt Sonderlogik je Karte (Entscheidungen Abschnitt 18).
+//   immer      (Standard, auch wenn die Angabe fehlt oder unbekannt ist)
+//   vorCheck   nur solange der Check heute offen ist
+//   nachCheck  erst nach dem Check (z. B. Feedback-Bitte: nicht vor der Hauptaktion um Aufmerksamkeit werben)
+//   vorFeuer   immer, außer das Lagerfeuer brennt (Etappe 3, Teil C: am Abend keine Bonus-Aufgaben, keine Zahlen)
+export const WANN = ['immer', 'vorCheck', 'nachCheck', 'vorFeuer'];
+// ids aus ordneAbschnitte(), liste = START_ABSCHNITTE, erledigt = Check heute schon beantwortet,
+// feuer = das Lagerfeuer ist gerade zu sehen. Wirft nie.
+export function nachWann(ids, liste, erledigt, feuer = false) {
+  if (!Array.isArray(ids)) return [];
+  const wann = {};
+  for (const z of Array.isArray(liste) ? liste : []) if (z && typeof z.id === 'string' && WANN.includes(z.wann)) wann[z.id] = z.wann;
+  return ids.filter(id => {
+    const w = wann[id] || 'immer';
+    if (w === 'vorFeuer') return feuer !== true;
+    return w === 'immer' || (w === 'nachCheck') === (erledigt === true);
+  });
+}
+
+// Fester Platz für Neuigkeiten unter der Kopfleiste (31.10.2026): höchstens `max` verschiedene am Tag, nach Vorrang.
+// Was heute schon zu sehen war, behält seinen Platz; wird eine davon erledigt, rückt KEINE weitere nach: der Rest
+// wartet auf den nächsten Tag. Grund: Neues erscheint an einem erkennbaren Ort und wird nie zur Liste vor der Heldentat.
+// kandidaten  IDs, die gerade etwas zu zeigen haben, in Vorrang-Reihenfolge
+// gemerkt     { tag, ids } vom Gerät (Merkmal), darf kaputt sein; anderer Tag = neuer Tag
+// Rückgabe    { sichtbar, warten, merken } – merken = neuer Stand ({ tag, ids }) oder null, wenn unverändert. Wirft nie.
+export function neuPlatz(kandidaten, gemerkt, tag, max = 2) {
+  const k = [...new Set((Array.isArray(kandidaten) ? kandidaten : []).filter(x => typeof x === 'string' && x))];
+  const m = Number.isInteger(max) && max >= 0 && max <= 5 ? max : 2;
+  const heute = gemerkt && typeof gemerkt === 'object' && gemerkt.tag === tag && Array.isArray(gemerkt.ids)
+    ? [...new Set(gemerkt.ids.filter(x => typeof x === 'string' && x))] : [];
+  const gezeigt = [...heute];
+  for (const id of k) if (!gezeigt.includes(id) && gezeigt.length < m) gezeigt.push(id);
+  const sichtbar = k.filter(id => gezeigt.includes(id));
+  const warten = k.filter(id => !gezeigt.includes(id));
+  const geaendert = !gemerkt || gemerkt.tag !== tag || gezeigt.length !== heute.length || !Array.isArray(gemerkt.ids) || gemerkt.ids.length !== heute.length;
+  return { sichtbar, warten, merken: geaendert && typeof tag === 'string' && tag ? { tag, ids: gezeigt } : null };
 }
 
 // Heldenkopf: wer ist aktiv, wer kommt in den Wechsel-Knopf, wie viele Checks sind offen.
@@ -53,6 +94,23 @@ export function tagesfrage(vorlage, faehigkeit, allgemein) {
 // „Weiter zu …“ (Version 45): nächster Held mit offenem Check in fester Crew-Reihenfolge, ab dem aktiven
 // weiterzählend und am Ende von vorn. null, wenn alle anderen erledigt sind oder es keine anderen gibt.
 // helden = [{ id, erledigt }] wie bei heldenKopf; unbekannter aktiver Held → Suche ab dem Anfang.
+// Tagesleiste (Etappe 3, Teil B, 02.11.2026): „Heute x von n“ und je Held ein Eintrag in fester Reihenfolge.
+// helden: [{ id, erledigt }]; zeigen erst ab cfg.abHelden (sonst ist die Leiste nur Lärm), höchstens cfg.max Einträge.
+// Ein sichtbarer, endlicher Tagesumfang nutzt den Ziel-Gradienten und gibt ein klares Ende statt einer Liste.
+export function tagesleiste(helden, fokus, cfg = {}) {
+  const liste = (Array.isArray(helden) ? helden : []).filter(h => h && typeof h.id === 'string' && h.id);
+  const eindeutig = liste.filter((h, i) => liste.findIndex(x => x.id === h.id) === i);
+  const ab = Number.isInteger(cfg && cfg.abHelden) && cfg.abHelden >= 1 ? cfg.abHelden : 2;
+  const max = Number.isInteger(cfg && cfg.max) && cfg.max >= 1 ? cfg.max : 3;
+  const sicht = eindeutig.slice(0, max);
+  const aktiv = sicht.some(h => h.id === fokus) ? fokus : (sicht[0] || {}).id || null;
+  return {
+    zeigen: !!(cfg && cfg.an !== false) && sicht.length >= ab,
+    erledigt: sicht.filter(h => h.erledigt).length,
+    gesamt: sicht.length,
+    eintraege: sicht.map(h => ({ id: h.id, aktiv: h.id === aktiv, erledigt: !!h.erledigt }))
+  };
+}
 export function naechsterOffener(helden, aktiv) {
   const liste = (Array.isArray(helden) ? helden : []).filter(h => h && typeof h.id === 'string' && h.id);
   const i = liste.findIndex(h => h.id === aktiv);
@@ -185,12 +243,24 @@ export function klappZustand(liste, mitKurz, gespeichert) {
     if (!klappbar.includes(z.id)) klappbar.push(z.id);
   }
   const g = new Set(Array.isArray(gespeichert) ? gespeichert.filter(x => typeof x === 'string') : []);
-  return { klappbar, klein: klappbar.filter(id => g.has(id)), fehler };
+  // 31.10.2026: klein: true in den Daten = eingeklappt, bis man es aufklappt (gemerkt als „auf:<id>“)
+  const std = new Set(klappStandardKlein(liste));
+  return { klappbar, klein: klappbar.filter(id => (std.has(id) ? !g.has(KLAPP_AUF + id) : g.has(id))), fehler };
+}
+
+// Merkzeichen für „aufgeklappt“ bei Abschnitten, die von sich aus klein sind (klein: true in START_ABSCHNITTE).
+export const KLAPP_AUF = 'auf:';
+// IDs mit klappbar: true und klein: true (Standard eingeklappt). Wirft nie.
+export function klappStandardKlein(liste) {
+  return (Array.isArray(liste) ? liste : []).filter(z => z && typeof z.id === 'string' && z.klappbar === true && z.klein === true).map(z => z.id);
 }
 
 // Neue gespeicherte Liste nach „Kleiner“ (klein = true) bzw. „Mehr zeigen“ (false). Ohne Doppel, nur Strings.
-export function klappUmschalten(gespeichert, id, klein) {
-  const alt = Array.isArray(gespeichert) ? gespeichert.filter(x => typeof x === 'string' && x !== id) : [];
+// standardKlein (31.10.2026): der Abschnitt ist von sich aus klein; gemerkt wird dann nur das Aufklappen („auf:<id>“).
+// Gespeichert wird immer nur die Abweichung vom Standard, alte Einträge derselben ID fallen weg.
+export function klappUmschalten(gespeichert, id, klein, standardKlein = false) {
+  const alt = Array.isArray(gespeichert) ? gespeichert.filter(x => typeof x === 'string' && x !== id && x !== KLAPP_AUF + id) : [];
+  if (standardKlein === true) return klein ? alt : [...alt, KLAPP_AUF + id];
   return klein ? [...alt, id] : alt;
 }
 
@@ -290,4 +360,130 @@ export function wennDann(f) {
   const roh = s(f && f.wenn).replace(/\s*[:：]\s*$/, '');
   const m = /^wenn\s+(.+)$/i.exec(roh);
   return { wenn: m ? m[1] : roh, dann: s(f && f.kurz) };
+}
+
+// ---------- Kampfbühne (31.10.2026, Entscheidungen Abschnitt 18) ----------
+// Zustand der Bühne für den Helden im Rampenlicht:
+//   offen   Check heute noch nicht beantwortet (Heldentat mit zwei Siegeln)
+//   ablauf  gerade nach „Ja“: Treffer → Heldenbild → Boss-Sprechblase (läuft nur in dieser Sitzung, nach der Uhr)
+//   ruhe    beantwortet: Bühne klein, Tagesende oder „Weiter zu …“. Nach „nicht gebraucht“ sofort.
+// antwort   heutige Antwort (daten/antworten.js: 'ja' | 'nein' | 'schwer'; sonst offen)
+// ablauf    ui.buehne = { heroId, tag, startMs, art } aus dem letzten Tages-Check dieser Sitzung, darf null/kaputt sein
+// heroId, tag  Held und Tag, die gerade gezeigt werden (ein Ablauf eines anderen Helden oder Tages zählt nicht)
+// jetztMs   Uhrzeit in ms; dauer = { art: ms bis zum Ruhezustand } (buehneDauer)
+// Liefert { zustand, art, vergangenMs }. Wirft nie.
+export function buehneZustand(antwort, ablauf, heroId, tag, jetztMs, dauer) {
+  if (!istAntwort(antwort)) return { zustand: 'offen', art: null, vergangenMs: 0 }; // Version 141: auch „schwer“ ist beantwortet
+  const ok = antwort === 'ja' && !!ablauf && typeof ablauf === 'object' && ablauf.heroId === heroId && ablauf.tag === tag
+    && Number.isFinite(ablauf.startMs) && typeof ablauf.art === 'string' && Number.isFinite(jetztMs);
+  if (!ok) return { zustand: 'ruhe', art: null, vergangenMs: 0 };
+  const d = dauer && Object.prototype.hasOwnProperty.call(dauer, ablauf.art) && Number.isFinite(dauer[ablauf.art]) ? dauer[ablauf.art] : 0;
+  const v = jetztMs - ablauf.startMs;
+  if (v < 0 || v >= d) return { zustand: 'ruhe', art: ablauf.art, vergangenMs: Math.max(0, v) };
+  return { zustand: 'ablauf', art: ablauf.art, vergangenMs: v };
+}
+
+// Gesamtdauer bis zum Ruhezustand je Art: Ende des Ablaufs (daten/bewegung.js) + ruhePauseMs. endeMs = ablaufEndeMs.
+// Unbekannte Art oder leerer Ablauf → 0 (sofort Ruhe). Liefert { dauer: { art: ms }, fehler: [...] }. Wirft nie.
+export function buehneDauer(kb, endeMs) {
+  const dauer = {};
+  const fehler = [];
+  const ablauf = kb && kb.ablauf && typeof kb.ablauf === 'object' ? kb.ablauf : {};
+  const p = kb && Number.isFinite(kb.ruhePauseMs) && kb.ruhePauseMs >= 0 && kb.ruhePauseMs <= 5000 ? kb.ruhePauseMs : 900;
+  if (kb && kb.ruhePauseMs !== undefined && p !== kb.ruhePauseMs) fehler.push('Kampfbühne: ruhePauseMs muss zwischen 0 und 5000 liegen (gilt 900)');
+  for (const [art, id] of Object.entries(ablauf)) {
+    let ende = 0;
+    try { ende = typeof endeMs === 'function' ? Number(endeMs(id)) || 0 : 0; } catch (e) { ende = 0; }
+    if (!ende) { fehler.push(`Kampfbühne: Ablauf „${id}“ für „${art}“ fehlt oder ist leer (sofort Ruhezustand)`); dauer[art] = 0; continue; }
+    dauer[art] = ende + p;
+  }
+  return { dauer, fehler };
+}
+
+// Treffer-Ablauf mit der Zeit kürzen (Version 139, KAMPFBUEHNE.kurz). Liefert { abTreffer, vollBeiComeback, fehler }.
+// abTreffer: ganze Zahl 0–365 (0 = nie kürzen), sonst 7; vollBeiComeback: Wahrheitswert, sonst true. Wirft nie.
+export const KURZ_STANDARD = { abTreffer: 7, vollBeiComeback: true };
+export function kurzRegel(kb) {
+  const k = kb && kb.kurz && typeof kb.kurz === 'object' ? kb.kurz : {};
+  const fehler = [];
+  let ab = KURZ_STANDARD.abTreffer;
+  if (k.abTreffer !== undefined) {
+    if (Number.isInteger(k.abTreffer) && k.abTreffer >= 0 && k.abTreffer <= 365) ab = k.abTreffer;
+    else fehler.push(`Kampfbühne: kurz.abTreffer muss eine ganze Zahl zwischen 0 und 365 sein (gilt ${KURZ_STANDARD.abTreffer})`);
+  }
+  let vc = KURZ_STANDARD.vollBeiComeback;
+  if (k.vollBeiComeback !== undefined) {
+    if (typeof k.vollBeiComeback === 'boolean') vc = k.vollBeiComeback;
+    else fehler.push('Kampfbühne: kurz.vollBeiComeback muss true oder false sein (gilt true)');
+  }
+  return { abTreffer: ab, vollBeiComeback: vc, fehler };
+}
+// Welcher Bühnen-Ablauf nach „Ja“ läuft: 'sieg' | 'treffer' | 'kurz'. f = { sieg, trefferVorher, comeback }.
+// trefferVorher = Treffer-Tage des Helden vor heute (ungültig → 0, also voll). Ohne ablauf.kurz nie 'kurz'. Wirft nie.
+export function buehneArtWahl(kb, f = {}) {
+  if (f && f.sieg) return 'sieg';
+  const r = kurzRegel(kb);
+  const hatKurz = !!(kb && kb.ablauf && typeof kb.ablauf.kurz === 'string' && kb.ablauf.kurz);
+  if (!hatKurz || r.abTreffer === 0) return 'treffer';
+  if (r.vollBeiComeback && f && f.comeback) return 'treffer';
+  const n = f && Number.isFinite(f.trefferVorher) && f.trefferVorher > 0 ? Math.floor(f.trefferVorher) : 0;
+  return n >= r.abTreffer ? 'kurz' : 'treffer';
+}
+// Treffer-Tage vor heuteK: Tage mit der Antwort „ja“ (tage = { 'JJJJ-MM-TT': antwort }). Wirft nie.
+export function trefferTageVor(tage, heuteK) {
+  if (!tage || typeof tage !== 'object' || typeof heuteK !== 'string') return 0;
+  return Object.keys(tage).filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t) && t < heuteK && tage[t] === 'ja').length;
+}
+
+// Ersatz-Abschnitte (31.10.2026): liste = START_ABSCHNITTE, aktiv = gezeigte IDs (START_IDS). Ist `id` gerade nicht auf
+// der Seite, aber ein aktiver Abschnitt nennt ihn in `ersetzt`, gilt dieser. Sonst bleibt `id` (Aufrufer prüft selbst).
+export function abschnittZiel(id, liste, aktiv) {
+  const a = Array.isArray(aktiv) ? aktiv : [];
+  if (a.includes(id)) return id;
+  for (const z of Array.isArray(liste) ? liste : []) {
+    if (z && typeof z.id === 'string' && Array.isArray(z.ersetzt) && z.ersetzt.includes(id) && a.includes(z.id)) return z.id;
+  }
+  return id;
+}
+
+// Form des Wegs in der Kopfleiste (31.10.2026): 'pfad' oder 'kette', alles andere → 'pfad'. Wirft nie.
+export const WEG_FORMEN = ['pfad', 'kette', 'streifen']; // 'streifen' seit Version 135
+export function wegForm(cfg) {
+  const f = cfg && typeof cfg === 'object' ? cfg.weg : undefined;
+  return WEG_FORMEN.includes(f) ? f : 'pfad';
+}
+
+// Fortschritt ordnen (Version 140): Register (daten/startseite.js FORTSCHRITT) → { id: Set(orte) }.
+// Fehlt das Register oder eine Anzeige darin, gilt der Standard. Unbekannte Anzeigen, unbekannte Orte und kaputte
+// Einträge werden gemeldet (warn) und übersprungen; ein kaputter Eintrag fällt auf seinen Standard zurück. Wirft nie.
+export function fortschrittOrte(reg, standard, orte, warn = () => {}) {
+  const erlaubt = new Set(Array.isArray(orte) ? orte : []);
+  const std = standard && typeof standard === 'object' ? standard : {};
+  const aus = {};
+  for (const [id, liste] of Object.entries(std)) aus[id] = new Set((Array.isArray(liste) ? liste : []).filter(o => erlaubt.has(o)));
+  if (reg === undefined || reg === null) return aus;
+  if (typeof reg !== 'object' || Array.isArray(reg)) { warn('Fortschritt: Register ist kein Objekt, Standard gilt'); return aus; }
+  for (const [id, e] of Object.entries(reg)) {
+    if (!Object.prototype.hasOwnProperty.call(std, id)) { warn(`Fortschritt: unbekannte Anzeige „${id}“`); continue; }
+    if (!e || typeof e !== 'object' || !Array.isArray(e.orte)) { warn(`Fortschritt: „${id}“ ohne Liste orte, Standard gilt`); continue; }
+    const s = new Set();
+    for (const o of e.orte) {
+      if (erlaubt.has(o)) s.add(o);
+      else warn(`Fortschritt: unbekannter Ort „${o}“ bei „${id}“`);
+    }
+    aus[id] = s;
+  }
+  return aus;
+}
+// Steht Anzeige `id` an Ort `ort`? Unbekannte Anzeige → false.
+export function zeigtFortschritt(orte, id, ort) {
+  return !!(orte && orte[id] instanceof Set && orte[id].has(ort));
+}
+// Text im Gegner-Streifen (bzw. Pfad, Kette) aus den Teilen, die an `ort` stehen. Reihenfolge: „x von y“, „noch n bis …“,
+// Kapitel. Bleibt nichts übrig (z. B. Runde schon gewonnen und „x von y“ steht nicht hier), gilt `rueckfall`.
+// teile: { rundeStand, rest, kapitel } als fertige Texte ('' = nicht vorhanden).
+export function wegText(orte, ort, teile, rueckfall = '') {
+  const t = teile || {};
+  const liste = ['rundeStand', 'rest', 'kapitel'].filter(id => zeigtFortschritt(orte, id, ort) && t[id]).map(id => t[id]);
+  return liste.length ? liste.join(' · ') : rueckfall;
 }

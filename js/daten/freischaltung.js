@@ -9,7 +9,7 @@
 // Unbekannte oder kaputte Regeln sperren (sicherer Rückfall) und erscheinen als Warnung in der Konsole.
 
 // Zähler, die Regeln abfragen dürfen. Ein Zähler, den die App noch nicht erfasst, gilt als 0.
-// rueckfaelle: kommt mit dem Eintrag Sieg/Rückfall (Startseite Phase D); bis dahin immer 0.
+// rueckfaelle: Zahl der schweren Tage (eigene Einträge, Version 75); interner Name, nie sichtbar.
 export const ZAEHLER = ['siege', 'rueckfaelle'];
 
 // Untere Leiste, höchstens MAX_TABS Einträge (Handybreite).
@@ -24,12 +24,20 @@ export const TABS = [
   // Logbuch („Chronik“ in Fantasy) von Anfang an offen (Entscheidung 30.10.2026, vorher ab Stufe 2): Rückschau auf das eigene
   // Tun stärkt das Erleben von Fortschritt gerade am Anfang; der leere Zustand hat einen eigenen Text (lb.leer).
   { screen: 'logbuch', label: { text: 'tab.logbuch' }, icon: 'buch', frei: { art: 'immer' } }, // gebaut seit Version 41
-  { screen: 'karte', label: { text: 'tab.karte' }, icon: 'karte', frei: { art: 'kapitel', ab: 2 }, neuText: 'neu.karte' }, // gebaut seit 30.10.2026; ab Kapitel 2, vorher wäre die Reise fast leer
+  // Karte und Stadt getauscht (Entscheidung 30.10.2026, Version 82): die Karte zeigt nach dem ersten Sieg das eigene Geschaffte
+  // (Erfolgserleben stärkt Selbstwirksamkeit gerade am Anfang); die Stadt zeigt, wer du wirst, und trägt mehr, wenn mehr dahintersteht.
+  { screen: 'karte', label: { text: 'tab.karte' }, icon: 'karte', frei: { art: 'sieg' }, sperrText: 'tab.siegGesperrt', neuText: 'neu.karte' }, // gebaut seit 30.10.2026
   // Reihenfolge Start | Logbuch | Karte | Stadt (Wunsch 30.10.2026, vorher Stadt an zweiter Stelle). Die Taktung der Freigaben
   // steht unabhängig davon in FREIGABE.reihenfolge.
-  { screen: 'stadt', label: { wort: 'stadt' }, icon: 'burg', frei: { art: 'sieg' }, sperrText: 'tab.stadtGesperrt', neuText: 'neu.stadt' },
+  { screen: 'stadt', label: { wort: 'stadt' }, icon: 'burg', frei: { art: 'kapitel', ab: 2 }, neuText: 'neu.stadt' }, // bis Version 81 nach dem ersten Sieg
   { screen: 'gruppe', label: { text: 'tab.gruppe' }, icon: 'menschen', frei: { art: 'stufe', ab: 4 }, bald: true }
 ];
+
+// Tab „Bald“ (Etappe 3, Teil A, 02.11.2026): gesperrte und noch nicht gebaute Bereiche stehen nicht mehr mit Schloss in der
+// Leiste, sondern gesammelt hinter einem Tab „Bald“; ein Tipp öffnet das Blatt „Was noch kommt“. Ohne Fortschrittsring
+// (Entscheidung 02.11., Punkt 2a: ein zweiter Zähler neben dem Kampf lenkt vom Verhalten auf die Belohnung).
+// an: false stellt die alte Leiste mit Schlössern wieder her. Sind alle Bereiche frei und gebaut, verschwindet der Tab.
+export const BALD = { an: true, icon: 'sanduhr', label: 'tab.bald' };
 
 // Funktionen außerhalb der Leiste (Entscheidung 27.10.2026). Noch nicht gebaut; die Regeln gelten,
 // sobald die Funktion zurückkommt (Abfrage: funktionFrei('<id>') in app.js).
@@ -61,7 +69,7 @@ export const FUNKTIONEN = {
 //                    Versprechen; unbestimmtes Warten fühlt sich wie ein gebrochenes an.
 export const FREIGABE = {
   maxProTag: 1,
-  reihenfolge: ['stadt', 'welten', 'angebot', 'karte'],
+  reihenfolge: ['karte', 'welten', 'angebot', 'stadt'], // seit Version 82 Karte zuerst (vorher Stadt zuerst, Karte zuletzt)
   nichtAmHoehepunkt: true,
   sperreBisFreigabe: true,
   pauseBei: ['sieg', 'levelup', 'story'],

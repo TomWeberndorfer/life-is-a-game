@@ -17,7 +17,7 @@ export const STANDARD = Object.freeze({
 // Version 68: Höhepunkte (zählen für „Fragen nie an einem Höhepunkt-Tag“). Fragen selbst sind keine.
 export const HOEHEPUNKTE = ['sieg', 'lauf', 'gegner', 'levelup', 'story'];
 
-const WERTE = { storyNachCheck: ['karte', 'popup'], storyBeiSieg: ['spaeter', 'danach'], levelupBeiSieg: ['zeile', 'eigen'], weltenwahl: ['naechsterBesuch', 'sofort'], kapitelwechsel: ['naechsterBesuch', 'sofort'] };
+const WERTE = { storyNachCheck: ['karte', 'popup'], storyBeiSieg: ['spaeter', 'danach'], levelupBeiSieg: ['zeile', 'eigen'], weltenwahl: ['naechsterBesuch', 'sofort'], kapitelwechsel: ['vorstellung', 'naechsterBesuch', 'sofort'] };
 const PAUSE_MAX = 5000;
 const TAG = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -56,7 +56,8 @@ export function konfig(cfg) {
 
 // Einblendungen nach einem Tages-Check.
 // e: { ereignisse (aus kern.tagesCheck), story: { neu, nr }, antwort, trefferVorher, trefferNachher,
-//      vorigeGewonnen (Runde davor gewonnen, Version 68), hoehepunktHeute (heute schon ein Höhepunkt gezeigt, Version 68) }
+//      vorigeGewonnen (Runde davor gewonnen, Version 68), hoehepunktHeute (heute schon ein Höhepunkt gezeigt, Version 68),
+//      vorgestellt (Version 115: der neue Gegner wurde schon vorgestellt, z. B. vor einem Rückgängig am Siegtag) }
 // darfFragen(art) → bool (Abstand je Bewertung, Analytics)
 // Liefert { momente: [...], weltenwahlSofort }.
 export function momenteNachCheck(e, cfgRoh, darfFragen = () => true) {
@@ -72,12 +73,20 @@ export function momenteNachCheck(e, cfgRoh, darfFragen = () => true) {
   if (sieg) {
     const s = { art: 'sieg', gegner: sieg.gegner, neuerGegner: !!sieg.neuerGegner };
     if (Number.isInteger(sieg.anzahl)) s.anzahl = sieg.anzahl; // Einstiegsrampe: was dieser Sieg gebraucht hat
+    // Kapitelsieg (Version 119): Nummer des Kapitels, das mit diesem Sieg endet. sieg.kapitel ist schon das Kapitel
+    // danach (gegnerNr nach dem Sieg); ohne neuen Gegner bleibt es dasselbe Kapitel (kein Kapitelende).
+    if (sieg.neuerGegner && Number.isInteger(sieg.kapitel) && sieg.kapitel > 1) s.kapitel = sieg.kapitel - 1;
     if (lvl && cfg.levelupBeiSieg === 'zeile') Object.assign(s, { level: lvl.level, titel: lvl.titel });
     m.push(s);
     // Version 68: bei 'naechsterBesuch' kommen Weg und neuer Gegner erst, wenn die neue Runde begonnen hat (kapitelFaellig)
     if (sieg.neuerGegner && cfg.kapitelwechsel === 'sofort') {
       m.push({ art: 'lauf', von: sieg.gegner, nach: sieg.naechster });
       m.push(gegnerMoment(sieg.naechster, sieg.kapitel, sieg.naechsteAnzahl, sieg.anzahl));
+    }
+    // Version 115 („Einführung vor Anzeige“): am Siegtag als dritte Szene die Vorstellung des Neuen (ohne „Weg“, höchstens
+    // 3 Szenen: Der letzte Schlag → Siegblatt → Vorstellung). Schon vorgestellt (Rückgängig und erneut gesiegt) → nicht noch einmal.
+    if (sieg.neuerGegner && cfg.kapitelwechsel === 'vorstellung' && !(e && e.vorgestellt === true)) {
+      m.push({ ...gegnerMoment(sieg.naechster, sieg.kapitel, sieg.naechsteAnzahl, sieg.anzahl), vorstellung: true });
     }
     if (lvl && cfg.levelupBeiSieg === 'eigen') m.push({ art: 'levelup', level: lvl.level, titel: lvl.titel });
     if (story.neu && cfg.storyBeiSieg === 'danach') m.push({ art: 'story', nr: story.nr });
@@ -139,9 +148,12 @@ export function weltenwahlFaellig(spiel, heuteK, cfgRoh) {
 // auch nach Tagen Pause. a = kern.auswertung(), kette = kern.kette(stand), basis = Kennung der Quest (Held, Start, Vorlage),
 // gesehen = Liste schon gezeigter Kennungen, siege = stand.siege. Ergebnis { kennung, momente } oder null. Wirft nie.
 // Stichtag (Umstellung auf Version 68): Wer den Gegner davor besiegt hat, sah Weg und neuen Gegner schon am Siegtag.
+// Version 115 ('vorstellung'): fällig, solange die Vorstellung nicht gesehen ist und die neue Runde läuft (am Siegtag selbst
+// kommt sie als dritte Szene nach dem Sieg bzw. über den Hinweis „Später ansehen“). Nur die Vorstellung, ohne „Weg“.
+// gesehen = spiel.vorgestellt, basis dann mit Präfix „boss:“ (logik/vorstellung.js).
 export function kapitelFaellig(a, kette, basis, gesehen, cfgRoh, { siege = [] } = {}) {
   const cfg = konfig(cfgRoh);
-  if (cfg.kapitelwechsel !== 'naechsterBesuch') return null;
+  if (cfg.kapitelwechsel === 'sofort') return null;
   if (!a || !Number.isInteger(a.gegnerNr) || a.gegnerNr < 2 || !Number.isInteger(a.rundeTag) || a.rundeTag < 0) return null;
   const k = Array.isArray(kette) ? kette : [];
   const nach = k[a.gegnerNr - 1], von = k[a.gegnerNr - 2];
@@ -154,7 +166,9 @@ export function kapitelFaellig(a, kette, basis, gesehen, cfgRoh, { siege = [] } 
     const beginn = sieg || a.rundeVon; // alte Stände ohne Gegner im Sieg: Beginn der Runde
     if (typeof beginn === 'string' && beginn < cfg.kapitelStichtag) return null;
   }
-  return { kennung, momente: [{ art: 'lauf', von, nach }, gegnerMoment(nach, a.gegnerNr, a.anzahl, a.vorigeAnzahl)] };
+  const neu = gegnerMoment(nach, a.gegnerNr, a.anzahl, a.vorigeAnzahl);
+  if (cfg.kapitelwechsel === 'vorstellung') return { kennung, momente: [{ ...neu, kennung, vorstellung: true, morgen: false }] };
+  return { kennung, momente: [{ art: 'lauf', von, nach }, neu] };
 }
 
 // Einblendung „neuer Gegner“. Einstiegsrampe (30.10.2026): anzahl = Ziel der neuen Runde, staerker = mehr als beim

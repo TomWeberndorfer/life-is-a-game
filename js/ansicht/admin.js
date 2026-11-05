@@ -26,6 +26,7 @@ export const ADMIN_SCREENS = {
     const lb = M.lebensbereiche(t);
     const fs = M.freischaltungen(t);
     const kl = M.klappen(t);
+    const vs = M.versionen(t);
     const lbName = id => (LEBENSBEREICHE.find(d => d.id === id) || { name: id }).name;
     const { pct, minSek } = M.format;
     const kachel = (l, v, s) => `<div class="kachel"><span class="eyebrow">${l}</span><span class="zahl">${v}</span><span class="klein">${s}</span></div>`;
@@ -60,7 +61,10 @@ export const ADMIN_SCREENS = {
         </div>
         <div class="karte spalte"><span class="eyebrow">${esc(T('admin.erkenntnisse'))}</span><ul class="erkenntnisse">${er.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
         <div class="karte spalte"><span class="eyebrow">${esc(T('admin.ranking'))}</span><span class="klein">${esc(T('admin.rankingText'))}</span>
-          ${rk.map((r, i) => balken(`${i + 1} ${r.name}`, r.score, r.score)).join('')}</div>
+          ${rk.map((r, i) => balken(`${i + 1} ${r.name}`, r.score, esc(T('admin.rankingZeile', { score: r.score, n: r.tester, basis: t.length })))).join('')}</div>
+        <div class="karte spalte"><span class="eyebrow">${esc(T('admin.versionen'))}</span>
+          ${vs.map(v => balken(v.nr === null ? T('admin.ohneVersion') : T('admin.versionNr', { nr: v.nr }), 100 * v.tester / Math.max(1, t.length), esc(T('admin.versionZeile', { sessions: v.sessions, n: v.tester })))).join('') || `<span class="klein">${esc(T('admin.versionenLeer'))}</span>`}
+          <span class="klein">${esc(T('admin.versionenText'))}</span></div>
         <div class="karte spalte"><span class="eyebrow">${esc(T('admin.bosskette'))}</span>
           ${balken(T('admin.besiegt'), kp.basis ? 100 * kp.sieger / kp.basis : 0, esc(T('admin.vonBasis', { n: kp.sieger, basis: kp.basis })))}
           ${kp.stufen.map(s => balken(T('admin.kapitel', { kapitel: s.kapitel }), kp.basis ? 100 * s.tester / kp.basis : 0, `${s.tester}`)).join('') || `<span class="klein">${esc(T('admin.kapitelLeer'))}</span>`}

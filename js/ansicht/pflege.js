@@ -17,7 +17,7 @@ const name = (T, gruppe, id) => (PFLEGE_NAMEN[gruppe].includes(id) ? T(`pflege.$
 export const formPos = (f, form) => (form !== 'alle' && f.formen && f.formen[form]) || TB.normPos(f.pos) || TB.STANDARD_POS;
 
 export function pflegeHtml(c) {
-  const { T, esc, icon, index, p, stile, plaetze, standardTexte, bildFuer, eingebautesBild, kannHochladen, verbunden } = c;
+  const { T, esc, icon, index, p, stile, plaetze, standardTexte, bildFuer, eingebautesBild, kannHochladen, verbunden, kartenLuecken, platzBekannt } = c;
   const FORM_NAME = k => name(T, 'form', k);
   const QUELLE_NAME = q => name(T, 'quelle', q);
   const ansichtWahl = `<div class="zwei" role="group" aria-label="${esc(T('pflege.ansichtAria'))}">${[['eintraege', T('pflege.eintraege')], ['medien', T('pflege.medien')]].map(([k, t]) => `<button class="opt kurz ${(p.ansicht || 'eintraege') === k ? 'sel' : ''}" aria-pressed="${(p.ansicht || 'eintraege') === k}" data-a="pf-ansicht" data-id="${k}">${esc(t)}</button>`).join('')}</div>`;
@@ -56,7 +56,7 @@ export function pflegeHtml(c) {
   const std = f.typ === 'text' && typeof standardTexte[f.schluessel] === 'string' ? standardTexte[f.schluessel] : null;
   const eigeneForm = wahl !== 'alle' && f.formen && f.formen[wahl];
   // Version 32: unbekannte Schlüssel melden und Ähnliches vorschlagen
-  const chk = TB.schluesselPruefen(f.schluessel, f.typ, f.typ === 'bild' ? plaetze : Object.keys(standardTexte));
+  const chk = TB.schluesselPruefen(f.schluessel, f.typ, f.typ === 'bild' ? plaetze : Object.keys(standardTexte), f.typ === 'bild' ? platzBekannt : null);
   const normKey = TB.normSchluessel(f.schluessel, f.typ);
   const vorschlagKnopf = chk.vorschlag ? ` <button class="link" data-a="pf-vorschlag" data-id="${esc(chk.vorschlag)}">${esc(T('pflege.vorschlag', { schluessel: chk.vorschlag }))}</button>` : '';
   const schluesselHinweis = chk.bekannt ? ''
@@ -112,9 +112,14 @@ export function pflegeHtml(c) {
     const alle = plaetze.map(k => ({ k, b: bildFuer(platzStil, k, TB.artVon(k), 'quadrat') }));
     const zahl = q => alle.filter(x => x.b.quelle === q).length;
     const sicht = p.nurLuecken ? alle.filter(x => x.b.quelle === 'platzhalter') : alle;
+    // Version 126: ruhiger Hinweis auf Lücken in der Bildfolge der Karte (nur hier, nie in der App)
+    let luecken = [];
+    try { luecken = typeof kartenLuecken === 'function' ? kartenLuecken(platzStil) : []; } catch (e) { console.warn('Pflege (Kartenbilder):', e.message); }
+    const karteHinweis = luecken.length ? `<p class="klein pf-warn" role="status">${esc(T(luecken.length === 1 ? 'pflege.kartenbildFehlt' : 'pflege.kartenbilderFehlen', { nr: luecken.join(', ') }))}</p>` : '';
     platzKarte = `<div class="karte spalte">
       <span class="eyebrow">${esc(T('pflege.plaetzeIn', { stil: stilName(platzStil) }).toUpperCase())}</span>
       <p class="klein">${esc(T('pflege.plaetzeZahl', { tabelle: zahl('tabelle'), eingebaut: zahl('eingebaut'), platzhalter: zahl('platzhalter') }))}</p>
+      ${karteHinweis}
       <button class="opt kurz ${p.nurLuecken ? 'sel' : ''}" aria-pressed="${!!p.nurLuecken}" data-a="pf-nur-luecken">${esc(T('pflege.nurLuecken'))}</button>
       <div class="pf-plaetze">${sicht.map(({ k, b }) => `<button class="pf-platz q-${b.quelle}" data-a="pf-platz" data-id="${esc(k)}" aria-label="${esc(k)}, ${esc(QUELLE_NAME(b.quelle))}${b.ueber ? ', ' + esc(T('pflege.wie', { platz: b.ueber })) : ''}">${bildTag(b.src, b.ph, b.pos, 'pf-platz-bild')}<span class="pf-platz-nm">${esc(k)}</span><span class="pf-platz-q">${esc(QUELLE_NAME(b.quelle))}${b.ueber ? ' · ' + esc(T('pflege.wie', { platz: b.ueber })) : ''}</span></button>`).join('') || `<span class="klein">${esc(T('pflege.keinePlaetze'))}</span>`}</div>
     </div>`;
@@ -207,13 +212,13 @@ function medienHtml(c, stilName) {
 // Logik in logik/pflege.js; Datenbank und Bildspeicher kommen über kx.pflegeUmgebung() (Adapter aus app.js).
 export const PFLEGE_SCREENS = {
   pflege() {
-    const { SCREENS, T, bildFuer, bildPlaetze, eingebautesBild, pflegeZustand, tabelle, ui } = kx;
+    const { SCREENS, T, bildFuer, bildPlaetze, eingebautesBild, kartenLuecken, kartenPlatzBekannt, pflegeZustand, tabelle, ui } = kx;
     if (!ui.istBesitzer) return SCREENS.einstellungen();
     const plaetze = bildPlaetze();
     return pflegeHtml({
       T, esc, icon, index: tabelle, p: pflegeZustand(),
       stile: STIL_REIHENFOLGE.map(id => ({ id, name: STILE[id].name })),
-      plaetze, standardTexte: TEXTE, bildFuer, eingebautesBild,
+      plaetze, standardTexte: TEXTE, bildFuer, eingebautesBild, kartenLuecken, platzBekannt: kartenPlatzBekannt,
       eingebaut: stilId => plaetze.map(platz => ({ platz, ...eingebautesBild(stilId, platz) })).filter(b => b.datei).map(b => ({ ...b, eigen: b.datei.startsWith('/_blob/') })),
       kannHochladen: !!ui.assets, verbunden: !!ui.db
     });

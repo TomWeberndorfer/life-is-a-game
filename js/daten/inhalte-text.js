@@ -1,4 +1,4 @@
-// ERZEUGT aus claude/inhalte.md (30.10.2026, 11:11) mit claude/werkzeuge/inhalte-uebernehmen.mjs – nicht von Hand ändern.
+// ERZEUGT aus claude/inhalte.md (02.11.2026, 14:17) mit claude/werkzeuge/inhalte-uebernehmen.mjs – nicht von Hand ändern.
 // Texte ändern: in der Markdown-Datei, dann „Geschichten übernehmen“. Einstellungen (Anzahl je Tag, Rückfall) stehen in inhalte.js.
 
 export const BOTSCHAFTEN = [
@@ -7,7 +7,7 @@ export const BOTSCHAFTEN = [
     "texte": [
       "{Gegner} und ich kennen uns schon lange. Heute zeige ich dir, wie wir {ihn} packen.",
       "Ein neues Abenteuer! Merk dir nur eines: {faehigkeit}. Den Rest machen wir gemeinsam.",
-      "Ich kenne {gegner} besser als jeder andere. {Er} wirkt groß, aber {er} hat eine Schwäche. Wir finden sie zusammen."
+      "Ich kenne {gegnerAkk} besser als jeder andere. {Er} wirkt groß, aber {er} hat eine Schwäche. Wir finden sie zusammen."
     ]
   },
   {
@@ -16,7 +16,7 @@ export const BOTSCHAFTEN = [
       "Kaum liegt der eine am Boden, steht schon der Nächste vor der Tür: {Gegner}. Gleiche Fähigkeit, neuer Kampf.",
       "{Gegner} hat von deinem Sieg gehört und will es jetzt selbst wissen. Wir sind bereit.",
       "Neuer Gegner, alte Stärke: Du weißt jetzt, wie man gewinnt. {Gegner} weiß es noch nicht.",
-      "Ich habe {gegner} beobachtet, während du gekämpft hast. {Er} ist anders, aber nicht stärker."
+      "Ich habe {gegnerAkk} beobachtet, während du gekämpft hast. {Er} ist anders, aber nicht stärker."
     ]
   },
   {
@@ -95,6 +95,86 @@ export const BOTSCHAFTEN = [
       "Wenn {gegner} heute auftaucht: kurz anhalten, an {faehigkeit} denken, dann handeln.",
       "Ein kleiner Sieg heute zählt mehr als ein großer Plan für morgen.",
       "Ich frage mich, wo {gegner} sich heute versteckt. Halt die Augen offen."
+    ]
+  },
+  {
+    "anlass": "rueckblick_stark",
+    "texte": [
+      "Was für eine Runde. {n} Siegel, und {gegner} musste weichen. Ich habe jeden Tag mitgezählt.",
+      "Du hast {gegnerAkk} diese Runde nicht nur getroffen, du hast {ihn} durchschaut. Das nimmt dir keiner mehr.",
+      "Schau dir die Siegel an. Jedes davon gehört dir, und am Ende stand {gegner} nicht mehr.",
+      "Ich schreibe dir das, damit du es nicht vergisst: Diese Runde hast du gewonnen, Tag für Tag.",
+      "Mit {faehigkeit} hast du {gegnerAkk} in die Knie gezwungen. Weißt du noch, wie sich der letzte Treffer angefühlt hat?"
+    ]
+  },
+  {
+    "anlass": "rueckblick_gemischt",
+    "texte": [
+      "Nicht jeder Tag war ein Treffer, aber {n} waren es. Auf denen bauen wir auf.",
+      "{Gegner} steht noch, aber {er} hat gemerkt, dass du da bist. {n} Mal hast du dich gestellt.",
+      "Eine Runde mit Höhen und Tiefen. Genau aus solchen Runden lernt man am meisten.",
+      "{n} Siegel in dieser Runde. Schau mal, was an den guten Tagen anders war.",
+      "Knapp daneben heißt: fast da. {Gegner} weiß jetzt, dass es enger wird."
+    ]
+  },
+  {
+    "anlass": "rueckblick_schwer",
+    "texte": [
+      "Diese Runde war zäh, das weiß ich. Dass du jetzt zurückschaust, zählt mehr als jede Zahl.",
+      "{Gegner} hatte diese Runde die Oberhand. Das passiert den Besten. Wir schauen, was es dir leichter macht.",
+      "Manchmal passt das Ziel nicht zu der Zeit, die gerade ist. Das ist kein Urteil über dich, nur ein Hinweis.",
+      "Keine Runde ist umsonst. Auch an schweren Tagen lernst du, wann {gegner} kommt.",
+      "Ich bin noch da, und du auch. Nächste Runde fangen wir einfach wieder an."
+    ]
+  },
+  {
+    "anlass": "lagerfeuer_abend",
+    "texte": [
+      "Setz dich ans Feuer. Für heute ist der Weg gegangen.",
+      "Du hast heute hingeschaut, bei jedem von uns. Das reicht. Morgen geht es weiter.",
+      "Die Glut hält bis morgen. Du auch.",
+      "Ruh dich aus. {stadtname} schläft ruhig, weil du heute da warst.",
+      "Keiner von uns muss heute noch kämpfen. Das hast du möglich gemacht."
+    ]
+  },
+  {
+    "anlass": "notfall_mitgefuehl",
+    "texte": [
+      "Das ist gerade schwer. Und es ist menschlich, dass es schwer ist.",
+      "Du musst das nicht allein lösen, und nicht heute alles.",
+      "Sprich mit dir so, wie du mit einem guten Freund sprechen würdest.",
+      "Viele Menschen kennen dieses Gefühl. Du bist damit nicht falsch.",
+      "Es ist in Ordnung, gerade nicht stark zu sein. Ein kleiner Schritt reicht."
+    ]
+  },
+  {
+    "anlass": "erfolg_erster",
+    "texte": [
+      "Du bist jemand, der anfängt, statt zu warten. {n} von {anzahl} in dieser Runde.",
+      "Der erste Treffer steht. Du bist jemand, der es ernst meint. {n} von {anzahl} in dieser Runde.",
+      "Du bist jemand, der hinschaut, wenn es zählt. {n} von {anzahl} in dieser Runde."
+    ]
+  },
+  {
+    "anlass": "erfolg_halb",
+    "texte": [
+      "Du bist jemand, der dranbleibt. {n} von {anzahl} in dieser Runde.",
+      "Das ist kein Zufall mehr. Du bist jemand, der Wort hält. {n} von {anzahl} in dieser Runde.",
+      "Du bist jemand, der auch an vollen Tagen daran denkt. {n} von {anzahl} in dieser Runde."
+    ]
+  },
+  {
+    "anlass": "erfolg_fast",
+    "texte": [
+      "Du bist jemand, der Dinge zu Ende bringt. {n} von {anzahl}, noch {rest}.",
+      "Du bist jemand, der durchhält, wenn es eng wird. {n} von {anzahl} in dieser Runde."
+    ]
+  },
+  {
+    "anlass": "erfolg_sieg",
+    "texte": [
+      "Du bist jemand, der seine Vorsätze lebt. {n} von {anzahl} in dieser Runde.",
+      "Geschafft. Du bist jemand, der dranbleibt. {n} von {anzahl} in dieser Runde."
     ]
   }
 ];
@@ -574,10 +654,10 @@ export const STORIES = {
       },
       {
         "titel": "Der alte Name",
-        "vorschau": "{verbuendeter} kennt {gegner}. Schon sehr lange.",
+        "vorschau": "{verbuendeter} kennt {gegnerAkk}. Schon sehr lange.",
         "text": {
           "ja": "Am Feuer bricht {verbuendeter} das Schweigen. „Früher hat {gegner} gewacht, so wie ich. {Er} hat die Menschen beschützt, mit aller Kraft und ohne Pause. Aber Kraft, die nie zur Ruhe kommt, wird irgendwann zu Feuer.“ Du verstehst plötzlich, warum {gegner} ausgerechnet dich gefunden hat.",
-          "nein": "In der Nacht hörst du {verbuendeter} im Schlaf einen Namen murmeln. Nicht {gegner}, sondern einen anderen, älteren Namen. Am Morgen fragst du nach. Lange keine Antwort. Dann: „So hieß {er}, bevor das Feuer kam.“"
+          "nein": "In der Nacht hörst du {verbuendeter} im Schlaf einen Namen murmeln. Nicht {gegnerAkk}, sondern einen anderen, älteren Namen. Am Morgen fragst du nach. Lange keine Antwort. Dann: „So hieß {er}, bevor das Feuer kam.“"
         }
       },
       {
@@ -1005,7 +1085,7 @@ export const BOSS_REAKTIONEN = {
   "_allgemein": {
     "treffer": [
       "{Gegner} taumelt. Dein Treffer sitzt.",
-      "Ein Riss geht durch {gegner}. {Er} weicht einen Schritt zurück.",
+      "Ein Riss geht durch {gegnerAkk}. {Er} weicht einen Schritt zurück.",
       "{verbuendeter} nickt dir zu. Diesen Schlag hat {gegner} nicht kommen sehen.",
       "{Gegner} wankt und sucht Halt. {Er} findet keinen.",
       "Ein sauberer Treffer. {Gegner} ist heute schwächer als gestern."
@@ -1035,7 +1115,7 @@ export const BOSS_REAKTIONEN = {
     "ruhe": [
       "Heute keine Glut. {Gegner} schleicht um das Lager und findet keinen Funken.",
       "{Gegner} hat sich nicht gezeigt. Irgendwo knistert es leise.",
-      "Ein stiller Tag im Wutwald. {verbuendeter} legt Holz nach, nicht für {gegner}."
+      "Ein stiller Tag im Wutwald. {verbuendeter} legt Holz nach, nicht für {gegnerAkk}."
     ],
     "phase": [
       "{Gegner} wird unruhig. Ihr Feuer flackert, sie spürt, dass du stärker wirst."
@@ -1080,7 +1160,7 @@ export const BOSS_REAKTIONEN = {
     ],
     "ruhe": [
       "Ein ruhiger Tag. {Gegner} döst am Wegrand und wartet vergeblich auf dich.",
-      "Heute kein Kampf mit {gegner}. Der Nebel bleibt dünn."
+      "Heute kein Kampf mit {gegnerDat}. Der Nebel bleibt dünn."
     ],
     "phase": [
       "{Gegner} ist hellwach vor Sorge. {Er} spürt, dass Warten bei dir nicht mehr zieht."
@@ -1172,7 +1252,7 @@ export const BOSS_REAKTIONEN = {
   },
   "kaufrausch": {
     "treffer": [
-      "Eine Nacht drüber geschlafen, und der Wagen von {gegner} bleibt halb voll.",
+      "Eine Nacht drüber geschlafen, und der Wagen von {gegnerDat} bleibt halb voll.",
       "„Nur heute“ hat nicht gezogen. {Gegner} packt beleidigt ein.",
       "Auf die Merkliste statt in den Korb. Treffer."
     ],
