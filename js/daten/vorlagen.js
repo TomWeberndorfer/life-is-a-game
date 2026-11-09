@@ -3,6 +3,11 @@
 // Namen und Bilder je Stil stehen in stile.js (Schlüssel = heroId bzw. id der Figur).
 import { HELDEN } from './helden.js';
 import { LEBENSBEREICHE } from './lebensbereiche.js';
+import { pruefeBedingungen } from '../logik/bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
+import { ZAEHLWEISEN } from './zaehlweisen.js';
+import { GEGNER, KETTEN } from './bosse.js'; // Gegner und Ketten aus Obsidian (06.11.2026)
+import { AURA } from './aura.js';
+import { BEDINGUNG_OPT } from './bedingungen.js';
 
 // Onboarding-Gruppen: nur Anzeige im Onboarding (Bildschirm 1). Eine Gruppe kann mehrere
 // Lebensbereiche abdecken (z. B. Familie & Beziehungen → partner, adventure). Gespeichert wird je Held die domain.
@@ -52,38 +57,10 @@ export const PROBLEME = {
   ]
 };
 
-// Gegner: kraft wird aus der Quest berechnet (ein Segment je nötiger Anwendung).
-export const GEGNER = {
-  zuckerkobold: {
-    name: 'Der Zuckerkobold',
-    kurz: 'Zuckerkobold',
-    text: 'Er versucht, dich zu unüberlegtem Naschen zu verleiten.',
-    staerker: 'wenn Gewohnheiten automatisch ablaufen',
-    schwaecher: 'wenn du bewusst handelst'
-  },
-  gaehnor: { name: 'Gähnor, der Träge', kurz: 'Gähnor', genus: 'm', text: 'Er flüstert dir zu, dass morgen auch noch ein Tag ist.', staerker: 'wenn du auf Lust wartest', schwaecher: 'wenn du einfach klein anfängst' },
-  nachtschwaermer: { name: 'Der Nachtschwärmer', kurz: 'Nachtschwärmer', text: 'Er hält dich mit „nur noch eine Folge“ wach.', staerker: 'wenn der Bildschirm mit ins Bett kommt', schwaecher: 'wenn der Abend ein festes Ende hat' },
-  heisshunger: { name: 'Der Heißhunger', kurz: 'Heißhunger', text: 'Er taucht auf, wenn du müde oder gestresst bist.', staerker: 'wenn du hungrig einkaufst oder nebenbei isst', schwaecher: 'wenn du kurz innehältst' },
-  hetzra: { name: 'Hetzra, die Eilige', kurz: 'Hetzra', genus: 'f', text: 'Sie füllt jeden Abend, bevor ihr euch seht.', staerker: 'wenn nichts fest geplant ist', schwaecher: 'wenn eure Zeit im Kalender steht' },
-  langeweile: { name: 'Der Graue Nachmittag', kurz: 'Grauer Nachmittag', text: 'Er schleicht sich ein, wenn keiner eine Idee hat.', staerker: 'wenn der Bildschirm die schnellste Lösung ist', schwaecher: 'wenn Ideen griffbereit sind' },
-  aufschieberitis: { name: 'Die Aufschieberitis', kurz: 'Aufschieberitis', text: 'Sie macht jede Aufgabe größer, als sie ist.', staerker: 'wenn der erste Schritt unklar ist', schwaecher: 'wenn du winzig anfängst' },
-  irrlicht: { name: 'Das Handy-Irrlicht', kurz: 'Handy-Irrlicht', text: 'Es lockt dich mit einem kurzen Blick weg.', staerker: 'wenn das Handy in Reichweite liegt', schwaecher: 'wenn es außer Sicht ist' },
-  kaufrausch: { name: 'Der Kaufrausch', kurz: 'Kaufrausch', text: 'Er macht aus „brauche ich vielleicht“ ein „sofort“.', staerker: 'wenn der Kauf mit einem Klick geht', schwaecher: 'wenn du eine Nacht darüber schläfst' },
-  geldfresser: { name: 'Der Geldfresser', kurz: 'Geldfresser', text: 'Er nimmt sich, was am Monatsende übrig wäre.', staerker: 'wenn zuerst ausgegeben wird', schwaecher: 'wenn zuerst gespart wird' },
-  leere: { name: 'Die Leere', kurz: 'Leere', text: 'Sie lässt dich durch den Abend scrollen.', staerker: 'wenn dir gerade nichts einfällt', schwaecher: 'wenn eine kleine Liste bereitliegt' },
-  einsiedler: { name: 'Der Einsiedler', kurz: 'Einsiedler', text: 'Er sagt: Die anderen melden sich schon.', staerker: 'wenn du wartest', schwaecher: 'wenn du den ersten Schritt machst' },
-  trott: { name: 'Der alte Trott', kurz: 'Alter Trott', text: 'Er hält dich in deinen alten Gewohnheiten fest.', staerker: 'wenn alles automatisch läuft', schwaecher: 'wenn du bewusst handelst' },
-  // Version 39: Resilienz. Wutwald-Kette aus dem alten Prototyp (Drycha → Murrgrim → Velkra → Morvane).
-  // Bis Etappe 3 (Serie/Rückfall) zählt sie wie jede Kette: X Anwendungen je Runde.
-  drycha: { name: 'Drycha, Herrin des Zorns', kurz: 'Drycha', genus: 'f', text: 'Sie macht aus einem kleinen Funken in Sekunden ein Feuer.', staerker: 'wenn du müde oder unter Druck bist', schwaecher: 'wenn du kurz Abstand nimmst' },
-  murrgrim: { name: 'Murrgrim, der Ungeduldige', kurz: 'Murrgrim', genus: 'm', text: 'Er tigert auf und ab und klopft auf seine Uhr.', staerker: 'wenn etwas länger dauert als gedacht', schwaecher: 'wenn du ruhig ansprichst, was dich stört' },
-  velkra: { name: 'Velkra, die Nachtragende', kurz: 'Velkra', genus: 'f', text: 'Sie hält alten Ärger fest und holt ihn immer wieder hervor.', staerker: 'wenn Ärger unausgesprochen bleibt', schwaecher: 'wenn du Gefühl und Wunsch benennst' },
-  morvane: { name: 'Morvane, Königin der alten Muster', kurz: 'Morvane', genus: 'f', text: 'Sie ruft alle alten Reaktionen auf einmal zurück.', staerker: 'wenn alles automatisch abläuft', schwaecher: 'wenn du deine neuen Wege schon oft gegangen bist' },
-  sturmgeist: { name: 'Der Sturmgeist', kurz: 'Sturmgeist', text: 'Er wirbelt alles auf, bis du nicht mehr klar denken kannst.', staerker: 'wenn zu viel gleichzeitig passiert', schwaecher: 'wenn dein Atem langsamer wird' },
-  gedankenkarussell: { name: 'Das Gedankenkarussell', kurz: 'Gedankenkarussell', text: 'Es dreht dieselben Sorgen wieder und wieder.', staerker: 'wenn du abends wach liegst', schwaecher: 'wenn die Gedanken auf Papier landen' },
-  kritiker: { name: 'Der innere Kritiker', kurz: 'Innerer Kritiker', text: 'Er flüstert dir zu, dass es nie gut genug ist.', staerker: 'wenn etwas schiefgeht', schwaecher: 'wenn du mit dir sprichst wie mit einem Freund' },
-  jasager: { name: 'Der Ja-Sager', kurz: 'Ja-Sager', text: 'Er sagt „gern“, bevor du nachdenken konntest.', staerker: 'wenn du sofort antworten sollst', schwaecher: 'wenn du dir Bedenkzeit nimmst' }
-};
+// Gegner und Ketten (06.11.2026): stehen in daten/bosse.js, ERZEUGT aus bosse.md (Obsidian) mit „Inhalte übernehmen“
+// (Format: logik/bosse-md.js). Hier nicht mehr von Hand ändern. kraft wird aus der Quest berechnet (ein Segment je nötiger
+// Anwendung); aura (05.11.2026): Effekt bei der Vorstellung (daten/aura.js), eine Angabe je Stil in stile.js geht vor.
+export { GEGNER };
 
 // Helden stehen in helden.js (Register mit domain).
 // Fähigkeit = Wenn-dann-Plan mit Schritten.
@@ -115,38 +92,59 @@ export const FAEHIGKEITEN = {
 };
 
 // Eine Zeile je Gruppe und Problem. problem '*' = Rückfall für die Gruppe (z. B. „Etwas anderes“).
-// kette = Gegner nacheinander (erster = gegner). Nach dem Sieg kommt sofort der nächste; mehr Gegner = Liste verlängern.
-// Version 47: Ketten auf mindestens 3 Gegner verlängert (Test über 2 Wochen). Neue Gegner nur HINTEN anhängen:
-// laufende Spielstände übernehmen die Kette beim Laden (ketteAuffrischen), die Position zählt die Siege.
-export const VORLAGEN = [
-  { id: 'gesundheit-suess', gruppe: 'gesundheit', problem: 'suess', domain: 'health', held: 'trogadon', gegner: 'zuckerkobold', kette: ['zuckerkobold', 'heisshunger', 'nachtschwaermer', 'trott'], faehigkeit: 'portionieren', quest: { anzahl: 3 } },
-  { id: 'gesundheit-bewegung', gruppe: 'gesundheit', problem: 'bewegung', domain: 'health', held: 'trogadon', gegner: 'gaehnor', kette: ['gaehnor', 'trott', 'aufschieberitis', 'irrlicht'], faehigkeit: 'zweiMinuten', quest: { anzahl: 3 } },
-  { id: 'gesundheit-schlaf', gruppe: 'gesundheit', problem: 'schlaf', domain: 'health', held: 'trogadon', gegner: 'nachtschwaermer', kette: ['nachtschwaermer', 'irrlicht', 'gedankenkarussell', 'trott'], faehigkeit: 'bildschirmAus', quest: { anzahl: 4 } },
-  { id: 'gesundheit-abnehmen', gruppe: 'gesundheit', problem: 'abnehmen', domain: 'health', held: 'trogadon', gegner: 'heisshunger', kette: ['heisshunger', 'zuckerkobold', 'trott', 'gaehnor'], faehigkeit: 'innehalten', quest: { anzahl: 3 } },
-  { id: 'gesundheit-anderes', gruppe: 'gesundheit', problem: '*', domain: 'health', held: 'trogadon', gegner: 'trott', kette: ['trott', 'gaehnor', 'heisshunger', 'nachtschwaermer'], faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
-  { id: 'familie-zeit', gruppe: 'familie', problem: 'zeit', domain: 'partner', held: 'khara', gegner: 'hetzra', kette: ['hetzra', 'irrlicht', 'trott', 'jasager'], faehigkeit: 'festeZeit', quest: { anzahl: 1 } },
-  { id: 'familie-langeweile', gruppe: 'familie', problem: 'langeweile', domain: 'adventure', held: 'fisker', gegner: 'langeweile', kette: ['langeweile', 'irrlicht', 'gaehnor', 'trott'], faehigkeit: 'ideenglas', quest: { anzahl: 2 } },
-  { id: 'familie-anruf', gruppe: 'familie', problem: 'anruf', domain: 'friends', held: 'ahren', gegner: 'einsiedler', kette: ['einsiedler', 'hetzra', 'aufschieberitis', 'trott'], faehigkeit: 'festerAnruf', quest: { anzahl: 1 } },
-  { id: 'gelassenheit-wut', gruppe: 'gelassenheit', problem: 'wut', domain: 'mindset', held: 'jelninolan', gegner: 'drycha', kette: ['drycha', 'murrgrim', 'velkra', 'morvane'], faehigkeit: 'bisZehn', quest: { anzahl: 6, art: 'bestaendigkeit', rampe: { start: 3, schritt: 1 } } },
-  { id: 'gelassenheit-laut', gruppe: 'gelassenheit', problem: 'laut', domain: 'mindset', held: 'jelninolan', gegner: 'drycha', kette: ['drycha', 'murrgrim', 'morvane'], faehigkeit: 'stoppLeise', quest: { anzahl: 3 } },
-  { id: 'gelassenheit-stress', gruppe: 'gelassenheit', problem: 'stress', domain: 'mindset', held: 'jelninolan', gegner: 'sturmgeist', kette: ['sturmgeist', 'gedankenkarussell', 'hetzra', 'kritiker'], faehigkeit: 'langAusatmen', quest: { anzahl: 3 } },
-  { id: 'gelassenheit-hektik', gruppe: 'gelassenheit', problem: 'hektik', domain: 'mindset', held: 'jelninolan', gegner: 'hetzra', kette: ['hetzra', 'sturmgeist', 'jasager', 'murrgrim'], faehigkeit: 'kurzAnhalten', quest: { anzahl: 3 } },
-  { id: 'gelassenheit-gruebeln', gruppe: 'gelassenheit', problem: 'gruebeln', domain: 'mindset', held: 'jelninolan', gegner: 'gedankenkarussell', kette: ['gedankenkarussell', 'kritiker', 'nachtschwaermer', 'sturmgeist'], faehigkeit: 'gedankenParken', quest: { anzahl: 3 } },
-  { id: 'gelassenheit-kritiker', gruppe: 'gelassenheit', problem: 'kritiker', domain: 'mindset', held: 'jelninolan', gegner: 'kritiker', kette: ['kritiker', 'gedankenkarussell', 'jasager', 'sturmgeist'], faehigkeit: 'freundesSatz', quest: { anzahl: 3 } },
-  { id: 'gelassenheit-jasagen', gruppe: 'gelassenheit', problem: 'jasagen', domain: 'mindset', held: 'jelninolan', gegner: 'jasager', kette: ['jasager', 'hetzra', 'kritiker', 'sturmgeist'], faehigkeit: 'bedenkzeit', quest: { anzahl: 2 } },
-  { id: 'gelassenheit-anderes', gruppe: 'gelassenheit', problem: '*', domain: 'mindset', held: 'jelninolan', gegner: 'trott', kette: ['trott', 'sturmgeist', 'gedankenkarussell', 'kritiker'], faehigkeit: 'langAusatmen', quest: { anzahl: 3 } },
-  { id: 'familie-anderes', gruppe: 'familie', problem: '*', domain: 'partner', held: 'khara', gegner: 'trott', kette: ['trott', 'hetzra', 'irrlicht', 'einsiedler'], faehigkeit: 'ersterSchritt', quest: { anzahl: 2 } },
-  { id: 'fokus-aufschieben', gruppe: 'fokus', problem: 'aufschieben', domain: 'career', held: 'uldini', gegner: 'aufschieberitis', kette: ['aufschieberitis', 'irrlicht', 'trott', 'gaehnor'], faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
-  { id: 'fokus-ablenkung', gruppe: 'fokus', problem: 'ablenkung', domain: 'career', held: 'uldini', gegner: 'irrlicht', kette: ['irrlicht', 'aufschieberitis', 'hetzra', 'trott'], faehigkeit: 'handyWeg', quest: { anzahl: 3 } },
-  { id: 'fokus-anderes', gruppe: 'fokus', problem: '*', domain: 'career', held: 'uldini', gegner: 'trott', kette: ['trott', 'aufschieberitis', 'irrlicht', 'hetzra'], faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
-  { id: 'finanzen-spontankauf', gruppe: 'finanzen', problem: 'spontankauf', domain: 'finance', held: 'goldwin', gegner: 'kaufrausch', kette: ['kaufrausch', 'geldfresser', 'irrlicht', 'trott'], faehigkeit: 'nachtRegel', quest: { anzahl: 2 } },
-  { id: 'finanzen-sparen', gruppe: 'finanzen', problem: 'sparen', domain: 'finance', held: 'goldwin', gegner: 'geldfresser', kette: ['geldfresser', 'kaufrausch', 'aufschieberitis', 'trott'], faehigkeit: 'erstSparen', quest: { anzahl: 1 } },
-  { id: 'finanzen-anderes', gruppe: 'finanzen', problem: '*', domain: 'finance', held: 'goldwin', gegner: 'trott', kette: ['trott', 'kaufrausch', 'geldfresser', 'aufschieberitis'], faehigkeit: 'ersterSchritt', quest: { anzahl: 2 } },
-  { id: 'lebensfreude-leer', gruppe: 'lebensfreude', problem: 'leer', domain: 'growth', held: 'der-erste', gegner: 'leere', kette: ['leere', 'irrlicht', 'einsiedler', 'trott'], faehigkeit: 'kleineListe', quest: { anzahl: 3 } },
-  { id: 'lebensfreude-freunde', gruppe: 'lebensfreude', problem: 'freunde', domain: 'friends', held: 'ahren', gegner: 'einsiedler', kette: ['einsiedler', 'hetzra', 'leere', 'irrlicht'], faehigkeit: 'nachricht', quest: { anzahl: 2 } },
-  { id: 'lebensfreude-anderes', gruppe: 'lebensfreude', problem: '*', domain: 'growth', held: 'der-erste', gegner: 'trott', kette: ['trott', 'leere', 'einsiedler', 'irrlicht'], faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
-  { id: 'allgemein', gruppe: '*', problem: '*', domain: 'growth', held: 'der-erste', gegner: 'trott', kette: ['trott', 'aufschieberitis', 'irrlicht', 'hetzra'], faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } }
+// quest.zaehlweise (06.11.2026, optional): Zählweise des Haupt-Teilziels (daten/zaehlweisen.js), passend zu quest.art.
+// Gegner, kette und bedingungen (06.11.2026) kommen aus daten/bosse.js (KETTEN, je Vorlage-ID), siehe baueVorlagen:
+//   kette = Gegner nacheinander (erster = gegner). Nach dem Sieg kommt sofort der nächste. Neue Gegner nur HINTEN anhängen:
+//   laufende Spielstände übernehmen Kette und Bedingungen beim Laden (helden.js ketteAuffrischen), die Position zählt die Siege.
+//   bedingungen = je Kettenplatz eine Liste aus daten/bedingungen.js (fehlt = nur Treffer).
+const ZEILEN = [
+  { id: 'gesundheit-suess', gruppe: 'gesundheit', problem: 'suess', domain: 'health', held: 'trogadon', faehigkeit: 'portionieren', quest: { anzahl: 3 } },
+  { id: 'gesundheit-bewegung', gruppe: 'gesundheit', problem: 'bewegung', domain: 'health', held: 'trogadon', faehigkeit: 'zweiMinuten', quest: { anzahl: 3 } },
+  { id: 'gesundheit-schlaf', gruppe: 'gesundheit', problem: 'schlaf', domain: 'health', held: 'trogadon', faehigkeit: 'bildschirmAus', quest: { anzahl: 4 } },
+  { id: 'gesundheit-abnehmen', gruppe: 'gesundheit', problem: 'abnehmen', domain: 'health', held: 'trogadon', faehigkeit: 'innehalten', quest: { anzahl: 3 } },
+  { id: 'gesundheit-anderes', gruppe: 'gesundheit', problem: '*', domain: 'health', held: 'trogadon', faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
+  { id: 'familie-zeit', gruppe: 'familie', problem: 'zeit', domain: 'partner', held: 'khara', faehigkeit: 'festeZeit', quest: { anzahl: 1 } },
+  { id: 'familie-langeweile', gruppe: 'familie', problem: 'langeweile', domain: 'adventure', held: 'fisker', faehigkeit: 'ideenglas', quest: { anzahl: 2 } },
+  { id: 'familie-anruf', gruppe: 'familie', problem: 'anruf', domain: 'friends', held: 'ahren', faehigkeit: 'festerAnruf', quest: { anzahl: 1 } },
+  // Wutwald (06.11.2026): Zähler mit Zählweise Wache statt Beständigkeit. Ein Gegner fällt nur durch gemeisterte Momente
+  // (die Wut kam, und du bist ruhig geblieben), nicht durch friedliche Tage ohne Anlass; ohne Zeitlimit je Runde.
+  // Bedingungen je Kettenplatz (bosse.md): jede Stufe bringt eine neue Seite der Fähigkeit dazu.
+  { id: 'gelassenheit-wut', gruppe: 'gelassenheit', problem: 'wut', domain: 'mindset', held: 'jelninolan', faehigkeit: 'bisZehn', quest: { anzahl: 6, art: 'zaehler', zaehlweise: 'wache', rampe: { start: 3, schritt: 1 } } },
+  { id: 'gelassenheit-laut', gruppe: 'gelassenheit', problem: 'laut', domain: 'mindset', held: 'jelninolan', faehigkeit: 'stoppLeise', quest: { anzahl: 3 } },
+  { id: 'gelassenheit-stress', gruppe: 'gelassenheit', problem: 'stress', domain: 'mindset', held: 'jelninolan', faehigkeit: 'langAusatmen', quest: { anzahl: 3 } },
+  { id: 'gelassenheit-hektik', gruppe: 'gelassenheit', problem: 'hektik', domain: 'mindset', held: 'jelninolan', faehigkeit: 'kurzAnhalten', quest: { anzahl: 3 } },
+  { id: 'gelassenheit-gruebeln', gruppe: 'gelassenheit', problem: 'gruebeln', domain: 'mindset', held: 'jelninolan', faehigkeit: 'gedankenParken', quest: { anzahl: 3 } },
+  { id: 'gelassenheit-kritiker', gruppe: 'gelassenheit', problem: 'kritiker', domain: 'mindset', held: 'jelninolan', faehigkeit: 'freundesSatz', quest: { anzahl: 3 } },
+  { id: 'gelassenheit-jasagen', gruppe: 'gelassenheit', problem: 'jasagen', domain: 'mindset', held: 'jelninolan', faehigkeit: 'bedenkzeit', quest: { anzahl: 2 } },
+  { id: 'gelassenheit-anderes', gruppe: 'gelassenheit', problem: '*', domain: 'mindset', held: 'jelninolan', faehigkeit: 'langAusatmen', quest: { anzahl: 3 } },
+  { id: 'familie-anderes', gruppe: 'familie', problem: '*', domain: 'partner', held: 'khara', faehigkeit: 'ersterSchritt', quest: { anzahl: 2 } },
+  { id: 'fokus-aufschieben', gruppe: 'fokus', problem: 'aufschieben', domain: 'career', held: 'uldini', faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
+  { id: 'fokus-ablenkung', gruppe: 'fokus', problem: 'ablenkung', domain: 'career', held: 'uldini', faehigkeit: 'handyWeg', quest: { anzahl: 3 } },
+  { id: 'fokus-anderes', gruppe: 'fokus', problem: '*', domain: 'career', held: 'uldini', faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
+  { id: 'finanzen-spontankauf', gruppe: 'finanzen', problem: 'spontankauf', domain: 'finance', held: 'goldwin', faehigkeit: 'nachtRegel', quest: { anzahl: 2 } },
+  { id: 'finanzen-sparen', gruppe: 'finanzen', problem: 'sparen', domain: 'finance', held: 'goldwin', faehigkeit: 'erstSparen', quest: { anzahl: 1 } },
+  { id: 'finanzen-anderes', gruppe: 'finanzen', problem: '*', domain: 'finance', held: 'goldwin', faehigkeit: 'ersterSchritt', quest: { anzahl: 2 } },
+  { id: 'lebensfreude-leer', gruppe: 'lebensfreude', problem: 'leer', domain: 'growth', held: 'der-erste', faehigkeit: 'kleineListe', quest: { anzahl: 3 } },
+  { id: 'lebensfreude-freunde', gruppe: 'lebensfreude', problem: 'freunde', domain: 'friends', held: 'ahren', faehigkeit: 'nachricht', quest: { anzahl: 2 } },
+  { id: 'lebensfreude-anderes', gruppe: 'lebensfreude', problem: '*', domain: 'growth', held: 'der-erste', faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } },
+  { id: 'allgemein', gruppe: '*', problem: '*', domain: 'growth', held: 'der-erste', faehigkeit: 'ersterSchritt', quest: { anzahl: 3 } }
 ];
+
+// Zeilen + Ketten → Vorlagen (06.11.2026). gegner = erster der Kette; ohne Kette bleiben gegner/kette leer, das meldet
+// pruefeTabelle („keine Kette“). Wirft nie; ändert die Eingaben nicht. Auch das Werkzeug „Inhalte übernehmen“ nutzt es.
+export function baueVorlagen(zeilen = ZEILEN, ketten = KETTEN) {
+  return (zeilen || []).map(z => {
+    const k = ketten && Object.prototype.hasOwnProperty.call(ketten, z.id) ? ketten[z.id] : null;
+    const kette = k && Array.isArray(k.kette) ? k.kette.slice() : undefined;
+    const v = { ...z, gegner: kette ? kette[0] : undefined, kette };
+    if (k && Array.isArray(k.bedingungen)) v.bedingungen = k.bedingungen.map(p => (Array.isArray(p) ? p.map(b => ({ ...b })) : p));
+    return v;
+  });
+}
+// Ketten für Vorlagen, die es nicht gibt (Tippfehler in bosse.md): Liste der IDs.
+export const kettenOhneVorlage = (ketten = KETTEN, zeilen = ZEILEN) => Object.keys(ketten || {}).filter(id => !(zeilen || []).some(z => z.id === id));
+export const VORLAGEN_ZEILEN = ZEILEN;
+export const VORLAGEN = baueVorlagen();
 
 export const TABELLE = { gruppen: GRUPPEN, probleme: PROBLEME, vorlagen: VORLAGEN, gegner: GEGNER, helden: HELDEN, lebensbereiche: LEBENSBEREICHE, faehigkeiten: FAEHIGKEITEN };
 
@@ -170,7 +168,8 @@ export function pruefeTabelle(t = TABELLE) {
     if (!domains.has(z.domain)) fehler.push(`${z.id}: Lebensbereich ${z.domain} fehlt`);
     if (!t.helden[z.held]) fehler.push(`${z.id}: Held ${z.held} fehlt`);
     else if (t.helden[z.held].domain !== z.domain) fehler.push(`${z.id}: Held ${z.held} gehört zu ${t.helden[z.held].domain}, nicht ${z.domain}`);
-    if (!t.gegner[z.gegner]) fehler.push(`${z.id}: Gegner ${z.gegner} fehlt`);
+    if (!z.gegner) fehler.push(`${z.id}: keine Kette (bosse.md › # Ketten › ## [[${z.id}]])`);
+    else if (!t.gegner[z.gegner]) fehler.push(`${z.id}: Gegner ${z.gegner} fehlt`);
     if (z.kette !== undefined) {
       if (!Array.isArray(z.kette) || !z.kette.length) fehler.push(`${z.id}: Kette leer`);
       else {
@@ -182,6 +181,15 @@ export function pruefeTabelle(t = TABELLE) {
       }
     }
     if (!t.faehigkeiten[z.faehigkeit]) fehler.push(`${z.id}: Fähigkeit ${z.faehigkeit} fehlt`);
+    const laenge = Array.isArray(z.kette) && z.kette.length ? z.kette.length : 1;
+    for (const m of pruefeBedingungen(z.bedingungen, laenge)) fehler.push(`${z.id}: ${m}`);
+    const zw = z.quest && z.quest.zaehlweise;
+    if (zw !== undefined) {
+      const e = ZAEHLWEISEN[zw];
+      const art = (z.quest && z.quest.art) || 'zaehler';
+      if (!e) fehler.push(`${z.id}: Zählweise ${zw} fehlt`);
+      else if (!e.arten.includes(art)) fehler.push(`${z.id}: Zählweise ${zw} passt nicht zu ${art}`);
+    }
     if (z.tagesfrage !== undefined && !(typeof z.tagesfrage === 'string' && z.tagesfrage.trim())) fehler.push(`${z.id}: Tagesfrage leer`);
     if (z.gruppe !== '*' && !t.gruppen.some(g => g.id === z.gruppe)) fehler.push(`${z.id}: Gruppe ${z.gruppe} fehlt`);
     if (z.problem !== '*' && !(t.probleme[z.gruppe] || []).some(p => p.id === z.problem)) fehler.push(`${z.id}: Problem ${z.problem} fehlt`);
@@ -196,5 +204,34 @@ export function pruefeTabelle(t = TABELLE) {
     if (f.tagesfrage !== undefined && !(typeof f.tagesfrage === 'string' && f.tagesfrage.trim())) fehler.push(`Fähigkeit ${id}: Tagesfrage leer`);
   }
   if (!t.vorlagen.some(z => z.gruppe === '*' && z.problem === '*')) fehler.push('Keine allgemeine Vorlage (*/*)');
+  fehler.push(...pruefeGegner(t.gegner));
   return fehler;
+}
+
+// Gegner-Register prüfen (06.11.2026, auch für bosse.md): Pflichtfelder, Aura aus daten/aura.js, genus, Gestalten-Vorschläge.
+export function pruefeGegner(gegner, { auren = AURA.effekte, opt = BEDINGUNG_OPT } = {}) {
+  const f = [];
+  const text = x => typeof x === 'string' && x.trim().length > 0;
+  for (const [id, g] of Object.entries(gegner || {})) {
+    try { pruefeEinen(id, g); } catch (e) { f.push(`Gegner ${id}: nicht lesbar (${e.message})`); } // Start darf nie scheitern
+  }
+  return f;
+  function pruefeEinen(id, g) {
+    if (!g || typeof g !== 'object') { f.push(`Gegner ${id}: keine Angaben`); return; }
+    for (const k of ['name', 'kurz', 'text', 'staerker', 'schwaecher']) if (!text(g[k])) f.push(`Gegner ${id}: ${k} fehlt`);
+    if (g.aura !== undefined && !Object.prototype.hasOwnProperty.call(auren || {}, g.aura)) f.push(`Gegner ${id}: unbekannte Aura ${g.aura} (bekannt: ${Object.keys(auren || {}).join(', ')})`);
+    if (g.genus !== undefined && !['m', 'f', 'n'].includes(g.genus)) f.push(`Gegner ${id}: genus ist m, f oder n`);
+    if (g.gestalten !== undefined) {
+      if (!Array.isArray(g.gestalten)) { f.push(`Gegner ${id}: Gestalten müssen eine Liste sein`); return; }
+      if (g.gestalten.length > opt.vorschlaegeMax) f.push(`Gegner ${id}: höchstens ${opt.vorschlaegeMax} vorgeschlagene Gestalten`);
+      const gesehen = new Set();
+      for (const x of g.gestalten) {
+        if (!text(x)) { f.push(`Gegner ${id}: leere Gestalt`); continue; }
+        if (x.trim().length > opt.nameMax) f.push(`Gegner ${id}: Gestalt „${x}“ länger als ${opt.nameMax} Zeichen`);
+        const k = x.trim().toLocaleLowerCase('de');
+        if (gesehen.has(k)) f.push(`Gegner ${id}: Gestalt „${x}“ doppelt`);
+        gesehen.add(k);
+      }
+    }
+  }
 }

@@ -6,6 +6,8 @@
 //   phase    einmal je Gegner und Runde: der Treffer, der die Kraft auf die Schwelle drückt (EINSTELLUNG.phaseAb)
 //   morgen   am Siegtag, wenn ein neuer Gegner folgt: Andeutung, Schlüssel = der BESIEGTE Gegner. Ohne {gegner}, {er} …
 //            (die wären schon der Neue); der Kapitelwechsel selbst kommt beim nächsten Öffnen (Version 68)
+//   bedingung nach „Ja“, wenn die Treffer voll sind, eine Bedingung des Gegners aber noch offen ist (06.11.2026):
+//            der Gegner steht noch; kein „noch ein Treffer“, denn weitere Treffer allein bringen ihn nicht zu Fall
 // Schlüssel = Gegner-ID aus vorlagen.js; „_allgemein“ gilt für jeden Gegner ohne eigene Zeilen (Pflicht).
 // Rückfall: Gegner.art → _allgemein.art; für „phase“ danach treffer. Fehlt alles, erscheint keine Zeile.
 // Platzhalter wie bei den Geschichten: {Gegner} {gegner} {Er} {er} {ihn} {verbuendeter} {faehigkeit} {rest} {anzahl}.

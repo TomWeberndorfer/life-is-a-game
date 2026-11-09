@@ -8,7 +8,10 @@ import * as EN from '../logik/eintraege.js';
 import * as H from '../logik/helden.js';
 import * as K from '../logik/kern.js';
 import * as W from '../logik/willkommen.js';
-import { esc } from './helfer.js';
+import { BEWEISBUCH } from '../daten/beweisbuch.js'; // Version 166: Gruß aus dem Beweisbuch
+import { EINTRAG_ARTEN } from '../daten/eintrag-arten.js';
+import * as BB from '../logik/beweisbuch.js';
+import { esc, kurzDatum } from './helfer.js';
 import { kx } from './kontext.js';
 
 const zustand = () => { const { ui } = kx; if (!ui.willkommen) ui.willkommen = { grund: null, zu: false, fehler: null, gezeigt: false }; return ui.willkommen; };
@@ -37,6 +40,22 @@ export const willkommenOffen = () => darfZeigen() && willkommenHelden().length >
 // leichte Zeile (Tipp schaltet weitermachen ↔ frisch anfangen, weitermachen vorgewählt), dann ein Knopf für alle.
 const wahlVon = id => { const z = zustand(); return (z.wahl && z.wahl[id]) || WILLKOMMEN.vorwahl; };
 
+// Gruß des früheren Ichs (Version 166): ein Brief an mich, sonst ein markierter Eintrag, höchstens einer, einmal gezogen
+// (z.beleg), damit Neuzeichnen ihn nicht wechselt. Nichts da → nichts (kein leerer Kasten). Wirft nie.
+function belegHtml(heroId) {
+  const { T, spiel } = kx;
+  if (!BEWEISBUCH.willkommen) return '';
+  try {
+    const z = zustand();
+    if (z.beleg === undefined) { const b = BB.belegFuer(spiel, heroId, { arten: EINTRAG_ARTEN }); z.beleg = b ? { id: b.eintrag.id, art: b.art } : null; }
+    if (!z.beleg) return '';
+    const e = (Array.isArray(spiel.eintraege) ? spiel.eintraege : []).find(x => x && x.id === z.beleg.id);
+    const text = e ? BB.belegText(e) : '';
+    if (!text) return '';
+    return `<div class="wk-beleg"><p class="klein">${esc(T('willkommen.gruss.' + (z.beleg.art === 'merken' ? 'merken' : 'brief'), { datum: kurzDatum(e.tag) }))}</p><p class="notfall-warum" style="white-space:pre-wrap">${esc(text)}</p></div>`;
+  } catch (err) { console.warn('Willkommen zurück (Beleg):', err.message); return ''; }
+}
+
 export function willkommenHtml() {
   const { T, img, jetzt, nameVon, spiel, wort } = kx;
   if (!darfZeigen()) return '';
@@ -44,8 +63,12 @@ export function willkommenHtml() {
   if (!ids.length) return '';
   const z = zustand();
   if (!z.gezeigt) { z.gezeigt = true; trackEvent('welcome_back_shown', { helden: ids.length }); }
-  const siege = ids.reduce((n, id) => { const h = spiel.helden.find(x => x.heroId === id); return n + ((h && Array.isArray(h.siege)) ? h.siege.length : 0); }, 0);
+  const siege = ids.reduce((n, id) => { const h = spiel.helden.find(x => x.heroId === id); return n + ((h && Array.isArray(h.siege)) ? h.siege.length + H.siegeFrueher(spiel, id) : 0); }, 0);
   const einer = ids.length === 1;
+  // Auffrischung (Version 159): nach einer langen Pause ein zusätzlicher ruhiger Satz. Ohne Zahl der Tage, ohne Wertung und
+  // ohne den Bonus anzukündigen (er kommt als leise Zeile nach dem ersten guten Tag, siehe daten/auffrischung.js).
+  const heuteK = K.tagKey(jetzt());
+  const lang = ids.some(id => { try { return W.langePauseFuer(H.ansicht(spiel, id), heuteK); } catch (e) { return false; } });
   const satz = T(`willkommen.satz.${W.satzNr(K.tagKey(jetzt()), ids[0], WILLKOMMEN.saetze)}`);
   const gruende = `<p class="klein">${esc(T('willkommen.wasWar'))}</p><div class="wk-gruende" role="group" aria-label="${esc(T('willkommen.wasWar'))}">${WILLKOMMEN.gruende.map(g => `<button class="wahl-chip ${z.grund === g ? 'an' : ''}" aria-pressed="${z.grund === g}" data-a="willkommen-grund" data-id="${esc(g)}">${esc(T(`eintrag.sit.${g}`))}</button>`).join('')}</div>`;
   const zeile = id => {
@@ -59,7 +82,7 @@ export function willkommenHtml() {
     : `<p class="klein">${esc(T('willkommen.waehleText'))}</p><div class="wk-helden">${ids.map(zeile).join('')}</div>
        <button class="cta" data-a="willkommen-los">${esc(T('willkommen.los'))}</button>
        <p class="klein">${esc(T('willkommen.frischText', { kapitel: wort('kapitel') }))}</p>`;
-  return `<div class="feier ruhe-seite willkommen-seite" role="dialog" aria-modal="true" aria-labelledby="willkommen-t">
+  return `<div class="feier ruhe-seite willkommen-seite erscheint" role="dialog" aria-modal="true" aria-labelledby="willkommen-t">
     <div class="nf-seite">
       <div class="nf-kopf"><span></span><button class="link" data-a="willkommen-zu">${esc(T('willkommen.spaeter'))}</button></div>
       <div class="nf-inhalt">
@@ -67,6 +90,8 @@ export function willkommenHtml() {
           <p class="blase wk-blase"><b>${esc(nameVon(ids[0]))}</b>${esc(satz)}</p></div>
         <h2 id="willkommen-t">${esc(T('willkommen.titel'))}</h2>
         <p class="lead">${esc(T(einer ? 'willkommen.textEiner' : 'willkommen.textMehrere', { held: nameVon(ids[0]) }))} ${esc(T(siege ? 'willkommen.bleibtSiege' : 'willkommen.bleibt', { gegner: wort('gegner') }))}</p>
+        ${lang ? `<p class="lead wk-lang">${esc(T('willkommen.lang'))}</p>` : ''}
+        ${belegHtml(ids[0])}
         ${gruende}
         ${z.fehler ? `<p class="fehler" role="alert">${esc(z.fehler)}</p>` : ''}
         ${wahl}

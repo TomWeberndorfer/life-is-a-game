@@ -18,6 +18,11 @@ import * as HM from './heldenmodi.js'; // Heldenmodi (04.11.2026)
 import { bereinigeWochen } from './wochenrunde.js'; // Wochenrunde (05.11.2026)
 import { DOMAIN_IDS as WR_BEREICHE } from '../daten/lebensbereiche.js';
 import { HELDEN } from '../daten/helden.js';
+import { bereinigeGestalten, bereinigeEigeneFaehigkeiten } from './gestalten.js'; // Bosskette mit Bedingungen (06.11.2026)
+import { bereinigeBedingungen } from './bedingungen.js';
+import { bereinigeAbschluss } from './abschluss.js'; // Kettenende: Abschluss und Weitergehen (Version 169)
+import * as KAP from './kapitel.js'; // Kapitel-Archiv (Version 171)
+import * as AB from './abschluss.js'; // abschlussStand für neuesKapitel
 
 export const SPIEL_VERSION = 4; // 4: Siege mit Tag, Bosskette je Quest (Version 14)
 // Heldenmodi (04.11.2026): keine eigene Grenze mehr. Höchstens so viele Helden, wie das Register kennt (jeder Held gehört zu
@@ -46,6 +51,11 @@ export function zuordner(tabelle, rueckfall) {
       const v = (tabelle.vorlagen || []).find(z => z.id === vid);
       return v ? K.gegnerKette(v) : [];
     },
+    // Vorlage → Bedingungen je Kettenplatz (06.11.2026); null = Vorlage unbekannt (dann bleibt, was die Quest hat)
+    bedingungenVon(vid) {
+      const v = (tabelle.vorlagen || []).find(z => z.id === vid);
+      return v ? bereinigeBedingungen(v.bedingungen, K.gegnerKette(v).length) : null;
+    },
     // Held → Lebensbereich laut Register oder null
     domainVon(heroId) {
       const h = (tabelle.helden || {})[heroId];
@@ -56,7 +66,7 @@ export function zuordner(tabelle, rueckfall) {
 
 export function neuesSpiel(profilId) {
   const s = K.neuerStand(profilId);
-  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [], freigaben: {}, freigabeWartet: null, eintraege: [], ideen: {}, messziele: {}, einstellungen: bereinigeEinstellungen(null), vorgestellt: [], modi: {}, mindest: {}, wochen: {} };
+  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [], freigaben: {}, freigabeWartet: null, eintraege: [], ideen: {}, messziele: {}, einstellungen: bereinigeEinstellungen(null), vorgestellt: [], modi: {}, mindest: {}, wochen: {}, gestalten: {}, eigeneFaehigkeiten: {}, abschluss: {}, kapitel: {} };
 }
 
 function heldAusAnsicht(heroId, domainId, a) {
@@ -81,8 +91,22 @@ export function ansicht(spiel, heroId) {
     // Heldenmodi (04.11.2026): Pausen (Erhalt, Ruhe) aus spiel.modi als Zeiträume; nur gelesen, nie zurückgeschrieben
     pausen: h ? HM.pausenVon(spiel, heroId) : [],
     // Mindestaufgabe im Erhalt (04.11.2026): Tage, an denen ein Haken XP gab; nur gelesen (kern.auswertung)
-    mindestXp: h ? HM.mindestXpTage(spiel, heroId) : []
+    mindestXp: h ? HM.mindestXpTage(spiel, heroId) : [],
+    // Bosskette mit Bedingungen (06.11.2026): Begegnungen (Einträge „geschafft“ mit Gestalt, Fähigkeit oder Schwierigkeit)
+    // und schwere Tage aus Einträgen „schwer“; nur gelesen (kern.bedingungenStand), nie zurückgeschrieben
+    begegnungen: h ? begegnungenVon(spiel, heroId) : [],
+    // Kapitel-Archiv (Version 171): XP und Siege früherer Kapitel; nur gelesen (kern.auswertung), nie zurückgeschrieben
+    xpFrueher: h ? KAP.xpFrueher(spiel, heroId) : 0,
+    siegeFrueher: h ? KAP.siegeFrueher(spiel, heroId) : 0,
+    schwerTage: h ? (Array.isArray(spiel.eintraege) ? spiel.eintraege : []).filter(e => e && e.heroId === heroId && e.art === 'schwer').map(e => e.tag) : []
   });
+}
+
+// Begegnungen eines Helden: { tag, gegner, gestalt, faehigkeit, schwierigkeit } aus Einträgen mit mindestens einem dieser Felder.
+export function begegnungenVon(spiel, heroId) {
+  return (Array.isArray(spiel && spiel.eintraege) ? spiel.eintraege : [])
+    .filter(e => e && e.heroId === heroId && (e.gestalt || e.faehigkeit || Number.isInteger(e.schwierigkeit)))
+    .map(e => ({ tag: e.tag, gegner: e.gegner || null, gestalt: e.gestalt || null, faehigkeit: e.faehigkeit || null, schwierigkeit: Number.isInteger(e.schwierigkeit) ? e.schwierigkeit : null }));
 }
 
 // Bestimmt { heroId, domainId } für einen neuen Helden aus Vorlage oder Vorgabe; wirft bei Ungültigem.
@@ -131,6 +155,30 @@ export function heldHinzufuegen(spiel, vorlage, zielText, heute, z, rampe = null
   return s;
 }
 
+// Neues Kapitel (Version 171): Der Held bleibt, sein bisheriges Ziel wandert samt Tagen und Siegen ins Archiv (spiel.kapitel),
+// ein neues Ziel beginnt. XP und Siege bleiben erhalten (xpFrueher/siegeFrueher in ansicht). Alles oder nichts: bei einem Fehler
+// wird nichts geändert. Voraussetzung: das Kettenende ist erreicht (sonst Fehler), die Vorlage gehört zum selben Helden.
+// Hat der Held heute im alten Kapitel schon etwas eingetragen, beginnt das neue morgen (nichts zählt doppelt).
+export function neuesKapitel(spiel, heroId, vorlage, zielText, heute, z, rampe = null, warum = null) {
+  const h = heldVon(spiel, heroId);
+  if (!h || !h.quest) throw new Error('Unbekannter Held.');
+  if (!vorlage || vorlage.held !== heroId) throw new Error('Dieses Ziel gehört zu einem anderen Helden.');
+  const heuteK = K.tagKey(heute);
+  const ab = AB.abschlussStand(spiel, heroId, heuteK);
+  if (!ab.erreicht) throw new Error('Das bisherige Ziel ist noch nicht ganz geschafft.');
+  const kapitel = KAP.archiviert(spiel, h, heuteK);
+  const st = KAP.startTag(h, heuteK);
+  const beginn = st.spaeter ? K.ausTagKey(st.start) : heute;
+  const a = K.questAnlegen(ansicht(spiel, null), vorlage, zielText, beginn, rampe, warum);
+  const s = kopie(spiel);
+  s.kapitel = kapitel;
+  s.helden = s.helden.map(x => (x.heroId === heroId ? heldAusAnsicht(heroId, x.domainId, kopie({ ...a, haken: {} })) : x));
+  // Die Entscheidung zum alten Ende ist erledigt (neue Kette, neuer Bezug); die Mindestaufgabe u. a. am Helden bleiben.
+  if (s.abschluss && typeof s.abschluss === 'object') delete s.abschluss[heroId];
+  s.fokus = heroId;
+  return s;
+}
+
 export function fokusSetzen(spiel, heroId) {
   if (!heldVon(spiel, heroId)) throw new Error('Unbekannter Held');
   return { ...kopie(spiel), fokus: heroId };
@@ -168,8 +216,10 @@ export function freigabeWartetSeit(spiel, tag) {
 }
 export const istGelesen = (spiel, heroId, tag) => !!spiel.gelesen && spiel.gelesen[heroId] === tag;
 
+export const siegeFrueher = KAP.siegeFrueher; // Siege früherer Kapitel eines Helden (Version 171)
+
 export function gesamtSiege(spiel) {
-  return spiel.helden.reduce((n, h) => n + h.siege.length, 0);
+  return spiel.helden.reduce((n, h) => n + h.siege.length + KAP.siegeFrueher(spiel, h.heroId), 0);
 }
 
 // Helden je Lebensbereich (Grundlage für Wheel und Heldenstadt). Leere Bereiche erscheinen mit [].
@@ -194,9 +244,15 @@ export function angebotAblehnen(spiel) {
 }
 
 // Kette aus der Tabelle übernehmen: neue Gegner kommen dazu, ohne dass Siege verloren gehen.
+// Bedingungen (06.11.2026) ebenso, aber nur bei Quests, die mit dem Feld angelegt wurden (ältere bekommen keine). Regel für
+// daten/vorlagen.js wie bei der Kette: Bedingungen nur für Plätze ändern, die noch niemand erreicht hat.
 function ketteAuffrischen(a, z) {
   const k = a.quest && z.ketteVon ? z.ketteVon(a.quest.vorlageId) : [];
   if (a.quest && k.length) a.quest.kette = k;
+  if (a.quest && Array.isArray(a.quest.bedingungen) && z.bedingungenVon) {
+    const b = z.bedingungenVon(a.quest.vorlageId);
+    if (b) a.quest.bedingungen = b;
+  }
   return a;
 }
 
@@ -275,6 +331,13 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
   // Wochenrunde (05.11.2026): fehlt das Feld (Altbestand) → {} (es gab noch keine Runde, nichts geht verloren).
   // Die Werte gehören zum Lebensbereich, nicht zum Helden (Abschnitt 34): sie bleiben, auch wenn ein Held geht.
   s.wochen = bereinigeWochen(roh.wochen, { bereichIds: new Set(WR_BEREICHE) });
+  // Bosskette mit Bedingungen (06.11.2026): fehlen die Felder (Altbestand) → {} (es gab noch keine, nichts geht verloren)
+  s.gestalten = bereinigeGestalten(roh.gestalten, { heroIds: new Set(s.helden.map(h => h.heroId)) });
+  s.eigeneFaehigkeiten = bereinigeEigeneFaehigkeiten(roh.eigeneFaehigkeiten, { heroIds: new Set(s.helden.map(h => h.heroId)) });
+  // Kettenende (Version 169): Entscheidung je Held nach der geschafften Kette (Typ, Weg, Bezug). Fehlt das Feld (Altbestand) → {}:
+  // Helden mit geschaffter Kette bekommen die Seite beim nächsten Start einmal angeboten (der Auslöser ist abgeleitet), nichts geht verloren.
+  s.kapitel = KAP.bereinigeKapitel(roh.kapitel, { heroIds: new Set(s.helden.map(h => h.heroId)) }); // Version 171; Altbestand ohne Feld = {}
+  s.abschluss = bereinigeAbschluss(roh.abschluss, { heroIds: new Set(s.helden.map(h => h.heroId)) });
   return s;
 }
 

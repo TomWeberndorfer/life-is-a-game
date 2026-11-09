@@ -8,8 +8,9 @@ import { bilderNoetig, fehlendeKartenbilder, istKartenPlatz, reiseTeile, reiseWe
 import { AUSBAU } from './daten/stadt.js'; // Version 82: Bildplätze des Stadt-Ausbaus (Pflege)
 import * as BR from './logik/bilder.js';
 import { DOMAIN_RUECKFALL, LEBENSBEREICHE } from './daten/lebensbereiche.js';
-import { hoechsteStufe, hoechstesKapitel, istFrei, pruefeFreischaltung, neuFreigeschaltet, pruefeFreigabe, istFreigegeben, naechsteFreigabe, freigabeKonfig, FREIGABE_ALT } from './logik/freischaltung.js';
-import { TABS, MAX_TABS, FUNKTIONEN, ZAEHLER as FREI_ZAEHLER, FREIGABE } from './daten/freischaltung.js';
+import { hoechsteStufe, hoechstesKapitel, istFrei, pruefeFreischaltung, neuFreigeschaltet, pruefeFreigabe, istFreigegeben, naechsteFreigabe, freigabeKonfig, FREIGABE_ALT, allesFreiErlaubt, allesFreiAktiv, pruefeAllesFrei } from './logik/freischaltung.js';
+import { TABS, MAX_TABS, FUNKTIONEN, ZAEHLER as FREI_ZAEHLER, FREIGABE, ALLES_FREI } from './daten/freischaltung.js';
+import { stuetzenKonfig } from './logik/stuetzen.js'; // Version 152: Schalter „Alles freischalten“
 import { RAMPE } from './daten/rampe.js';
 import { TEXTE } from './daten/texte.js';
 import { text as textAus, pruefeTexte } from './logik/texte.js';
@@ -28,8 +29,12 @@ import * as V from './logik/versand.js';
 import { VERSAND } from './daten/versand.js';
 import { BEWERTUNGEN, EINWILLIGUNG } from './daten/forschung.js';
 import * as EW from './logik/einwilligung.js';
+import { TESTERHINWEIS } from './daten/testerhinweis.js'; // 09.11.2026: einmaliger Tester-Hinweis
+import * as TH from './logik/testerhinweis.js';
+import { TESTER_KLICKS } from './ansicht/testerhinweis.js';
 import * as I from './logik/inhalte.js';
 import * as H from './logik/helden.js';
+import * as KAP from './logik/kapitel.js'; // Version 171: Kapitel-Archiv
 import { schwereTageZahl } from './logik/antworten.js'; // Version 141: „War schwer“ zählt als schwerer Tag
 import { BOTSCHAFTEN, STORIES, MIKRO, MIKRO_JE_TAG, MIKRO_RUECKFALL } from './daten/inhalte.js';
 import * as TB from './logik/tabelle.js';
@@ -41,8 +46,9 @@ import { NEUIGKEITEN } from './daten/neuigkeiten.js';
 import { BEWEGUNG, SPRECHBLASEN } from './daten/bewegung.js';
 import { ANZEIGE } from './daten/anzeige.js'; // Blatt „Anzeige“ (Version 125)
 import * as AZ from './logik/anzeige.js';
+import * as GN from './logik/gegner-namen.js'; // Version 164: Gegnernamen je Stil
 const { pruefeAnzeige } = AZ;
-import { ablaufEndeMs, ablaufJetzt, funkenStoss, funkenWann, naechsterHalt, naechsterHaltepunkt, pruefeBewegung, uebersprungenStart, weiterNachPause } from './logik/bewegung.js';
+import { ablaufEndeMs, ablaufJetzt, funkenStoss, funkenWann, naechsterHalt, naechsterHaltepunkt, musterVariablen, pruefeBewegung, uebersprungenStart, weiterNachPause } from './logik/bewegung.js';
 import { esc, icon, ohneEinblendung } from './ansicht/helfer.js';
 import { SYMBOLE, AKTION_SYMBOLE } from './daten/symbole.js';
 import { symbolFuer, pruefeSymbole, funkenListe } from './logik/symbole.js'; // Version 84: Stil-Kulisse
@@ -60,6 +66,7 @@ import { NOTIZ_FELDER, NOTIZ_KLICKS, notizBlattHtml } from './ansicht/notiz.js';
 import { TAGESNOTIZ } from './daten/tagesnotiz.js';
 import { pruefeTagesnotiz } from './logik/tagesnotiz.js';
 import { WOCHE_FELDER, WOCHE_KLICKS, wochenBlattHtml, wochenEbene } from './ansicht/wochenrunde.js'; // Wochenrunde (05.11.2026)
+import { CREW_KLICKS, crewBlattHtml, crewEbene } from './ansicht/crew.js'; // Crew-Übersicht (06.11.2026)
 import { WOCHENRUNDE } from './daten/wochenrunde.js';
 import { pruefeWochenrunde } from './logik/wochenrunde.js';
 import { STADT_KLICKS, STADT_SCREENS, stadtBlattHtml } from './ansicht/stadt.js';
@@ -67,6 +74,7 @@ import { KARTE_KLICKS, KARTE_SCREENS, karteBlattHtml } from './ansicht/karte.js'
 import { STORY_KLICKS, STORY_SCREENS } from './ansicht/story.js';
 import { QUEST_FELDER, QUEST_KLICKS, QUEST_SCREENS } from './ansicht/quest-bearbeiten.js';
 import { STUETZEN_FELDER, STUETZEN_KLICKS } from './ansicht/stuetzen.js';
+import * as MF from './logik/mehrfach.js'; // Mehrere Helden auf einmal (05.11.2026)
 import * as SP from './logik/startpaket.js'; // Startpaket mit drei Helden (02.11.2026) // Schritt „Zähler“: Stützgewohnheiten
 import { STILWAHL_KLICKS, STILWAHL_SCREENS } from './ansicht/stilwahl.js';
 import { FEEDBACK_FELDER, FEEDBACK_KLICKS, FEEDBACK_SCREENS } from './ansicht/feedback.js';
@@ -75,12 +83,22 @@ import { BLATT_KLICKS, blattHtml } from './ansicht/blatt.js';
 import { EINTRAG_FELDER, EINTRAG_KLICKS, eintragBlattHtml } from './ansicht/eintrag.js';
 import { NOTFALL_FELDER, NOTFALL_KLICKS, notfallBlattHtml, notfallErinnerungHtml, notfallErinnerungOffen, notfallWahlHtml, oeffneNotfall } from './ansicht/notfall.js';
 import { WILLKOMMEN_KLICKS, willkommenHtml, willkommenOffen } from './ansicht/willkommen.js'; // Version 98
+import { DENKEN_KLICKS, DENKEN_SCREENS } from './ansicht/denken.js'; // Seite „Wie diese App denkt“ (Version 165)
+import { PLANCHECK_FELDER, PLANCHECK_KLICKS, PLANCHECK_SCREENS } from './ansicht/plancheck.js'; // Plan- und Warum-Check (Version 167)
+import { PLANCHECK } from './daten/plancheck.js';
+import { pruefePlancheck } from './logik/plancheck.js';
+import { BEWEIS_FELDER, BEWEIS_KLICKS, BEWEIS_SCREENS } from './ansicht/beweisbuch.js'; // Brief und Beweisbuch (Version 166)
+import { BEWEISBUCH } from './daten/beweisbuch.js';
+import { pruefeBeweisbuch } from './logik/beweisbuch.js';
+import { DENKEN } from './daten/denken.js';
+import { pruefeDenken } from './logik/denken.js';
+import { ABSCHLUSS_KLICKS, abschlussOffen, abschlussSeiteHtml } from './ansicht/abschluss.js'; // Version 169: Kettenende
 import { RUECKBLICK_FELDER, RUECKBLICK_KLICKS, rueckblickOffen, rueckblickSeiteHtml } from './ansicht/rueckblick.js'; // Rundenrückblick (02.11.2026)
 import { PROBE_KLICKS, probeBlattHtml } from './ansicht/probe.js'; // Version 81: Morgenprobe
 import { ANZEIGE_KLICKS, anzeigeBlattHtml } from './ansicht/anzeige.js'; // Version 125: Blatt „Anzeige“
 import { RUHETAG_KLICKS, ruhetagBlattHtml } from './ansicht/ruhetag.js'; // Version 90: Ruhetag
 import { HELDENMODI_FELDER, HELDENMODI_KLICKS, neuImErhaltText } from './ansicht/heldenmodi.js'; // Heldenmodi (04.11.2026)
-import { pruefeMindestRegeln, pruefeModiRegeln, rampenlichtBeimStart } from './logik/heldenmodi.js';
+import { pruefeMindestRegeln, pruefeModiRegeln, rampenlichtBeimStart, rueckkehrAnwenden } from './logik/heldenmodi.js';
 import { HELDENMODI } from './daten/heldenmodi.js';
 import { LINK_BASIS, PROFILE, SPRUNGZIELE } from './daten/sprungziele.js';
 import { NACHTRAGEN } from './daten/nachtragen.js';
@@ -98,7 +116,7 @@ import { START_KLICKS, START_KURZ, START_SCREENS, START_TEILE, buehneDauerMs, bu
 import { BUEHNE_KLICKS } from './ansicht/buehne.js'; // 02.11.2026: aus startseite.js ausgelagert
 import { NACHTRAG_KLICKS } from './ansicht/nachtrag.js';
 
-export const VERSION = { nr: 148, datum: '05.11.2026 · 15:18' };
+export const VERSION = { nr: 172, datum: '09.11.2026 · 15:28' };
 
 // Version 78: Hash aus Profil und Sprungziel (daten/sprungziele.js), z. B. #notfall oder #test+notfall.
 const HASH = leseHash(location.hash, { profile: PROFILE, ziele: SPRUNGZIELE });
@@ -125,6 +143,16 @@ function entscheideDaten(stand) {
   if (stand === 'ja') { merke('einwilligung', `v${einw.version}`); trackEvent('consent_given', {}); }
   verbindeSender();
 }
+// Tester-Hinweis (09.11.2026): einmalige Kenntnisnahme, je Browser gespeichert wie die Einwilligung (kein Spielstand-Feld).
+// Das ist keine Einwilligung und ändert nichts an der Übertragung. Kaputte oder fehlende Werte = noch nicht gesehen.
+let testerHinweis = TH.lies(speicher.einstellung(TESTERHINWEIS.einstellung), TESTERHINWEIS.version);
+function bestaetigeTesterHinweis() {
+  try {
+    testerHinweis = TH.lies(TH.bestaetige(K.tagKey(new Date()), TESTERHINWEIS.version), TESTERHINWEIS.version);
+  } catch (e) { console.warn('Tester-Hinweis:', e.message); return; }
+  if (!speicher.setzeEinstellung(TESTERHINWEIS.einstellung, { tag: testerHinweis.tag, version: testerHinweis.version })) console.warn('Tester-Hinweis: nur bis zum Schließen gespeichert');
+}
+TH.pruefeTesterhinweis(TESTERHINWEIS, TEXTE).forEach(m => console.warn(m));
 
 const app = document.getElementById('app');
 const systemRuhig = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -157,6 +185,7 @@ const BW = {
   r.setProperty('--bw-zoom', BW.zoom ? BW.zoom + 's' : '0s');
   r.setProperty('--bw-fackel', BW.fackel ? BW.fackel + 's' : '0s');
   r.setProperty('--bw-nebel', BW.nebel ? BW.nebel + 's' : '0s');
+  for (const [k, w] of Object.entries(musterVariablen(BEWEGUNG))) r.setProperty(k, w); // Übergangs-Muster (Version 162)
 }
 // Anzeige auf <html> anwenden: data-Attribute (bilder, prunk, bewegung, text) und --text-skala. Wirft nie.
 function wendeAnzeigeAn() {
@@ -200,6 +229,9 @@ let stand;
   const { stand: roh, fehler } = speicher.laden();
   spiel = H.migriereSpiel(roh, testerId, STIL_REIHENFOLGE, zuordnung, migWarnung);
   spiel.stil.aktiv = stilId(spiel.stil.aktiv);
+  // Pause mit Rückkehr-Datum (09.11.2026): vorbei? Dann kehrt der Held in den Modus davor zurück (Fokus voll: Erhalt).
+  // Hier ohne Speichern (der Abgleich ist noch nicht bereit); der Schritt ist wiederholbar und wird beim nächsten Speichern festgehalten.
+  try { spiel = rueckkehrAnwenden(spiel, K.tagKey(jetzt())).spiel; } catch (e) { console.warn('Rückkehr aus der Pause:', e.message); }
   // Heldenmodi (04.11.2026): pausiert der zuletzt gewählte Held heute, beginnt der Tag mit einem Helden im Fokus
   const imFokus = rampenlichtBeimStart(spiel, K.tagKey(jetzt()));
   if (imFokus) spiel = { ...spiel, fokus: imFokus };
@@ -228,10 +260,15 @@ const ui = {
   stadtBlatt: null,   // Bezirksblatt der Stadt (05.11.2026): domainId eines Bezirks ohne oder mit mehreren Helden
   eintrag: null,      // Eintragsblatt (Version 75): { art, heroId, situation, stimmung, text, fehler }
   woche: null,        // Wochenrunde (05.11.2026): { woche, schritt, wheel, vorher, gewaehlt, vorsatz, vorsatzAlt, info, fehler }, ansicht/wochenrunde.js
+  beweis: null,       // Brief und Beweisbuch (Version 166): Editor { id, heroId, text, fehler, loeschenSicher } oder null, ansicht/beweisbuch.js
+  beweisZurueck: null,
+  plancheck: null,    // Plan- und Warum-Check (Version 167): Antworten der Seite { wenndann, warum, plan, warumNeu, fehler } oder null, ansicht/plancheck.js
   notiz: null,        // Tagesnotiz (04.11.2026): { id, tag, bereiche, stimmung, felder, fehler, loeschenSicher }, ansicht/notiz.js
   notfall: null,      // Notfallkarte (Version 75, Seite seit 97): { heroId, schritt, idee, verwalten, neuText, neuKat, fehler, frage }
   messziel: null,     // Messziele (Version 76): { heroId, modus, zielId, form, wert, fehler, frage, erreicht }
   heldenWahl: false,  // Popup „Helden wechseln“ (Version 43)
+  crew: null,         // Blatt „Crew planen“ (06.11.2026): { info }, ansicht/crew.js; crewRuhe: { modus: true } = Gruppe aufgeklappt
+  crewRuhe: null,
   notfallWahl: false, // Wahl „Für wen?“ des Schnellwegs „Gerade schwer“ (Version 139)
   bonusMehr: false,   // alle Bonus-Aufgaben zeigen (Version 45), nur in dieser Sitzung
   einmal: new Set(),  // Einmal-Effekte für das nächste Zeichnen (Version 46): 'check', 'treffer', 'bonus', 'siegel' (48)
@@ -248,6 +285,9 @@ const ui = {
   premiumGesehen: false,
   obStart: Date.now(),
   neu: false,         // Onboarding für einen weiteren Helden
+  kapitelFuer: null,  // Version 171: gilt nur mit neu = true: heroId, dessen neues Ziel (Kapitel) gewählt wird; sonst null
+  mehrfach: null,     // Mehrere Helden auf einmal (05.11.2026): { auswahl, fehler }; Startpaket (06.11.): + paket, zurueck
+  obAura: null,       // Aura des ersten Gegners im Onboarding (05.11.2026): { gegner, auraStart }
   bereich: stand.onboarding.bereich,
   problem: stand.onboarding.problem,
   ziel: stand.onboarding.ziel,
@@ -325,7 +365,20 @@ async function starteAbgleich(db, user) {
 }
 
 // ---------- Helfer ----------
-const stil = () => STILE[stand.stil.aktiv] || STILE.fantasy;
+// Gegnernamen je Stil (Version 164, logik/gegner-namen.js): Standardnamen einmal merken, bei Stilwechsel die Gegner-Tabelle angleichen.
+const GEGNER_BASIS = GN.macheBasis(TABELLE.gegner);
+GN.pruefeGegnerNamen(STILE, TABELLE.gegner).forEach(m => console.warn(m));
+pruefeDenken(DENKEN, TEXTE, STILE).forEach(m => console.warn(m)); // Version 165: Zusagen und Glossar vollständig?
+pruefeBeweisbuch(BEWEISBUCH, TEXTE, { arten: EINTRAG_ARTEN, notfallPfade: NOTFALL.pfade, notfallBekannt: NOTFALL_BEKANNT }).forEach(m => console.warn(m)); // Version 166: Brief und Beweisbuch vollständig?
+pruefePlancheck(PLANCHECK, TEXTE, EINTRAG_ARTEN).forEach(m => console.warn(m)); // Version 167: Plan-Check vollständig?
+let gegnerNamenStil = null;
+function gegnerNamenAbgleichen() {
+  const id = stand && stand.stil ? stand.stil.aktiv : null;
+  if (!id || id === gegnerNamenStil) return;
+  gegnerNamenStil = id;
+  GN.wendeGegnerNamenAn(TABELLE.gegner, GEGNER_BASIS, STILE, id);
+}
+const stil = () => { gegnerNamenAbgleichen(); return STILE[stand.stil.aktiv] || STILE.fantasy; };
 // Vorauswahl in der Weltenwahl (Version 33): gewählte → aktive → erste wählbare Welt; nie eine gesperrte.
 const stilVorauswahl = () => [ui.stilAuswahl, stand.stil.aktiv].find(id => id && istWaehlbar(id)) || STIL_WAEHLBAR[0];
 const wort = k => stil().wort[k] || STILE.fantasy.wort[k];
@@ -482,12 +535,29 @@ const freiKontext = () => ({
   // und Antworten „War schwer“, je Held und Tag einmal
   zaehler: { siege: H.gesamtSiege(spiel), rueckfaelle: schwereTageZahl(spiel) }
 });
-const regelFrei = r => istFrei(r, freiKontext(), m => console.warn(m), FREI_ZAEHLER);
+// Version 152: Schalter „Alles freischalten“ (daten/freischaltung.js ALLES_FREI): nur im Testprofil und für den Besitzer,
+// gemerkt im Browser je Profil (nicht im Spielstand). Hebt Regeln, Taktung, Weltenwahl- und Stützgewohnheiten-Sperre auf.
+pruefeAllesFrei(ALLES_FREI).forEach(m => console.warn('Alles freischalten:', m));
+const profilName = istTest ? 'test' : 'haupt';
+const allesFreiAblage = `${ALLES_FREI.schluessel}.${profilName}`;
+let allesFreiAn = (() => { try { return localStorage.getItem(allesFreiAblage) === '1'; } catch (e) { return false; } })();
+const allesFreiMoeglich = () => allesFreiErlaubt({ profil: profilName, istBesitzer: ui.istBesitzer });
+const allesFrei = () => allesFreiAktiv({ profil: profilName, istBesitzer: ui.istBesitzer, an: allesFreiAn });
+function setzeAllesFrei(an) {
+  if (!allesFreiMoeglich()) { console.warn('Alles freischalten: nur im Testprofil für den Besitzer'); return false; }
+  allesFreiAn = an === true;
+  try { if (allesFreiAn) localStorage.setItem(allesFreiAblage, '1'); else localStorage.removeItem(allesFreiAblage); }
+  catch (e) { console.warn('Alles freischalten: Browser speichert nicht, gilt nur bis zum Neuladen'); }
+  trackEvent('test_alles_frei', { an: allesFreiAn });
+  return true;
+}
+const stuetzenCfg = () => stuetzenKonfig(allesFrei());
+const regelFrei = r => allesFrei() || istFrei(r, freiKontext(), m => console.warn(m), FREI_ZAEHLER);
 // Version 69: höchstens eine Freischaltung pro Tag (Regeln: daten/freischaltung.js FREIGABE, Logik: logik/freischaltung.js).
 // angekuendigt(id): freigegeben (oder nicht getaktet). nutzbar(id): bei sperreBisFreigabe erst nach der Freigabe.
 const FG = freigabeKonfig(FREIGABE);
 const angekuendigt = id => istFreigegeben(id, spiel.freigaben, FG);
-const nutzbar = id => !FG.sperreBisFreigabe || angekuendigt(id);
+const nutzbar = id => allesFrei() || !FG.sperreBisFreigabe || angekuendigt(id);
 const tabAktiv = t => regelFrei(t.frei) && nutzbar(t.screen);
 const tabVerdientGesperrt = t => regelFrei(t.frei) && !nutzbar(t.screen);
 // Etappe 3, Teil A: Status je Tab für die Aufteilung Leiste / „Bald“ (logik/freischaltung.js teileBald)
@@ -495,7 +565,7 @@ const tabStatus = t => (tabAktiv(t) ? 'frei' : tabVerdientGesperrt(t) ? 'verdien
 // Version 50: frisch freigeschaltete Bereiche, bis sie geöffnet oder mit „Später“ bestätigt wurden (spiel.neuGesehen)
 const neuBereiche = () => neuFreigeschaltet(TABS.filter(tabSichtbar), t => tabAktiv(t) && angekuendigt(t.screen), spiel.neuGesehen);
 // Version 69: Welten und erstes „Neues Abenteuer?“ nur, wenn verdient UND freigegeben (bei Sperre)
-const weltenFrei = () => !!stand.stil.frei && nutzbar('welten');
+const weltenFrei = () => (allesFrei() || !!stand.stil.frei) && nutzbar('welten');
 const angebotFrei = () => H.zielAngebot(spiel) && nutzbar('angebot');
 function alsGesehen(ids) {
   if (!ids.length) return;
@@ -669,6 +739,7 @@ function freigabenAltbestand() {
 // Muss eine Freigabe wegen eines Höhepunkts warten, merkt sich das Spiel den ersten Tag (Höchstwartezeit, alle Geräte).
 function gibFreigabe(mitMoment = false) {
   if (ui.feier || ui.blatt || ui.screen !== 'start' || !stand.onboarding.fertig || !stand.quest) return null;
+  if (allesFrei()) return null; // Version 152: alles schon nutzbar, keine Ankündigungen (Takt und „Verdient!“ ruhen)
   let r;
   try {
     r = naechsteFreigabe({ verdient: verdienteFreigaben(), freigaben: spiel.freigaben, heute: heute(), hoehepunktHeute: freigabePauseHeute(), siegTage: siegTage(),
@@ -688,6 +759,11 @@ function gibFreigabe(mitMoment = false) {
 // Seit 30.10.2026 darf eine ruhige Freigabe („Neu für dich“-Karte, Angebot) im selben Besuch wie der Kapitelwechsel kommen:
 // sie wird vor der Einblendung geprüft (danach wäre eine Einblendung offen) und erscheint, wenn die Einblendung zu ist.
 function pruefeBesuchsMomente() {
+  // Pause mit Rückkehr-Datum (09.11.2026): bei jedem Besuch und nach jedem Zeitsprung prüfen, ob eine Rückkehr fällig ist
+  try {
+    const rk = rueckkehrAnwenden(spiel, K.tagKey(jetzt()));
+    if (rk.zurueck.length) { setzeSpiel(rk.spiel); speichere(); render(); }
+  } catch (e) { console.warn('Rückkehr aus der Pause:', e.message); }
   const kapitel = kapitelJetzt();
   const id = gibFreigabe(!!kapitel);
   if (pruefeKapitelwechsel(kapitel)) { if (id === 'welten') weltenNachKapitel(); return; }
@@ -765,7 +841,7 @@ function abonniereTabelle(db) {
 // Neue Ansicht = neues Modul + eine Zeile hier. Doppelte Namen meldet der Start (der spätere gewinnt), damit kein
 // Bildschirm still verschwindet.
 const SCREENS = {};
-for (const [quelle, teil] of Object.entries({ ONBOARDING_SCREENS, START_SCREENS, LOGBUCH_SCREENS, STADT_SCREENS, KARTE_SCREENS, STORY_SCREENS, QUEST_SCREENS, STILWAHL_SCREENS, FEEDBACK_SCREENS, EINSTELLUNGEN_SCREENS, ADMIN_SCREENS, PFLEGE_SCREENS })) {
+for (const [quelle, teil] of Object.entries({ ONBOARDING_SCREENS, START_SCREENS, LOGBUCH_SCREENS, STADT_SCREENS, KARTE_SCREENS, STORY_SCREENS, QUEST_SCREENS, STILWAHL_SCREENS, FEEDBACK_SCREENS, DENKEN_SCREENS, PLANCHECK_SCREENS, BEWEIS_SCREENS, EINSTELLUNGEN_SCREENS, ADMIN_SCREENS, PFLEGE_SCREENS })) {
   for (const [name, f] of Object.entries(teil || {})) {
     if (typeof f !== 'function') { console.warn(`Bildschirm ${name} (${quelle}) ist keine Funktion`); continue; }
     if (name in SCREENS) console.warn(`Bildschirm ${name} doppelt (${quelle})`);
@@ -932,6 +1008,7 @@ function ebenenSchluessel() {
   if (ui.karteOrt) return 'karte:' + ui.karteOrt.heroId + ':' + ui.karteOrt.i;
   if (ui.eintrag) return 'eintrag:' + ui.eintrag.art;
   if (ui.woche) return wochenEbene(); // Wochenrunde: jeder Schritt beginnt oben
+  if (ui.crew) return crewEbene(); // Crew planen (06.11.2026)
   if (ui.notiz) return 'notiz:' + (ui.notiz.id || 'neu:' + (ui.notiz.nr || 0)); // Tagesnotiz: jedes neue Blatt beginnt oben
   if (ui.notfall) return 'notfall:' + (ui.notfall.verwalten ? 'ideen' : 'karte');
   if (notfallErinnerungOffen()) return 'notfall-erinnerung'; // Version 127
@@ -942,6 +1019,7 @@ function ebenenSchluessel() {
   if (ui.anzeigeBlatt) return 'anzeige'; // Version 125
   if (willkommenOffen()) return 'willkommen'; // Version 98
   if (rueckblickOffen()) return 'rueckblick'; // Rundenrückblick (02.11.2026)
+  if (abschlussOffen()) return 'abschluss'; // Version 169: Kettenende
   return null;
 }
 let letzteEbene = null;
@@ -953,6 +1031,7 @@ function zoomWeiter() {
   catch (e) { /* nur Darstellung */ }
 }
 function renderJetzt() {
+  gegnerNamenAbgleichen();
   document.documentElement.dataset.stil = stand.stil.aktiv;
   zoomWeiter();
   // Version 46: Auftritt nur bei neuem Bildschirm oder Heldenwechsel, nie bei jedem Neuzeichnen
@@ -970,7 +1049,7 @@ function renderJetzt() {
   const xpFlug = ui.xpFlug && ui.screen === 'start' ? `<span class="xpflug schwebend" aria-hidden="true">${ui.xpFlug > 0 ? '+' : ''}${ui.xpFlug} XP</span>` : '';
   const blattScroll = app.querySelector('.feier .blatt')?.scrollTop || 0;
   const seite = testleiste() + fn() + tabLeiste() + xpFlug;
-  let ebenen = blattHtml() + stadtBlattHtml() + karteBlattHtml() + eintragBlattHtml() + notizBlattHtml() + wochenBlattHtml() + probeBlattHtml() + anzeigeBlattHtml() + ruhetagBlattHtml() + notfallBlattHtml() + notfallWahlHtml() + notfallErinnerungHtml() + messzielBlattHtml() + heldenWahlHtml() + feierHtml() + willkommenHtml() + rueckblickSeiteHtml();
+  let ebenen = blattHtml() + stadtBlattHtml() + karteBlattHtml() + eintragBlattHtml() + notizBlattHtml() + wochenBlattHtml() + crewBlattHtml() + probeBlattHtml() + anzeigeBlattHtml() + ruhetagBlattHtml() + notfallBlattHtml() + notfallWahlHtml() + notfallErinnerungHtml() + messzielBlattHtml() + heldenWahlHtml() + feierHtml() + willkommenHtml() + rueckblickSeiteHtml() + abschlussSeiteHtml();
   // Version 75: Ein offenes Blatt, in dem man tippt (Eintragsblatt, Notfallkarte, Heldenwahl …), wird mit dem Bildschirm
   // neu gezeichnet. Die Einblendung („erscheint“) gehört nur zum Öffnen; sonst wächst das Blatt bei jedem Tipp neu auf
   // und springt nach oben (wirkte wie Flackern). Gleiche Ebene wie zuvor → ohne Einblendung, Scrollstand im Blatt bleibt.
@@ -986,6 +1065,7 @@ function renderJetzt() {
   if (gleicheEbene && blattScroll) { const b = app.querySelector('.feier .blatt'); if (b) b.scrollTop = blattScroll; }
   if (letzterScreen !== ui.screen) {
     app.querySelector('.screen')?.scrollTo?.(0, 0);
+    if (letzterScreen !== null && !(auftritt && ui.screen === 'start')) app.querySelector('.screen')?.classList.add('seite-wechsel'); // Tab-Wechsel: kurz überblenden (Version 162)
     const h = app.querySelector('.feier h2, .screen h1');
     if (h && letzterScreen !== null) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     letzterScreen = ui.screen;
@@ -1134,21 +1214,46 @@ function zurueck() {
 }
 
 // Startpaket (02.11.2026, daten/startpakete.js): mehrere Helden in einem Rutsch, nur für Besitzer und #test.
-// Zweistufig wie „Zurücksetzen“: erster Tipp fragt nach. Scheitert es, bleibt der Spielstand unverändert (Meldung als Hinweis).
+// Seit 06.11.2026: Der Knopf öffnet die Auswahl „Mehrere Helden auf einmal“ (obmehr) mit allen Helden des Pakets
+// vorausgewählt; abwählen geht vor dem Anlegen. Zurück führt dorthin, wo der Knopf stand. Scheitert es, bleibt der
+// Spielstand unverändert (Meldung auf dem Bildschirm).
 const startpaketErlaubt = () => istTest || ui.istBesitzer;
 function startpaket(id) {
   if (!startpaketErlaubt()) { console.warn('Startpaket: nur für den Besitzer oder im Testprofil'); return; }
-  if (ui.startpaketFrage !== id) { ui.startpaketFrage = id; ui.startpaketInfo = null; render(); return; }
-  ui.startpaketFrage = null;
+  const helden = SP.paketHelden(id, spiel, TABELLE);
+  if (!helden.length) { console.warn('Startpaket: unbekannt oder leer', id); return; }
+  ui.mehrfach = { paket: id, auswahl: helden.map(h => h.heroId), fehler: null, zurueck: ui.screen };
+  trackEvent('starter_pack_opened', { paket: id });
+  geheZu('obmehr');
+}
+function startpaketAnlegenAuswahl() {
+  const id = ui.mehrfach.paket;
   let r;
-  try { r = SP.startpaketAnlegen(spiel, id, jetzt(), TABELLE, { rampe: RAMPE_NEU, zuordnung }); }
-  catch (e) { console.warn('Startpaket:', e.message); ui.startpaketInfo = e.message; render(); return; }
+  try { r = SP.startpaketAnlegen(spiel, id, jetzt(), TABELLE, { rampe: RAMPE_NEU, zuordnung, cfg: stuetzenCfg(), nur: ui.mehrfach.auswahl }); }
+  catch (e) { console.warn('Startpaket:', e.message); ui.mehrfach.fehler = e.message; render(); return; }
   stoppeAnalyse();
   setzeSpiel(r.spiel);
-  Object.assign(ui, { neu: false, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null });
+  Object.assign(ui, { mehrfach: null, neu: false, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null });
   speichere();
   trackEvent('starter_pack_added', { paket: id, helden: r.angelegt.length, ergaenzt: r.ergaenzt.length - r.uebersprungen.length, uebersprungen: r.uebersprungen.length });
   hinweis = [SP.ergebnisText(r, TABELLE), ...r.hinweise].join(' ');
+  geheZu('start');
+}
+
+// Mehrere Helden auf einmal (05.11.2026, logik/mehrfach.js): nur Besitzer und #test, alles oder nichts.
+// Scheitert es, bleibt der Spielstand unverändert und die Meldung steht auf dem Bildschirm.
+function mehrfachAnlegen() {
+  if (startpaketErlaubt() && ui.mehrfach && ui.mehrfach.paket) return startpaketAnlegenAuswahl(); // Startpaket (06.11.2026)
+  if (!startpaketErlaubt() || !ui.neu || !ui.mehrfach) { console.warn('Mehrere Helden: nur für den Besitzer oder im Testprofil'); return; }
+  let r;
+  try { r = MF.mehrereAnlegen(spiel, ui.mehrfach.auswahl, TABELLE, jetzt(), zuordnung, { rampe: RAMPE_NEU }); }
+  catch (e) { console.warn('Mehrere Helden:', e.message); ui.mehrfach.fehler = e.message; render(); return; }
+  setzeSpiel(r.spiel);
+  Object.assign(ui, { mehrfach: null, neu: false, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null });
+  speichere();
+  trackEvent('multi_heroes_added', { helden: r.angelegt.length, gesamt: spiel.helden.length });
+  const erhalt = r.angelegt.map(id => neuImErhaltText(id)).filter(Boolean);
+  hinweis = [T('mehr.angelegt', { namen: r.angelegt.map(nameVon).join(', ') }), ...new Set(erhalt)].join(' ');
   geheZu('start');
 }
 
@@ -1156,7 +1261,15 @@ function beginnen() {
   const v = aktuelleVorlage();
   if (!v) { hinweis = T('hinweis.ohneVorlage'); geheZu('ob1'); return; }
   try {
-    if (ui.neu) {
+    if (ui.neu && ui.kapitelFuer) {
+      // Neues Ziel für einen vorhandenen Helden (Version 171): das alte Ziel wandert ins Archiv, XP und Siege bleiben
+      const hid = ui.kapitelFuer;
+      setzeSpiel(H.neuesKapitel(spiel, hid, v, ui.ziel, jetzt(), zuordnung, RAMPE_NEU, ui.warum));
+      trackEvent('chapter_started', { vorlage: v.id, domain: v.domain, kapitel: KAP.kapitelVon(spiel, hid).length + 1 });
+      const neuH = H.heldVon(spiel, hid);
+      hinweis = T(neuH && neuH.quest && neuH.quest.start > K.tagKey(jetzt()) ? 'kapitel.beginntMorgen' : 'kapitel.begonnen', { held: nameVon(hid) });
+      ui.kapitelFuer = null;
+    } else if (ui.neu) {
       setzeSpiel(H.heldHinzufuegen(spiel, v, ui.ziel, jetzt(), zuordnung, RAMPE_NEU, ui.warum));
       trackEvent('hero_added', { vorlage: v.id, domain: v.domain, helden: spiel.helden.length });
       const imErhalt = neuImErhaltText(v.held); // Heldenmodi: Fokus voll → startet im Erhalt, mit Hinweis
@@ -1241,6 +1354,22 @@ function check(antwort) {
   speichere();
   trackEvent('quest_checkin', { antwort });
   zeigeEreignisse(r, antwort, buehneArt);
+}
+
+// Sieg nachholen (06.11.2026, Bosskette mit Bedingungen): ein gespeicherter Eintrag (Gestalt, Fähigkeit, Schwierigkeit)
+// erfüllt die letzte Bedingung, die Treffer sind schon da. Dann fällt der Gegner jetzt, mit Bühne und Siegkarte wie nach
+// einem „Ja“; keine Antwort ändert sich. Liefert true, wenn ein Sieg kam.
+function siegNachholen() {
+  if (!stand || !stand.quest) return false;
+  let r;
+  try { r = K.siegNachholen(stand, jetzt()); } catch (e) { console.warn('Sieg nachholen:', e.message); return false; }
+  if (!r.ereignisse.some(e => e && e.typ === 'sieg')) return false;
+  setzeStand(r.stand);
+  const buehneArt = starteBuehne('ja', r);
+  speichere();
+  trackEvent('boss_won_by_condition', {});
+  zeigeEreignisse(r, 'ja', buehneArt);
+  return true;
 }
 
 // Kampfbühne (31.10.2026): nach „Ja“ läuft der Ablauf (Treffer → Heldenbild → Boss-Sprechblase) nach der Uhr; danach wird
@@ -1516,7 +1645,7 @@ async function ladeAdmin() {
 // Klicks (Klick-Logik aufteilen, 30.10.2026): jede Ansicht hat ihr Register <NAME>_KLICKS (Aktion data-a → Funktion).
 // Neue Ansicht = Register exportieren + eine Zeile hier. Fehler im Register (doppelt, keine Funktion) meldet der Start;
 // klick.test.js verlangt, dass es keine gibt und jeder Knopf eine Aktion hat.
-const KLICKS = klickRegister({ ONBOARDING_KLICKS, START_KLICKS, BUEHNE_KLICKS, NACHTRAG_KLICKS, RAHMEN_KLICKS, FEIER_KLICKS, BLATT_KLICKS, FEEDBACK_KLICKS, EINSTELLUNGEN_KLICKS, ADMIN_KLICKS, STILWAHL_KLICKS, LOGBUCH_KLICKS, QUEST_KLICKS, STORY_KLICKS, PFLEGE_KLICKS, KARTE_KLICKS, EINTRAG_KLICKS, NOTFALL_KLICKS, MESSZIEL_KLICKS, PROBE_KLICKS, RUHETAG_KLICKS, STUETZEN_KLICKS, ZIELQUEST_KLICKS, WILLKOMMEN_KLICKS, RUECKBLICK_KLICKS, ANZEIGE_KLICKS, NOTIZ_KLICKS, HELDENMODI_KLICKS, WOCHE_KLICKS, STADT_KLICKS });
+const KLICKS = klickRegister({ ONBOARDING_KLICKS, START_KLICKS, BUEHNE_KLICKS, NACHTRAG_KLICKS, RAHMEN_KLICKS, FEIER_KLICKS, BLATT_KLICKS, FEEDBACK_KLICKS, TESTER_KLICKS, DENKEN_KLICKS, PLANCHECK_KLICKS, BEWEIS_KLICKS, EINSTELLUNGEN_KLICKS, ADMIN_KLICKS, STILWAHL_KLICKS, LOGBUCH_KLICKS, QUEST_KLICKS, STORY_KLICKS, PFLEGE_KLICKS, KARTE_KLICKS, EINTRAG_KLICKS, NOTFALL_KLICKS, MESSZIEL_KLICKS, PROBE_KLICKS, RUHETAG_KLICKS, STUETZEN_KLICKS, ZIELQUEST_KLICKS, WILLKOMMEN_KLICKS, RUECKBLICK_KLICKS, ABSCHLUSS_KLICKS, ANZEIGE_KLICKS, NOTIZ_KLICKS, HELDENMODI_KLICKS, WOCHE_KLICKS, CREW_KLICKS, STADT_KLICKS });
 KLICKS.fehler.forEach(m => console.error(m));
 // Fehler in einer Aktion: Spiel läuft weiter, kurzer Hinweis statt stillem Nichts (Einzelheiten in der Konsole).
 function klickFehler(err, aktion) {
@@ -1569,7 +1698,7 @@ document.addEventListener('pointercancel', zeigerLos, true);
 
 // Felder (Feld-Eingaben aufteilen, 30.10.2026): change/input/Enter je Element-ID über die Register <NAME>_FELDER der
 // Ansichten. Felder ohne Eintrag bleiben still (z. B. Import-Code, wird beim Klick gelesen).
-const FELDER = feldRegister({ ONBOARDING_FELDER, QUEST_FELDER, FEEDBACK_FELDER, ADMIN_FELDER, PFLEGE_FELDER, EINTRAG_FELDER, NOTFALL_FELDER, MESSZIEL_FELDER, STUETZEN_FELDER, ZIELQUEST_FELDER, RUECKBLICK_FELDER, NOTIZ_FELDER, LOGBUCH_FELDER, HELDENMODI_FELDER, WOCHE_FELDER });
+const FELDER = feldRegister({ ONBOARDING_FELDER, QUEST_FELDER, FEEDBACK_FELDER, ADMIN_FELDER, PFLEGE_FELDER, EINTRAG_FELDER, BEWEIS_FELDER, PLANCHECK_FELDER, NOTFALL_FELDER, MESSZIEL_FELDER, STUETZEN_FELDER, ZIELQUEST_FELDER, RUECKBLICK_FELDER, NOTIZ_FELDER, LOGBUCH_FELDER, HELDENMODI_FELDER, WOCHE_FELDER });
 FELDER.fehler.forEach(m => console.error(m));
 function feldFehler(err, id) {
   console.warn(`Eingabe „${id}“:`, (err && err.message) || err);
@@ -1614,15 +1743,15 @@ function zeitSprung(n, einheit = 'tag') { // nur Testprofil (Testleiste); einhei
 // <kontext> Namen, die die Ansichten über kx lesen (ansicht/kontext.js): veränderliche Werte (let) als Getter, der Rest fest.
 // Neuer Name: hier ergänzen. Fehlt einer, meldet kx beim Zeichnen genau diesen Namen.
 binde(
-  { anzeige: () => anzeige, bewegungAus: () => bewegungAus, einw: () => einw, hinweis: () => hinweis, spiel: () => spiel, stand: () => stand, tabelle: () => tabelle },
-  { NEU_QUELLEN, SCREENS, SM, START_IDS, T, VERSION, abgleichStatus, aktuelleVorlage, angebotFrei, weltenFrei, andeutungGesehen, bezirkName, bild, bildFuer, funktionFrei, heldenAnsichten, img, istTest, jetzt, mikroListe, nameVon, naechsterTitel, titel, neuBereiche, neuPunkte, platzhalter, setzeStartGlanz, speicher, stil, stilVorauswahl, stilWerte, story, symbol, arenaFunken, tabAktiv, tabLabel, tabSichtbar, tabStatus, testerId, ui, wort,
+  { anzeige: () => anzeige, bewegungAus: () => bewegungAus, einw: () => einw, hinweis: () => hinweis, spiel: () => spiel, stand: () => stand, tabelle: () => tabelle, testerHinweis: () => testerHinweis },
+  { NEU_QUELLEN, SCREENS, SM, START_IDS, T, VERSION, abgleichStatus, aktuelleVorlage, angebotFrei, weltenFrei, andeutungGesehen, bezirkName, bild, bildFuer, funktionFrei, heldenAnsichten, img, istTest, jetzt, mikroListe, nameVon, naechsterTitel, titel, neuBereiche, neuPunkte, platzhalter, setzeStartGlanz, speicher, stil, stilVorauswahl, stilWerte, story, symbol, arenaFunken, tabAktiv, tabLabel, tabSichtbar, tabStatus, testerId, ui, wort, allesFrei, allesFreiMoeglich, setzeAllesFrei, stuetzenCfg,
     // Aktionen für die Klick-Register (Klick-Logik aufteilen)
-    alsGesehen, beginnen, check, entscheideDaten, erstelleExport, finde, geheZu, importiere, importiereCsv, kopiereExport,
+    alsGesehen, beginnen, bestaetigeTesterHinweis, check, entscheideDaten, erstelleExport, finde, geheZu, importiere, importiereCsv, kopiereExport,
     ladeAdmin, mikro, oeffneBlatt, zeichneNachZeiger: renderNachZeiger,
     // Pflege (Pflege-Logik auslagern): Zustand, Umgebung mit Datenbank-Adapter, Bildplätze
     bildPlaetze, eingebautesBild, kartenLuecken, kartenPlatzBekannt, pflegeUmgebung, pflegeZustand, sprungLink, nachtrage,
-    bestaetige, setzeAnzeige, systemRuhig, gegnerVerhuellt, vorstellungSpaeter, vorstellungZeigen, startpaket, startpaketErlaubt, pruefeBesuchsMomente, questBearbeitenOeffnen, questBearbeitenSpeichern, render, schliesseBlatt, setzeHinweis, setzeSpiel, setzeStand, speichere, sperrTextVon, stoppeAnalyse,
-    storyGelesenBis, teileExport, weiter, zeigeNaechstes, zeitSprung, zurueck }
+    bestaetige, setzeAnzeige, systemRuhig, gegnerVerhuellt, vorstellungSpaeter, vorstellungZeigen, startpaket, startpaketErlaubt, mehrfachAnlegen, pruefeBesuchsMomente, questBearbeitenOeffnen, questBearbeitenSpeichern, render, schliesseBlatt, setzeHinweis, setzeSpiel, setzeStand, speichere, sperrTextVon, stoppeAnalyse,
+    storyGelesenBis, teileExport, weiter, zeigeNaechstes, zeitSprung, zurueck, siegNachholen }
 );
 // </kontext>
 

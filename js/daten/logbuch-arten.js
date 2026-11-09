@@ -18,6 +18,7 @@
 export const LOGBUCH_ARTEN = {
   kapitel: { text: 'lb.kapitel', icon: 'kompass', gruppe: 'meilensteine', rang: 1 },
   sieg: { text: 'lb.sieg', icon: 'stern', gruppe: 'meilensteine', xp: 'sieg', rang: 2 },
+  abschluss: { text: 'lb.abschluss', icon: 'stern', gruppe: 'meilensteine', rang: 2.5 }, // Version 169: Kettenende, Abschluss oder Meilenstein (ruhig, ohne XP)
   anwendung: { text: 'lb.anwendung', icon: 'check', gruppe: 'erledigt', xp: 'anwendung', rang: 3 },
   nicht: { text: 'lb.nicht', icon: 'mond', gruppe: 'erledigt', rang: 4 },
   warSchwer: { text: 'lb.warSchwer', icon: 'welle', gruppe: 'erledigt', rang: 4.2 }, // Version 141: Antwort „War schwer“ (ruhig, ohne XP)
@@ -29,6 +30,7 @@ export const LOGBUCH_ARTEN = {
   neustart: { text: 'lb.neustart', icon: 'blume', gruppe: 'eintraege', rang: 0.3 }, // Version 98: Willkommen zurück
   wiederda: { text: 'lb.wiederda', icon: 'haus', gruppe: 'eintraege', rang: 0.35 },
   rueckblick: { text: 'lb.rueckblick', icon: 'buch', gruppe: 'eintraege', rang: 0.4 }, // Rundenrückblick (02.11.2026)
+  plancheck: { text: 'lb.plancheck', icon: 'kompass', gruppe: 'eintraege', rang: 0.45 }, // Plan- und Warum-Check (Version 167)
   notiz: { text: 'lb.notiz', icon: 'blatt', gruppe: 'notizen', rang: 0.1 }, // Tagesnotiz (04.11.2026), oben am Tag, ohne Held
   mikro: { text: 'lb.mikro', icon: 'sonne', gruppe: 'erledigt', xp: 'mikro', rang: 5 },
   stuetze: { text: 'lb.stuetze', icon: 'spross', gruppe: 'erledigt', rang: 5.5 }, // Schritt „Zähler“: Stützgewohnheit, ohne XP

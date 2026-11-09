@@ -7,13 +7,60 @@ import { TABELLE } from '../daten/vorlagen.js';
 import * as EW from '../logik/einwilligung.js';
 import * as H from '../logik/helden.js';
 import * as K from '../logik/kern.js';
+import * as MF from '../logik/mehrfach.js'; // Mehrere Helden auf einmal (05.11.2026)
+import * as SP from '../logik/startpaket.js'; // Startpaket mit Auswahl (06.11.2026)
 import { einwKarte, startpaketKnopf } from './einstellungen.js';
 import { STARTPAKETE } from '../daten/startpakete.js'; // Startpaket (02.11.2026)
+import { STIL_REIHENFOLGE, STIL_WAEHLBAR, STILE } from '../daten/stile.js'; // Stilfrage am Start (Version 163)
+import { weltKachel } from './stilwahl.js';
 import { akkusativ, esc, icon } from './helfer.js';
 import { kx } from './kontext.js';
+import { auraHtml } from './feier.js'; // Aura je Gegner auch beim ersten Gegner (05.11.2026)
 import { erreichenGewaehlt, pruefeZielWahl, tuerHtml, wegWahlHtml, zielVorschauHtml, zielWahlBereit, zielWahlHtml } from './zielquest.js'; // Ziel-Quests (31.10.2026)
 
 // Schritte der Fortschrittsanzeige und Zeilen der Analyse (ob4). Die Analyse zählt in app.js bis ANALYSE_ZEILEN.length.
+// Startpaket mit Auswahl (06.11.2026): dieselbe Ansicht wie „Mehrere Helden auf einmal“, die Helden des Pakets sind
+// vorausgewählt. Je Held: Ziel und was das Paket mitbringt; schon vorhandene Helden „werden ergänzt“ (auch abwählbar).
+// Zustand ui.mehrfach = { paket, auswahl: [Helden-IDs], fehler, zurueck }. Anlegen: mehrfachAnlegen → startpaketAnlegenAuswahl.
+function paketAuswahlHtml() {
+  const { T, nameVon, spiel, ui } = kx;
+  const p = STARTPAKETE[ui.mehrfach.paket];
+  const helden = SP.paketHelden(ui.mehrfach.paket, spiel, TABELLE);
+  const gew = ui.mehrfach.auswahl;
+  const neu = helden.filter(h => !h.vorhanden && gew.includes(h.heroId)).length;
+  const frei = Math.max(0, H.MAX_HELDEN - ((spiel && spiel.helden) || []).length);
+  const mit = h => [h.zielquest ? T('paket.mitZiel') : '', h.messziele ? T(h.messziele === 1 ? 'paket.mitMessziel' : 'paket.mitMessziele', { n: h.messziele }) : '', h.ideen ? T(h.ideen === 1 ? 'paket.mitIdee' : 'paket.mitIdeen', { n: h.ideen }) : ''].filter(Boolean).join(' · ');
+  const unter = h => [h.vorhanden ? T('paket.ergaenzt') : h.ziel, mit(h)].filter(Boolean).join(' · ');
+  return `<section class="screen">
+      <div class="ob-kopf"><button class="icbtn" data-a="mehrfach-zurueck" aria-label="${esc(T('nav.zurueck'))}">${icon('zurueck')}</button><span class="schritt"></span></div>
+      <div class="inhalt">
+        <span class="eyebrow">${esc(T('einst.startpaket'))}</span>
+        <h1>${esc(p ? p.name : '')}</h1>
+        <p class="lead">${esc(T('paket.text'))}</p>
+        <p class="klein" role="status">${esc(neu > frei ? T('paket.keinPlatz', { n: neu, frei }) : T('paket.gewaehlt', { n: gew.length, alle: helden.length }))}</p>
+        <div class="optionen" role="group" aria-label="${esc(T('paket.gruppe'))}">
+          ${helden.map(h => `<button class="opt ${gew.includes(h.heroId) ? 'sel' : ''}" aria-pressed="${gew.includes(h.heroId)}" data-a="mehrfach-wahl" data-id="${esc(h.heroId)}">${gew.includes(h.heroId) ? icon('check') : ''}<span>${esc(nameVon(h.heroId))}<small>${esc(unter(h))}</small></span></button>`).join('')}
+        </div>
+        ${ui.mehrfach.fehler ? `<p class="fehler" role="alert">${esc(ui.mehrfach.fehler)}</p>` : ''}
+      </div>
+      <div class="fuss"><button class="cta" data-a="mehrfach-anlegen" ${gew.length && neu <= frei ? '' : 'disabled'}>${esc(T('paket.anlegen', { n: gew.length }))}</button></div>
+    </section>`;
+}
+
+// Stilfrage am Start (Version 163): Welten, die gewählt werden dürfen (`waehlbar` in daten/stile.js), als Kacheln im ersten
+// Onboarding-Schritt; Fantasy ist vorgewählt. Nicht bei weiteren Helden (ui.neu, der Stil steht dann) und nicht, wenn es
+// nichts zu wählen gibt (weniger als zwei wählbare Welten). Der Stil wirkt sofort auf Bild und Farben dieses Schritts.
+// Die Weltenwahl nach dem ersten Sieg bleibt: kern.stilStartWaehlen lässt `angeboten` und `frei` unberührt.
+function stilStartHtml() {
+  const { T, stand, ui } = kx;
+  if (ui.neu || STIL_WAEHLBAR.length < 2) return '';
+  return `<p class="frage" id="f-stil">${esc(T('ob.stilFrage'))}</p>
+        <div class="welten start" role="group" aria-labelledby="f-stil">
+          ${STIL_WAEHLBAR.map(id => weltKachel(id, { sel: stand.stil.aktiv === id, zeile: STILE[id].name, aktion: 'ob-stil' })).join('')}
+        </div>
+        <p class="klein">${esc(T('ob.stilHinweis'))}</p>`;
+}
+
 export const OB_SCHRITTE = 8;
 export const ANALYSE_ZEILEN = ['ob.analyse1', 'ob.analyse2', 'ob.analyse3', 'ob.analyse4'];
 
@@ -34,27 +81,57 @@ export function kopf(nr, zurueck = true, hell = false) {
 }
 export const ONBOARDING_SCREENS = {
   ob1() {
-    const { T, einw, img, ui } = kx;
+    const { T, einw, img, nameVon, ui } = kx;
     const bereiche = TABELLE.gruppen.filter(b => b.onboarding);
     return `<section class="screen">
       <div class="ob-bild klein">${img('szene', T('ob.appName'), 'szene', 'cover')}<div class="verlauf"></div></div>
       <div class="ob-kopf ueber">${ui.neu ? `<button class="icbtn hell-btn" data-a="zurueck" aria-label="${esc(T('ob.abbrechen'))}">${icon('zurueck')}</button>` : '<span class="icplatz"></span>'}${fortschritt(1)}</div>
       <div class="inhalt">
-        ${ui.neu ? `<h1>${esc(T('ob.neuTitel'))}</h1>
-        <p class="lead">${esc(T('ob.neuText'))}</p>`
+        ${ui.neu ? `<h1>${esc(T(kapitelHeld() ? 'ob.kapitelTitel' : 'ob.neuTitel'))}</h1>
+        <p class="lead">${esc(T(kapitelHeld() ? 'ob.kapitelText' : 'ob.neuText', { held: kapitelHeld() ? nameVon(kapitelHeld()) : '' }))}</p>`
         : `<h1>${esc(T('ob.willkommen'))}</h1>
         <p class="lead">${esc(T('ob.willkommenText'))}</p>`}
+        ${stilStartHtml()}
         ${tuerHtml()}
         <p class="frage" id="f1">${esc(T(erreichenGewaehlt() ? 'zq.bereichFrage' : 'ob.bereichFrage'))}</p>
         <div class="optionen" role="group" aria-labelledby="f1">
           ${bereiche.map(b => bereichBelegt(b.id)
-            ? `<button class="opt belegt" disabled>${icon(b.icon)}<span>${esc(b.name)}<small>${esc(T('ob.heldSchonDabei'))}</small></span></button>`
+            ? `<button class="opt belegt" disabled>${icon(b.icon)}<span>${esc(b.name)}<small>${esc(T(kapitelHeld() ? 'ob.kapitelAnderer' : 'ob.heldSchonDabei'))}</small></span></button>`
             : `<button class="opt ${ui.bereich === b.id ? 'sel' : ''}" aria-pressed="${ui.bereich === b.id}" data-a="bereich" data-id="${b.id}">${icon(b.icon)}<span>${esc(b.name)}</span></button>`).join('')}
         </div>
+        ${ui.neu && !kapitelHeld() && kx.startpaketErlaubt() && MF.platzFrei(kx.spiel) > 1 ? `<div class="karte spalte"><span class="eyebrow">${esc(T('mehr.eyebrow'))}</span><p class="klein">${esc(T('mehr.einstiegText'))}</p><button class="btn" data-a="mehrfach-oeffnen">${icon('menschen')} ${esc(T('mehr.einstieg'))}</button></div>` : ''}
         ${ui.neu ? '' : einwKarte(true)}
         ${!ui.neu && kx.startpaketErlaubt() ? `<div class="karte spalte"><span class="eyebrow">${esc(T('einst.startpaket'))}</span>${Object.keys(STARTPAKETE).map(id => startpaketKnopf(id, 'btn')).join('')}</div>` : ''}
       </div>
       <div class="fuss"><button class="cta" data-a="weiter" ${ui.bereich && (ui.neu || !EW.istOffen(einw)) ? '' : 'disabled'}>${esc(T('ob.weiter'))}</button></div>
+    </section>`;
+  },
+
+  // Mehrere Helden auf einmal (05.11.2026): nur bei ui.neu und für Besitzer bzw. Testprofil; sonst zurück zum ersten Schritt.
+  // Zustand ui.mehrfach = { auswahl: [Vorlagen-IDs], fehler }. Logik: logik/mehrfach.js, Anlegen: mehrfachAnlegen in app.js.
+  obmehr() {
+    const { SCREENS, T, nameVon, spiel, ui } = kx;
+    if (ui.mehrfach && ui.mehrfach.paket && kx.startpaketErlaubt()) return paketAuswahlHtml(); // Startpaket (06.11.2026)
+    if (!ui.neu || !kx.startpaketErlaubt() || !ui.mehrfach) { ui.screen = 'ob1'; return SCREENS.ob1(); }
+    const ang = MF.angebot(TABELLE, spiel);
+    const frei = MF.platzFrei(spiel);
+    const gew = ui.mehrfach.auswahl;
+    return `<section class="screen">
+      <div class="ob-kopf"><button class="icbtn" data-a="mehrfach-zurueck" aria-label="${esc(T('nav.zurueck'))}">${icon('zurueck')}</button><span class="schritt"></span>${abbrechenKnopf()}</div>
+      <div class="inhalt">
+        <span class="eyebrow">${esc(T('mehr.eyebrow'))}</span>
+        <h1>${esc(T('mehr.titel'))}</h1>
+        <p class="lead">${esc(T('mehr.text'))}</p>
+        <p class="klein" role="status">${esc(frei ? T('mehr.platz', { n: gew.length, frei }) : T('mehr.kein'))}</p>
+        ${ang.map(g => `<p class="frage" id="mehr-${esc(g.gruppe.id)}">${esc(g.gruppe.name)}</p>
+        <div class="optionen" role="group" aria-labelledby="mehr-${esc(g.gruppe.id)}">
+          ${g.eintraege.map(e => e.belegt
+            ? `<button class="opt belegt" disabled><span>${esc(e.text)}<small>${esc(T('ob.heldDabei', { held: nameVon(e.held) }))}</small></span></button>`
+            : `<button class="opt ${gew.includes(e.vorlage) ? 'sel' : ''}" aria-pressed="${gew.includes(e.vorlage)}" data-a="mehrfach-wahl" data-id="${esc(e.vorlage)}">${gew.includes(e.vorlage) ? icon('check') : ''}<span>${esc(e.text)}<small>${esc(T('mehr.unter', { held: nameVon(e.held), ziel: e.ziel }))}</small></span></button>`).join('')}
+        </div>`).join('')}
+        ${ui.mehrfach.fehler ? `<p class="fehler" role="alert">${esc(ui.mehrfach.fehler)}</p>` : ''}
+      </div>
+      <div class="fuss"><button class="cta" data-a="mehrfach-anlegen" ${gew.length && gew.length <= frei ? '' : 'disabled'}>${esc(T('mehr.anlegen', { n: gew.length }))}</button></div>
     </section>`;
   },
 
@@ -77,7 +154,7 @@ export const ONBOARDING_SCREENS = {
         <p class="lead">${esc(T('ob.problemText'))}</p>
         <div class="optionen" role="group" aria-label="${esc(T('ob.problemAria'))}">
           ${probleme.map(p => problemBelegt(ui.bereich, p.id)
-            ? `<button class="opt belegt" disabled><span>${esc(p.text)}<small>${esc(T('ob.heldDabei', { held: nameVon(K.vorlageFuer(TABELLE, ui.bereich, p.id).held) }))}</small></span></button>`
+            ? `<button class="opt belegt" disabled><span>${esc(p.text)}<small>${esc(kapitelHeld() ? T('ob.kapitelAnderer') : T('ob.heldDabei', { held: nameVon(K.vorlageFuer(TABELLE, ui.bereich, p.id).held) }))}</small></span></button>`
             : `<button class="opt ${ui.problem === p.id ? 'sel' : ''}" aria-pressed="${ui.problem === p.id}" data-a="problem" data-id="${p.id}"><span>${esc(p.text)}</span></button>`).join('')}
           ${problemBelegt(ui.bereich, '*') ? '' : `<button class="opt leise ${anders ? 'sel' : ''}" aria-pressed="${anders}" data-a="problem" data-id="*"><span>${esc(T('ob.anders'))}</span></button>`}
         </div>
@@ -147,14 +224,16 @@ export const ONBOARDING_SCREENS = {
   },
 
   ob6() {
-    const { T, aktuelleVorlage, img } = kx;
+    const { T, aktuelleVorlage, img, ui } = kx;
     const v = aktuelleVorlage();
     const g = TABELLE.gegner[v.gegner];
+    // Aura (05.11.2026): einmal, wenn der erste Gegner hier vorgestellt wird; Zurück und wieder Weiter spielt sie nicht erneut
+    if (!ui.obAura || ui.obAura.gegner !== v.gegner) ui.obAura = { gegner: v.gegner };
     return `<section class="screen dunkel">
       ${kopf(6, true, true)}
       <div class="inhalt">
         <span class="chip schlecht">${esc(T('ob.hindernis'))}</span>
-        <div class="boss-bild auftritt">${img('boss-' + v.gegner, g.name, 'boss', 'cover', g.name, 'auftritt')}</div>
+        <div class="boss-bild auftritt">${img('boss-' + v.gegner, g.name, 'boss', 'cover', g.name, 'auftritt')}${auraHtml(v.gegner, ui.obAura)}</div>
         <h1 class="name">${esc(g.name)}</h1>
         <div class="kraft"><span>${esc(T('ob.kraft'))}</span><div class="balken boss"><i style="width:100%"></i></div></div>
         <p class="lead">${esc(g.text)}</p>
@@ -234,13 +313,26 @@ export function warumFeld() {
         <p class="klein">${esc(T('ob.warumHilfe'))}</p>`;
 }
 // Bereiche/Probleme, deren Held schon in der Crew ist, sind im Onboarding für weitere Helden gesperrt.
-export const heldBelegt = vorlage => { const { spiel, ui } = kx; return !!vorlage && ui.neu && !!H.heldVon(spiel, vorlage.held); };
+// Neues Ziel für einen vorhandenen Helden (Version 171, ui.kapitelFuer): nur Auswahl, die zu diesem Helden gehört, ist frei;
+// alles andere ist gesperrt. Sonst („Neues Abenteuer“): gesperrt ist, wer schon in der Crew ist.
+export const kapitelHeld = () => { const { ui } = kx; return ui.neu && ui.kapitelFuer ? ui.kapitelFuer : null; };
+export const heldBelegt = vorlage => { const { spiel, ui } = kx; const kh = kapitelHeld(); return !!vorlage && ui.neu && (kh ? vorlage.held !== kh : !!H.heldVon(spiel, vorlage.held)); };
 export const problemBelegt = (bereich, problem) => heldBelegt(K.vorlageFuer(TABELLE, bereich, problem));
 export const bereichBelegt = b => [...(TABELLE.probleme[b] || []).map(p => p.id), '*'].every(p => problemBelegt(b, p));
 
 // ---------- Klicks (Klick-Logik aufteilen, 30.10.2026) ----------
 // Aktion (data-a) → Funktion({ id, aktion, el }). Zusammengeführt und verteilt in app.js über logik/klicks.js.
 export const ONBOARDING_KLICKS = {
+  // Stilfrage am Start (Version 163): setzt nur den aktiven Stil (kern.stilStartWaehlen), speichert und zeichnet neu.
+  'ob-stil'({ id }) {
+    const { render, setzeHinweis, setzeStand, speichere, stand, ui } = kx;
+    if (ui.neu) return;
+    try { setzeStand(K.stilStartWaehlen(stand, id, STIL_REIHENFOLGE, STIL_WAEHLBAR)); }
+    catch (err) { setzeHinweis(err.message); render(); return; }
+    speichere();
+    trackEvent('style_selected', { stil: kx.stand.stil.aktiv, start: true }); // neu lesen: setzeStand hat den Stand ersetzt
+    render();
+  },
   bereich({ id }) { const { render, ui } = kx; Object.assign(ui, { bereich: id, problem: null, ziel: null, freitext: '', warum: '', zq: null }); render(); },
   problem({ id }) {
     const { finde, render, ui } = kx;
@@ -254,10 +346,29 @@ export const ONBOARDING_KLICKS = {
   beginnen() { const { beginnen } = kx; beginnen(); },
   'neues-abenteuer'() {
     const { geheZu, spiel, ui } = kx;
-    Object.assign(ui, { heldenWahl: false, blatt: null, neu: true, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null, obStart: Date.now() });
+    Object.assign(ui, { heldenWahl: false, blatt: null, neu: true, kapitelFuer: null, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null, obStart: Date.now() });
     trackEvent('new_adventure_started', { helden: spiel.helden.length });
     geheZu('ob1');
   },
+  // Mehrere Helden auf einmal (05.11.2026)
+  'mehrfach-oeffnen'() {
+    const { geheZu, ui } = kx;
+    if (!ui.neu || !kx.startpaketErlaubt()) { console.warn('Mehrere Helden: nur für den Besitzer oder im Testprofil'); return; }
+    ui.mehrfach = { auswahl: [], fehler: null };
+    trackEvent('multi_heroes_opened', {});
+    geheZu('obmehr');
+  },
+  'mehrfach-wahl'({ id }) {
+    const { render, spiel, ui } = kx;
+    if (!ui.mehrfach) return;
+    ui.mehrfach.auswahl = ui.mehrfach.paket
+      ? SP.paketUmschalten(ui.mehrfach.auswahl, id, SP.paketHelden(ui.mehrfach.paket, spiel, TABELLE))
+      : MF.umschalten(ui.mehrfach.auswahl, id, MF.angebot(TABELLE, spiel));
+    ui.mehrfach.fehler = null;
+    render();
+  },
+  'mehrfach-zurueck'() { const { geheZu, ui } = kx; const ziel = (ui.mehrfach && ui.mehrfach.zurueck) || 'ob1'; ui.mehrfach = null; geheZu(ziel === 'obmehr' ? 'ob1' : ziel); },
+  'mehrfach-anlegen'() { const { mehrfachAnlegen } = kx; mehrfachAnlegen(); },
   // Weiteres Abenteuer jederzeit abbrechen: nichts ist gespeichert (merkeAuswahl speichert bei ui.neu nicht),
   // Auswahl zurück auf den Stand des Spielstands, Analyse-Zeitgeber stoppen.
   'abenteuer-abbrechen'() {
@@ -265,7 +376,7 @@ export const ONBOARDING_KLICKS = {
     if (!ui.neu) return;
     stoppeAnalyse();
     trackEvent('new_adventure_cancelled', { schritt: ui.screen });
-    Object.assign(ui, { neu: false, bereich: stand.onboarding.bereich, problem: stand.onboarding.problem, ziel: stand.onboarding.ziel, freitext: stand.onboarding.freitext || '', warum: '', zielart: 'aendern', zq: null });
+    Object.assign(ui, { mehrfach: null, neu: false, bereich: stand.onboarding.bereich, problem: stand.onboarding.problem, ziel: stand.onboarding.ziel, freitext: stand.onboarding.freitext || '', warum: '', zielart: 'aendern', zq: null });
     geheZu('start');
   }
 };

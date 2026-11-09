@@ -11,6 +11,9 @@
 //   - Die Freischaltungen gelten weiter: Stützgewohnheiten gibt es erst ab TEILZIELE.nebenAbSiegen Siegen; bis dahin
 //     liefert das Ergebnis einen Hinweis statt sie vorzuziehen (kein Überspringen des Takts).
 //   - Fokus bleibt beim ersten Helden des Pakets (bzw. beim bisherigen, wenn es schon Helden gab).
+//   - Auswahl (06.11.2026): `nur` = Helden-IDs aus dem Paket; nur diese werden angelegt bzw. ergänzt. Fehlt `nur`, gilt das
+//     ganze Paket. Leere Auswahl oder ein Held, der nicht im Paket steht, ist ein Fehler (nichts wird angelegt).
+//     Die Ansicht ist dieselbe wie bei „Mehrere Helden auf einmal“ (ansicht/onboarding.js, obmehr), mit paketHelden().
 import { STARTPAKETE, STARTPAKET_VERSATZ_MAX } from '../daten/startpakete.js';
 import { ZIEL_VORLAGEN } from '../daten/zielvorlagen.js';
 import { MESSZIEL_RICHTUNGEN, MESSZIEL_OPT } from '../daten/messziele.js';
@@ -137,7 +140,32 @@ function ergaenzen(s, e, v, heute, heuteK, { tabelle, zuordnung, zielVorlagen, c
 // (wie im Onboarding), opt.zuordnung: H.zuordner(…). Liefert { spiel, angelegt: [heroId], ergaenzt: [Protokoll],
 // uebersprungen: [heroId ohne Neues], hinweise: [Text] }. Protokoll: { heroId, neu: { ziel, messziele, ideen, stuetzen },
 // vorhanden }. Wirft StartpaketFehler (auch, wenn es nichts zu tun gibt); der übergebene Spielstand wird nie verändert.
-export function startpaketAnlegen(spiel, paketId, heute, tabelle, { rampe = null, zuordnung, pakete = STARTPAKETE, zielVorlagen = ZIEL_VORLAGEN, cfg = TEILZIELE } = {}) {
+// Helden eines Pakets für die Auswahl: [{ heroId, vorlage, ziel, vorhanden, messziele, ideen, zielquest }]. vorhanden = schon
+// in der Crew (wird ergänzt). Unbekanntes Paket oder Vorlage → [] bzw. der Eintrag fehlt. Wirft nie.
+export function paketHelden(paketId, spiel, tabelle, pakete = STARTPAKETE) {
+  const paket = pakete && Object.prototype.hasOwnProperty.call(pakete, paketId) ? pakete[paketId] : null;
+  if (!paket || !Array.isArray(paket.helden)) return [];
+  const aus = [];
+  for (const e of paket.helden) {
+    const v = e && ((tabelle && tabelle.vorlagen) || []).find(x => x.id === e.vorlage);
+    if (!v) continue;
+    let vorhanden = false;
+    try { vorhanden = !!H.heldVon(spiel, v.held); } catch (err) { vorhanden = false; }
+    aus.push({ heroId: v.held, vorlage: v.id, ziel: e.ziel || '', vorhanden, messziele: (e.messziele || []).length, ideen: (e.ideen || []).length, zielquest: !!e.zielquest });
+  }
+  return aus;
+}
+
+// Auswahl umschalten (Helden-ID dazu oder weg); unbekannte IDs ändern nichts. Neue Liste in Paket-Reihenfolge.
+export function paketUmschalten(auswahl, heroId, helden) {
+  const ids = (helden || []).map(h => h.heroId);
+  const alt = new Set((Array.isArray(auswahl) ? auswahl : []).filter(x => ids.includes(x)));
+  if (!ids.includes(heroId)) return ids.filter(x => alt.has(x));
+  if (alt.has(heroId)) alt.delete(heroId); else alt.add(heroId);
+  return ids.filter(x => alt.has(x));
+}
+
+export function startpaketAnlegen(spiel, paketId, heute, tabelle, { rampe = null, zuordnung, pakete = STARTPAKETE, zielVorlagen = ZIEL_VORLAGEN, cfg = TEILZIELE, nur = null } = {}) {
   if (!spiel || !Array.isArray(spiel.helden)) throw new StartpaketFehler('Kein gültiger Spielstand.');
   if (!(heute instanceof Date) || isNaN(heute)) throw new StartpaketFehler('Ungültiges Datum.');
   if (!zuordnung) throw new StartpaketFehler('Zuordnung der Lebensbereiche fehlt.');
@@ -147,7 +175,15 @@ export function startpaketAnlegen(spiel, paketId, heute, tabelle, { rampe = null
   const fehler = pruefePaket(paket, tabelle, { zielVorlagen, heute: heuteK });
   if (fehler.length) throw new StartpaketFehler('Startpaket fehlerhaft: ' + fehler.join(' '));
 
-  const alle = paket.helden.map(e => ({ e, v: tabelle.vorlagen.find(x => x.id === e.vorlage) }));
+  const imPaket = paket.helden.map(e => ({ e, v: tabelle.vorlagen.find(x => x.id === e.vorlage) }));
+  // Auswahl (06.11.2026): nur gewählte Helden; null/undefined = alle
+  let alle = imPaket;
+  if (nur !== null && nur !== undefined) {
+    if (!Array.isArray(nur) || !nur.length) throw new StartpaketFehler('Wähle mindestens einen Helden.');
+    const fremd = nur.filter(id => !imPaket.some(x => x.v.held === id));
+    if (fremd.length) throw new StartpaketFehler(`Nicht in diesem Paket: ${fremd.join(', ')}.`);
+    alle = imPaket.filter(x => nur.includes(x.v.held));
+  }
   const vorhanden = alle.filter(x => H.heldVon(spiel, x.v.held));
   const anzulegen = alle.filter(x => !H.heldVon(spiel, x.v.held));
   if (spiel.helden.length + anzulegen.length > H.MAX_HELDEN) throw new StartpaketFehler(`Dafür ist kein Platz: höchstens ${H.MAX_HELDEN} Helden gleichzeitig, ${spiel.helden.length} sind schon da.`);

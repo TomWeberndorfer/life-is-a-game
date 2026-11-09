@@ -2,6 +2,7 @@
 // Ein Bezirk je Lebensbereich (Reihenfolge wie LEBENSBEREICHE). Helden außerhalb bekannter Bereiche
 // werden nicht verworfen, sondern als zusätzliche Bezirke angehängt (z. B. nach einer Datenänderung).
 import { heldenJeDomain } from './helden.js';
+import { siegeFrueher } from './kapitel.js';
 
 export const STATUS = Object.freeze({ entsteht: 'entsteht', unentdeckt: 'unentdeckt' });
 
@@ -17,7 +18,7 @@ export function stadtAnsicht(spiel, lebensbereiche) {
 
 // Ab wann die Stadt sichtbar ist (Progressive Disclosure): nach dem ersten Sieg eines beliebigen Helden.
 export function stadtSichtbar(spiel) {
-  return !!spiel && Array.isArray(spiel.helden) && spiel.helden.some(h => Array.isArray(h.siege) && h.siege.length > 0);
+  return !!spiel && Array.isArray(spiel.helden) && spiel.helden.some(h => (Array.isArray(h.siege) && h.siege.length > 0) || siegeFrueher(spiel, h.heroId) > 0); // mit früheren Kapiteln (Version 171)
 }
 
 // Ausbau der Stadt (Version 82): Stufe aus der Gesamtzahl der Siege, nur abgeleitet, nie gespeichert.

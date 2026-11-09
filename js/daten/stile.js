@@ -13,6 +13,9 @@
 //   das Standard-Symbol der Stelle (logik/symbole.js). Wörter dazu über `texte` ('tab.start', 'siegel.treffer' …).
 //   Kulisse und Arena je Stil stehen als CSS in index.html (:root[data-stil=…], Variablen --k-* und --arena-*).
 //   Auf welchen Seiten die Kulisse liegt, steht in KULISSE_SEITEN (unten); app.js setzt dort die Klasse „kulisse“.
+// aura (optional, 05.11.2026): Effekt je Gegner bei seiner Vorstellung, { <gegner-id>: '<effekt>' } aus daten/aura.js; '' = bewusst keiner.
+// gegnerNamen (optional, Version 164): eigener Name je Gegner im Stil, { <gegner-id>: 'Die Zuckermaschine' } oder { name, kurz?, genus? };
+//   die ID bleibt, nur Name, Kurzname und Genus ändern sich (Regeln und Prüfung: logik/gegner-namen.js). Fehlt die Angabe, gilt der Name aus bosse.js.
 // marke (optional, Version 61): kleine Marke über der Heldentat-Karte (Sci-Fi „MISSION // HEUTE“); fehlt sie, keine.
 // stadt/bezirk/stadtname: Heldenstadt (nur Darstellung). Bezirksbilder: Bildplatz `bezirk-<domainId>`, sonst gezeichnete Silhouette.
 // Regel: Kein Stil leiht Bilder eines anderen. Fehlt ein Bild, gilt die Rückfallkette (BILD_RUECKFALL, nur innerhalb
@@ -65,7 +68,8 @@ export const STILE = {
       'ausbau-1': 'bilder/fantasy/ausbau-1.jpg', 'ausbau-2': 'bilder/fantasy/ausbau-2.jpg', 'ausbau-3': 'bilder/fantasy/ausbau-3.jpg',
       'ausbau-4': 'bilder/fantasy/ausbau-4.jpg', 'ausbau-5': 'bilder/fantasy/ausbau-5.jpg', 'ausbau-6': 'bilder/fantasy/ausbau-6.jpg'
     },
-    pos: { trogadon: '50% 22%', 'boss-zuckerkobold': '50% 30%' }
+    pos: { trogadon: '50% 22%', 'boss-zuckerkobold': '50% 30%' },
+    aura: { irrlicht: 'flackern', nachtschwaermer: 'nebel' }, // Aura je Gegner (05.11.2026, daten/aura.js): einmal bei der Vorstellung
   },
   scifi: {
     name: 'Sci-Fi', alt: [], waehlbar: true,
@@ -91,7 +95,8 @@ export const STILE = {
       'ausbau-1': 'bilder/scifi/ausbau-1.jpg', 'ausbau-2': 'bilder/scifi/ausbau-2.jpg', 'ausbau-3': 'bilder/scifi/ausbau-3.jpg',
       'ausbau-4': 'bilder/scifi/ausbau-4.jpg', 'ausbau-5': 'bilder/scifi/ausbau-5.jpg', 'ausbau-6': 'bilder/scifi/ausbau-6.jpg'
     },
-    pos: {}
+    pos: {},
+    aura: { irrlicht: 'flackern', kaufrausch: 'funken' },
   },
   myth: {
     name: 'Mythologie', alt: [], waehlbar: false,
@@ -102,7 +107,8 @@ export const STILE = {
     symbole: { 'tab.start': 'saeule', 'tab.karte': 'kompass', 'tab.stadt': 'amphore', 'tab.gruppe': 'feuer', 'siegel.treffer': 'blitz', 'siegel.ruhe': 'olive' },
     namen: { trogadon: 'Trogaides', khara: 'Charis', fisker: 'Fiskeus', uldini: 'Uldinos', goldwin: 'Ploutos', ahren: 'Ahrenos', jelninolan: 'Eleia', 'der-erste': 'Protos' },
     bilder: { szene: 'bilder/myth/szene.jpg' },
-    pos: {}
+    pos: {},
+    aura: { gedankenkarussell: 'nebel', sturmgeist: 'schatten' },
   },
   cozy: {
     name: 'Cozy', alt: [], waehlbar: false,
@@ -125,7 +131,8 @@ export const STILE = {
       'banner-der-erste': 'bilder/cozy/banner-der-erste.jpg',
       'banner-ahren': 'bilder/cozy/banner-ahren.jpg'
     },
-    pos: {}
+    pos: {},
+    aura: { sturmgeist: 'nebel', heisshunger: 'glut' },
   },
   monster: {
     name: 'Monsterjäger', alt: [], waehlbar: false,
@@ -141,7 +148,8 @@ export const STILE = {
       'der-erste': 'bilder/monster/der-erste.png', ahren: 'bilder/monster/ahren.png'
       // Banner und Bezirke nutzen die Rückfallkette (Version 62)
     },
-    pos: {}
+    pos: {},
+    aura: { irrlicht: 'funken', heisshunger: 'glut' },
   },
   strasse: {
     name: 'Miami Nights', alt: [], waehlbar: true,
@@ -164,7 +172,10 @@ export const STILE = {
       'bezirk-family': 'bilder/strasse/bezirk-family.jpg',
       'bezirk-adventure': 'bilder/strasse/bezirk-adventure.jpg'
     },
-    pos: {}
+    pos: {},
+    aura: { kaufrausch: 'funken', irrlicht: 'flackern' },
+    // Version 164: aus der Neon-Stadt selbst (Automaten, Verkehr, Neon), keine Märchenfiguren; feminin, weil „den Automaten“ im Akkusativ unschön wäre
+    gegnerNamen: { zuckerkobold: 'Die Zuckermaschine' },
   },
   // Version 80: Rom (Legion). Rot nur, wo man handelt (Heldentat, Knöpfe); ruhige Bereiche bleiben Marmor und Gold.
   // Zitate (Seneca, Marc Aurel, Epiktet) sind eigene Übersetzungen der antiken Originale.
@@ -192,7 +203,8 @@ export const STILE = {
     bezirke: { health: 'Exerzierfeld', mindset: 'Heiligtum', partner: 'Garten', family: 'Lararium', friends: 'Taverne', career: 'Principia', finance: 'Aerarium', adventure: 'Hafen', growth: 'Bibliothek' },
     namen: { trogadon: 'Trogadus', khara: 'Cara', fisker: 'Piscator', uldini: 'Uldinus', goldwin: 'Aureus', ahren: 'Arrius', jelninolan: 'Iulia', 'der-erste': 'Primus' },
     bilder: {},
-    pos: {}
+    pos: {},
+    aura: { heisshunger: 'glut', trott: 'schatten' },
   }
 };
 
@@ -221,7 +233,7 @@ export const EIGENE_BILDER = {
       '50% 30%'
     ],
     'boss-geldfresser': [
-      'bilder/speicher/a1f209cce4291a9325e734c70073cdff.png',
+      'bilder/speicher/ea0f7adc8de15e05229b2edb13e1a825.jpg',
       '83% 4%'
     ],
     'boss-kritiker': [
@@ -233,7 +245,7 @@ export const EIGENE_BILDER = {
       '50% 30%'
     ],
     'boss-murrgrim': [
-      'bilder/speicher/a1f209cce4291a9325e734c70073cdff.png',
+      'bilder/speicher/ea0f7adc8de15e05229b2edb13e1a825.jpg',
       '50% 30%'
     ],
     'jelninolan': [
@@ -241,7 +253,7 @@ export const EIGENE_BILDER = {
       '50% 30%'
     ],
     'karte-hintergrund': [
-      'bilder/speicher/b05939aef6fe09625f2000909872f1dc.png',
+      'bilder/speicher/438340c17076e7d36c2ff3488f1623c5.jpg',
       '50% 30%'
     ],
     'story-drycha': [
@@ -249,7 +261,7 @@ export const EIGENE_BILDER = {
       '50% 30%'
     ],
     'story-murrgrim': [
-      'bilder/speicher/a1f209cce4291a9325e734c70073cdff.png',
+      'bilder/speicher/ea0f7adc8de15e05229b2edb13e1a825.jpg',
       '50% 30%'
     ]
   },
@@ -295,11 +307,11 @@ export const EIGENE_BILDER = {
       '50% 30%'
     ],
     'boss-heisshunger': [
-      'bilder/speicher/8b8fafc034dcb5c09c850bd17ac08c64.png',
+      'bilder/speicher/55da557be9025c280ac3788fdd771084.jpg',
       '79% 21%'
     ],
     'boss-langeweile': [
-      'bilder/speicher/0cad1c9d34997806c9e26c232ec5331f.png',
+      'bilder/speicher/c72d6aaf1ce37221e389ba47ad719ca4.jpg',
       '87% 0%'
     ],
     'boss-leere': [
@@ -307,7 +319,7 @@ export const EIGENE_BILDER = {
       '20% 7%'
     ],
     'boss-trott': [
-      'bilder/speicher/4e34ed80f69001b6e5cd0bf54dfcb2f4.png',
+      'bilder/speicher/c72d6aaf1ce37221e389ba47ad719ca4.jpg',
       '100% 0%'
     ],
     'jelninolan': [

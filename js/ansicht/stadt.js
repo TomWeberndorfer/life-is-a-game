@@ -4,7 +4,7 @@ import { LEBENSBEREICHE } from '../daten/lebensbereiche.js';
 import { AUSBAU, SILHOUETTEN } from '../daten/stadt.js';
 import { gesamtSiege } from '../logik/helden.js';
 import * as K from '../logik/kern.js';
-import { STATUS, ZIEL, ausbauKonfig, ausbauStufe, bezirkZiel, stadtAnsicht, stadtSichtbar } from '../logik/stadt.js';
+import { STATUS, ZIEL, ausbauKonfig, ausbauStufe, bezirkZiel, stadtAnsicht } from '../logik/stadt.js';
 import { heldFrei } from '../logik/helden.js';
 import { trackEvent } from '../analytics.js';
 import { esc, icon, kurzDatum } from './helfer.js';
@@ -27,15 +27,21 @@ export function ausbauHtml() {
   let a;
   try { a = ausbauStufe(gesamtSiege(spiel), AUSBAU_CFG); }
   catch (e) { console.warn('Stadt-Ausbau:', e.message); return ''; }
-  if (!a.stufe || bildFuer(stand.stil.aktiv, a.platz, 'szene').quelle === 'platzhalter') return '';
-  const alt = T('stadt.ausbauAlt', { stadt: wort('stadt'), stufe: a.stufe, max: a.max });
-  return `<figure class="ausbau">${img(a.platz, wort('stadt'), 'szene', 'ausbau-img', alt, 'breit')}
-    <figcaption class="klein">${esc(a.naechsteAb ? T('stadt.ausbauNaechste', { nr: a.naechsteAb }) : T('stadt.ausbauFertig'))}</figcaption></figure>`;
+  // Eine Logik: Ist die Stadt offen, zeigt sie ein Bild (Version 172). Vor dem ersten Sieg gilt das Startbild = Bild der
+  // Stufe 1 (z. B. „Alles freischalten“ im Testprofil); die Stufe wächst weiter nur mit den Siegen. Ohne Bild des Stils nichts.
+  const platz = a.platz || AUSBAU_CFG.platz + 1;
+  if (bildFuer(stand.stil.aktiv, platz, 'szene').quelle === 'platzhalter') return '';
+  const alt = T('stadt.ausbauAlt', { stadt: wort('stadt'), stufe: Math.max(1, a.stufe), max: a.max });
+  const zeile = !a.stufe ? T('stadt.ausbauStart') : a.naechsteAb ? T('stadt.ausbauNaechste', { nr: a.naechsteAb }) : T('stadt.ausbauFertig');
+  return `<figure class="ausbau">${img(platz, wort('stadt'), 'szene', 'ausbau-img', alt, 'breit')}
+    <figcaption class="klein">${esc(zeile)}</figcaption></figure>`;
 }
 export const STADT_SCREENS = {
   stadt() {
-    const { SCREENS, T, bezirkName, jetzt, nameVon, spiel, ui, wort } = kx;
-    if (!stadtSichtbar(spiel)) { ui.screen = 'start'; return SCREENS.start(); }
+    // Version 153: keine eigene Sperre mehr. Ob die Stadt offen ist, entscheidet allein die Tab-Regel (daten/freischaltung.js,
+    // geprüft in render über tabAktiv). Die alte Prüfung „erster Sieg“ (bis Version 81) widersprach der Regel „Kapitel 2“
+    // und hebelte „Alles freischalten“ aus: die Stadt sprang ohne Sieg still zur Startseite zurück.
+    const { T, bezirkName, jetzt, nameVon, spiel, wort } = kx;
     let bezirke;
     try { bezirke = stadtAnsicht(spiel, LEBENSBEREICHE); }
     catch (e) { console.warn('Stadt:', e.message); bezirke = []; }

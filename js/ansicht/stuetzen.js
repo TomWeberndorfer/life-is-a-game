@@ -41,10 +41,10 @@ export function stuetzeBereitHtml(a) {
 
 // ---------- Quest bearbeiten: Liste und Formular ----------
 export function stuetzenBearbeitenHtml() {
-  const { T, jetzt, stand, ui } = kx;
+  const { T, jetzt, stand, stuetzenCfg, ui } = kx;
   const q = ui.qe;
   const kopf = `<span class="eyebrow">${esc(T('st.titel'))}</span>`;
-  if (!S.nebenFrei(stand)) {
+  if (!S.nebenFrei(stand, stuetzenCfg())) { // Version 152: mit „Alles freischalten“ ohne Mindestzahl an Siegen
     return `<div class="karte spalte stuetzen-bearbeiten">${kopf}<p class="klein">${esc(T('st.gesperrt', { n: TEILZIELE.nebenAbSiegen }))}</p></div>`;
   }
   const liste = S.stuetzenStand(stand, jetzt());
@@ -158,14 +158,14 @@ export const STUETZEN_KLICKS = {
   },
   'qe-st-abbrechen'() { const { render, ui } = kx; if (ui.qe) { ui.qe.st = null; ui.qe.stInfo = null; } render(); },
   'qe-st-ok'() {
-    const { T, jetzt, render, stand, ui } = kx;
+    const { T, jetzt, render, stand, stuetzenCfg, ui } = kx;
     const f = ui.qe && ui.qe.st;
     if (!f) return;
     const p = S.stuetzePruefen(f, f.id ? { mitZeitraum: false, zeitraum: f.zeitraum } : {});
     if (!p.ok) { f.fehler = p.fehler; render(); kx.finde('.stuetze-form [aria-invalid="true"]')?.focus(); return; }
     const neu = !f.id;
     const r = anwenden(
-      () => (neu ? S.stuetzeAnlegen(stand, p.werte, jetzt()) : S.stuetzeAendern(stand, f.id, p.werte, jetzt())),
+      () => (neu ? S.stuetzeAnlegen(stand, p.werte, jetzt(), stuetzenCfg()) : S.stuetzeAendern(stand, f.id, p.werte, jetzt())),
       x => (neu ? T(x.teilziel.seit > K.runden(x.stand, K.tagKey(jetzt())).aktuell.nr ? 'st.angelegt' : 'st.angelegtSofort', { name: x.teilziel.name })
         : x.anzahlAb === 'naechsteRunde' ? T('st.gespeichertNaechste') : T('st.gespeichert'))
     );

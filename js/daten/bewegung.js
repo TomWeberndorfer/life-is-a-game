@@ -127,6 +127,15 @@ export const BEWEGUNG = {
       { teil: 'stern', bewegung: 'funkeln', startMs: 150, dauerMs: 350 }
     ]
   },
+  // Übergangs-Muster (Version 162, 07.11.2026): wie etwas ins Bild kommt. Blatt = Moment festhalten oder entscheiden (von unten),
+  // Feier = Anerkennung (sanft ein, selten und kurz), Ruhe = Rückfall-Moment (ruhig überblenden), Tab = Wechsel zwischen Seiten.
+  // Schließen ist sofort. Die Notfallkarte hat bewusst kein Muster (flach). Keyframes stehen einmal in index.html.
+  muster: {
+    blatt: { keyframes: 'bw-blatt', dauerMs: 280, kurve: 'cubic-bezier(.2,.8,.3,1)' },
+    feier: { keyframes: 'bw-feier', dauerMs: 320, kurve: 'ease-out' },
+    ruhe: { keyframes: 'bw-ruhe', dauerMs: 300, kurve: 'ease-in-out' },
+    tab: { keyframes: 'bw-tab', dauerMs: 150, kurve: 'ease-out' }
+  },
   lesen: { msProZeichen: 70, minMs: 2500, maxMs: 8000, leiste: 'bw-leiste', haltAnteil: 0.9 }, // 02.11.2026: auf Wunsch mehr Zeit (vorher 55 / 1800 / 6000)
   bedienbar: { maxMs: 1500, teile: ['knopf'], ketten: [{ vor: 'buehneSieg', danach: 'sieg' }] } // tagesCheck gehört zum alten Ablauf ohne Bühne (aus)
 };

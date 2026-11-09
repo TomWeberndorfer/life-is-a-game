@@ -3,7 +3,8 @@
 // Gerät gleich, übersteht Neuladen und braucht kein neues Feld im Spielstand (wie das Heldenbild, Entscheidung 13).
 import { streuwert, TEXT_PLATZHALTER } from './inhalte.js';
 
-export const REAKTION_ARTEN = ['treffer', 'ruhe', 'phase', 'morgen'];
+// „bedingung“ (06.11.2026): Treffer sind voll, aber eine Bedingung des Gegners ist noch offen (Bosskette mit Bedingungen).
+export const REAKTION_ARTEN = ['treffer', 'ruhe', 'phase', 'morgen', 'bedingung'];
 // „morgen“ (Siegtag mit neuem Gegner) darf den neuen Gegner nicht verraten: {gegner} & Co. wären schon der Neue.
 const OHNE_GEGNERNAME = { morgen: ['gegner', 'Gegner', 'gegnerAkk', 'GegnerAkk', 'gegnerDat', 'GegnerDat', 'er', 'Er', 'ihn'] };
 const RUECKFALL_ART = { phase: 'treffer' };
@@ -16,7 +17,8 @@ export function phaseSchwelle(anzahl, anteil = 0.5) {
   return Math.max(1, Math.min(anzahl - 1, Math.floor(anzahl * a)));
 }
 
-// Welche Reaktion gilt heute? lage = { antwort, kraft, anzahl, rundeTag, siegHeute, neuerGegner } aus kern.auswertung().
+// Welche Reaktion gilt heute? lage = { antwort, kraft, anzahl, rundeTag, siegHeute, neuerGegner, bedingungOffen } aus kern.auswertung().
+// bedingungOffen (= auswertung().bedingungenOffen): Treffer voll, Bedingung offen → nach „Ja“ „bedingung“ statt keiner Zeile.
 // Siegtag: mit neuem Gegner „morgen“ (Andeutung, Version 68: der Kapitelwechsel kommt erst beim nächsten Besuch), sonst null.
 // null = keine Zeile: noch nicht beantwortet, Runde beginnt erst morgen, kaputte Zahlen.
 export function reaktionsArt(lage, anteil) {
@@ -25,6 +27,7 @@ export function reaktionsArt(lage, anteil) {
   if (!(Number.isInteger(l.rundeTag) && l.rundeTag >= 0)) return null;
   if (l.antwort === 'nein') return 'ruhe';
   if (l.antwort !== 'ja') return null;
+  if (l.bedingungOffen === true && l.kraft === 0 && Number.isInteger(l.anzahl) && l.anzahl >= 1) return 'bedingung';
   if (!Number.isInteger(l.anzahl) || l.anzahl < 1 || !Number.isInteger(l.kraft) || l.kraft <= 0 || l.kraft > l.anzahl) return null;
   const s = phaseSchwelle(l.anzahl, anteil);
   return s > 0 && l.kraft === s ? 'phase' : 'treffer';

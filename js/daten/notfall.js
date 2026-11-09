@@ -23,15 +23,19 @@
 //               ohne Öffnen verfällt er still (dann passt er nicht mehr).
 //   frueher     „Du hast das schon geschafft“: zufällig einer der letzten `letzte` eigenen geschafft-Einträge mit Text,
 //               bevorzugt mit gleichem Zustand
+//   beleg       (Version 166) ein Brief an das künftige Ich oder ein markierter Eintrag (daten/beweisbuch.js, logik/beweisbuch.js):
+//               höchstens EINER, nur wenn es einen gibt (sonst fällt der Abschnitt still weg). Er steht nur in den Pfaden
+//               „Standard“ und „Ohnmacht“, nie im Wut-Pfad (wer wütend ist, braucht Abstand, keinen Brief). Im Ohnmacht-Pfad
+//               ersetzt er „frueher“, solange er etwas zeigt (BEWEISBUCH.notfall.ersetzt).
 //   mitgefuehl  Botschaften-Anlass in claude/inhalte.md („# Botschaften“) für den Satz Selbstmitgefühl; fehlt er,
 //               gilt 'notfall.mitgefuehl.ersatz'
 export const NOTFALL = Object.freeze({
   zustaende: Object.freeze(['wut', 'ohnmacht', 'druck', 'drang', 'weissnicht']),
   merken: Object.freeze(['wut', 'ohnmacht', 'druck', 'drang']),
   pfade: Object.freeze({
-    _standard: Object.freeze(['innehalten', 'zustand', 'wenndann', 'warum', 'idee']),
+    _standard: Object.freeze(['innehalten', 'zustand', 'wenndann', 'warum', 'beleg', 'idee']),
     wut: Object.freeze(['innehalten', 'zustand', 'aufschub', 'wichtig', 'warum']),
-    ohnmacht: Object.freeze(['innehalten', 'zustand', 'einfluss', 'kleinster', 'frueher', 'mitgefuehl'])
+    ohnmacht: Object.freeze(['innehalten', 'zustand', 'einfluss', 'kleinster', 'beleg', 'frueher', 'mitgefuehl'])
   }),
   gegnerIn: Object.freeze(['wut']),
   erinnerung: Object.freeze({ nachMin: 20, verfallStd: 12, einstellung: 'notfall-erinnerung' }),
@@ -39,7 +43,7 @@ export const NOTFALL = Object.freeze({
   mitgefuehl: 'notfall_mitgefuehl'
 });
 // Alle Abschnitte, die ansicht/notfall.js zeichnen kann (Prüfung beim Start in app.js).
-export const NOTFALL_BEKANNT = Object.freeze(['innehalten', 'zustand', 'wenndann', 'warum', 'idee', 'aufschub', 'wichtig', 'einfluss', 'kleinster', 'frueher', 'mitgefuehl']);
+export const NOTFALL_BEKANNT = Object.freeze(['innehalten', 'zustand', 'wenndann', 'warum', 'beleg', 'idee', 'aufschub', 'wichtig', 'einfluss', 'kleinster', 'frueher', 'mitgefuehl']);
 // Bisheriger Name (vor Version 127): der Standardpfad.
 export const NOTFALL_ABSCHNITTE = NOTFALL.pfade._standard;
 

@@ -13,14 +13,18 @@ import { AKTION_SYMBOLE } from '../daten/symbole.js';
 import { esc, icon, kurzDatum, kachel } from './helfer.js';
 import { kx } from './kontext.js';
 import { notfallKnopf } from './notfall.js';
+import { begegnungHtml, bedingungenJetzt, gegnerJetzt, standText } from './bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
+import * as G from '../logik/gestalten.js';
+import { merkenChip, sternSetzen } from './beweisbuch.js'; // Version 166: Stern „Das will ich mir merken“
 
 // Leiser Link, der das Blatt öffnet (auf der Heldentat-Karte). text: Textschlüssel.
-export function eintragLink(art, text, { alsKachel = false } = {}) {
+// werte (06.11.2026): Platzhalter des langen Texts, z. B. { gegner } für „Moment festhalten · zählt für Velkra“.
+export function eintragLink(art, text, { alsKachel = false, werte = {} } = {}) {
   const { T, symbol } = kx;
   if (!EINTRAG_ARTEN[art] || EINTRAG_ARTEN[art].ohneBlatt) return '';
   const k = 'aktion.' + art; // Version 89: Symbol aus dem Verzeichnis statt fest im Code; unbekannte Art → Stift
-  if (alsKachel) return kachel({ aktion: 'eintrag-oeffnen', id: art, symbol: icon(symbol(k, AKTION_SYMBOLE[k] || 'stift')), kurz: T(`kachel.${art}`), lang: T(text), klasse: `art-${art}` }); // Version 93
-  return `<button class="link eintrag-link art-${esc(art)}" data-a="eintrag-oeffnen" data-id="${esc(art)}">${icon(symbol(k, AKTION_SYMBOLE[k] || 'stift'))}${esc(T(text))}</button>`;
+  if (alsKachel) return kachel({ aktion: 'eintrag-oeffnen', id: art, symbol: icon(symbol(k, AKTION_SYMBOLE[k] || 'stift')), kurz: T(`kachel.${art}`), lang: T(text, werte), klasse: `art-${art}` }); // Version 93
+  return `<button class="link eintrag-link art-${esc(art)}" data-a="eintrag-oeffnen" data-id="${esc(art)}">${icon(symbol(k, AKTION_SYMBOLE[k] || 'stift'))}${esc(T(text, werte))}</button>`;
 }
 
 export function eintragBlattHtml() {
@@ -40,6 +44,7 @@ export function eintragBlattHtml() {
         <h2 id="eintrag-t">${esc(e.tag ? T(e.art === 'schwer' ? 'eintrag.frage.schwerTag' : 'eintrag.frage.geschafftTag') : T(art.frage))}</h2>
         <p class="klein">${esc(T('eintrag.hinweis.' + e.art))}</p>
         ${e.ausSiegel ? siegelZeilen(e) : ''}
+        ${begegnungHtml(e)}
         ${e.art === 'schwer' && !e.tag ? notfallKnopf('im-blatt') : ''}
         <div class="feld"><span id="eintrag-sit-l">${esc(T('eintrag.situation'))}</span>
           <div class="wahl eintrag-wahl" role="group" aria-labelledby="eintrag-sit-l">${art.situationen.map(s => `<button ${an(e.situation === s)} data-a="eintrag-situation" data-id="${esc(s)}">${esc(T('eintrag.sit.' + s))}</button>`).join('')}</div></div>
@@ -50,6 +55,7 @@ export function eintragBlattHtml() {
         <label class="feld"><span>${esc(T(art.text || 'eintrag.text'))}</span><textarea id="eintrag-text" rows="3" maxlength="${EINTRAG_OPT.textMax}" ${f.text ? 'aria-invalid="true"' : ''}>${esc(e.text || '')}</textarea></label>
         ${f.text ? `<p class="fehler" role="alert">${esc(f.text)}</p>` : ''}
         ${planFeld(art, e, f)}
+        ${art.merkbar ? merkenChip(e.merken, 'eintrag-merken') : ''}
         ${f.allgemein ? `<p class="fehler" role="alert">${esc(f.allgemein)}</p>` : ''}
         <p class="klein">${esc(T('eintrag.privat'))}</p>
         <button class="cta" data-a="eintrag-speichern">${esc(T('eintrag.speichern'))}</button>
@@ -87,21 +93,29 @@ function planFeld(art, e, f) {
 export function oeffneEintrag(art, { tag = null, ausSiegel = null } = {}) {
   const { render, spiel, ui } = kx;
   if (!EINTRAG_ARTEN[art] || EINTRAG_ARTEN[art].ohneBlatt || !spiel.fokus) { console.warn('Eintrag: unbekannte Art', art); return false; }
-  ui.eintrag = { art, heroId: spiel.fokus, situation: null, stimmung: null, text: '', naechstesMal: '', planOffen: false, fehler: {}, tag, ausSiegel };
+  // Begegnung (06.11.2026): gestalt, faehigkeit, schwierigkeit (Wahl) und die Eingaben für neue Gestalten und Fähigkeiten
+  ui.eintrag = { art, heroId: spiel.fokus, situation: null, stimmung: null, text: '', naechstesMal: '', planOffen: false, merken: false, fehler: {}, tag, ausSiegel,
+    gestalt: null, faehigkeit: null, schwierigkeit: null, gestaltName: '', faehName: '', faehSo: '' };
   trackEvent(art === 'schwer' ? 'entry_hard_day_opened' : 'entry_done_opened', ausSiegel ? { quelle: 'siegel' } : {});
   render();
   return true;
 }
 // Hat der Spieler im Blatt schon etwas angegeben? (dann wird es vor „Doch geschafft?“ gesichert, nichts geht verloren)
-const hatInhalt = e => !!(e && (e.situation || e.stimmung || String(e.text || '').trim() || String(e.naechstesMal || '').trim()));
+const hatInhalt = e => !!(e && (e.situation || e.stimmung || String(e.text || '').trim() || String(e.naechstesMal || '').trim() || e.gestalt || e.faehigkeit || Number.isInteger(e.schwierigkeit)));
 
 // Speichern: prüfen, anlegen, Spielstand sichern. Fehler bleiben im Blatt sichtbar (nichts geht still verloren).
 // still (Version 141): ohne Bestätigungs-Popup (wenn gleich danach eine andere Rückmeldung kommt). Liefert true bei Erfolg.
 export function eintragSpeichern({ still = false } = {}) {
-  const { T, aktuelleVorlage, funktionFrei, jetzt, render, setzeHinweis, setzeSpiel, speichere, spiel, stand, ui } = kx;
-  const e = ui.eintrag;
+  const e = kx.ui.eintrag;
   if (!e) return false;
-  const p = EN.eintragPruefen(e, EINTRAG_OPT);
+  // Begegnung (06.11.2026): getippter Name ohne „Hinzufügen“ wird mitgenommen (geht die eigene Wahl vor, bleibt er liegen).
+  // Vor dem Lesen von spiel und stand: das Anlegen ändert den Spielstand.
+  let ok = true;
+  if (!e.gestalt && String(e.gestaltName || '').trim()) ok = gestaltUebernehmen(e) && ok;
+  if (!e.faehigkeit && String(e.faehName || '').trim()) ok = faehigkeitUebernehmen(e) && ok;
+  if (!ok) { kx.render(); return false; }
+  const { T, aktuelleVorlage, funktionFrei, jetzt, render, setzeHinweis, setzeSpiel, speichere, spiel, stand, ui } = kx;
+  const p = EN.eintragPruefen({ ...e, gestalt: e.gestalt || null, faehigkeit: e.faehigkeit || null, schwierigkeit: Number.isInteger(e.schwierigkeit) ? e.schwierigkeit : null }, EINTRAG_OPT);
   if (!p.ok) { e.fehler = p.fehler; render(); return false; }
   // Version 79: Eintrag für einen nachgetragenen Tag bekommt dessen Datum (und den Gegner von damals)
   const datum = e.tag ? K.ausTagKey(e.tag) : jetzt();
@@ -113,13 +127,24 @@ export function eintragSpeichern({ still = false } = {}) {
   try { r = EN.eintragHinzufuegen(spiel, e.heroId, p.werte, datum, { ...EINTRAG_OPT, gegner }); }
   catch (err) { e.fehler = { allgemein: err.message }; render(); return false; }
   const notfallVorher = funktionFrei('notfallkarte');
+  if (e.merken && EINTRAG_ARTEN[e.art] && EINTRAG_ARTEN[e.art].merkbar) r = { ...r, spiel: sternSetzen(r.spiel, r.eintrag.id, true) }; // Version 166
   setzeSpiel(r.spiel);
   speichere();
   // Analytics: nur Art und ob Felder gesetzt sind, nie Text oder Situation (Entscheidung 28.10.2026)
   trackEvent(e.art === 'schwer' ? 'entry_hard_day' : 'entry_done', {});
   if (r.eintrag.text) trackEvent('entry_text', {});
   if (r.eintrag.naechstesMal) trackEvent('entry_plan', {}); // Version 81: nur ob, nie was
+  const begegnung = !!(r.eintrag.gestalt || r.eintrag.faehigkeit || Number.isInteger(r.eintrag.schwierigkeit));
+  if (begegnung) trackEvent('entry_encounter', { gestalt: !!r.eintrag.gestalt, faehigkeit: !!r.eintrag.faehigkeit, schwierigkeit: Number.isInteger(r.eintrag.schwierigkeit) });
   ui.eintrag = null;
+  // Bosskette mit Bedingungen (06.11.2026): erfüllt die Begegnung die letzte Bedingung, fällt der Gegner jetzt (Siegkarte
+  // statt „Festgehalten“). Sonst sagt eine Zeile, was die Begegnung bewirkt hat (Kompetenzerleben: es zählt sichtbar).
+  if (begegnung && kx.siegNachholen()) return true;
+  if (begegnung && !still) {
+    const st = bedingungenJetzt();
+    const g = gegnerJetzt();
+    if (st.liste.length && g) { kx.bestaetige(T('bed.eintrag.ergebnis', { gegner: g.kurz, stand: st.liste.map(standText).join(' · ') })); render(); return true; }
+  }
   // Erster schwerer Tag schaltet die Notfallkarte frei (FUNKTIONEN.notfallkarte): einmal ruhig ankündigen
   const neuFrei = !notfallVorher && funktionFrei('notfallkarte');
   if (neuFrei) trackEvent('unlock_opened', { bereich: 'notfallkarte' });
@@ -162,6 +187,13 @@ export const EINTRAG_KLICKS = {
     e.fehler = { ...e.fehler, situation: undefined };
     render();
   },
+  // Version 166: Stern „Das will ich mir merken“ im Blatt (gilt erst beim Speichern)
+  'eintrag-merken'() {
+    const { render, ui } = kx;
+    if (!ui.eintrag) return;
+    ui.eintrag.merken = !ui.eintrag.merken;
+    render();
+  },
   'eintrag-stimmung'({ id }) {
     const { render, ui } = kx;
     const e = ui.eintrag;
@@ -172,6 +204,24 @@ export const EINTRAG_KLICKS = {
     render();
   },
   'eintrag-speichern'() { eintragSpeichern(); },
+  // Begegnung (06.11.2026): Wahl antippen = wählen, erneut tippen = abwählen (freiwillig wie Situation und Stimmung)
+  'eintrag-gestalt'({ id }) { waehle('gestalt', id); },
+  'eintrag-faehigkeit'({ id }) { waehle('faehigkeit', id); },
+  'eintrag-schwierigkeit'({ id }) { const n = Number(id); if (Number.isInteger(n)) waehle('schwierigkeit', n); },
+  // Neue Gestalt bzw. eigene Fähigkeit: gleich im Spielstand anlegen und auswählen; Fehler bleiben im Blatt sichtbar
+  'eintrag-gestalt-neu'() { const { render, ui } = kx; if (ui.eintrag) { gestaltUebernehmen(ui.eintrag); render(); } },
+  // Vorschlag (06.11.2026, bosse.md): wie eine getippte Gestalt anlegen und wählen; ein halb getippter Name bleibt im Feld
+  'eintrag-gestalt-vorschlag'({ id }) {
+    const { render, ui } = kx;
+    const e = ui.eintrag;
+    if (!e || typeof id !== 'string' || !id.trim()) return;
+    const getippt = e.gestaltName;
+    e.gestaltName = id;
+    gestaltUebernehmen(e); // Fehler (z. B. schon 12 Gestalten) steht danach im Blatt
+    e.gestaltName = getippt || '';
+    render();
+  },
+  'eintrag-faehigkeit-neu'() { const { render, ui } = kx; if (ui.eintrag) { faehigkeitUebernehmen(ui.eintrag); render(); } },
   // Version 81: Feld „Was probierst du nächstes Mal?“ aufklappen; Fokus ins Feld, damit man gleich tippen kann
   'eintrag-plan-auf'() {
     const { render, ui } = kx;
@@ -181,8 +231,54 @@ export const EINTRAG_KLICKS = {
     try { const el = typeof document !== 'undefined' && document.getElementById('eintrag-plan'); if (el && el.focus) el.focus(); } catch (err) { /* nur Komfort */ }
   }
 };
+// Neue Gestalt bzw. eigene Fähigkeit aus den Eingabefeldern anlegen und auswählen. Liefert false bei einem Fehler (steht dann
+// im Blatt). Auch beim Speichern: ein getippter, nicht hinzugefügter Name geht so nicht verloren.
+function gestaltUebernehmen(e) {
+  const { setzeSpiel, speichere, spiel } = kx;
+  const g = gegnerJetzt();
+  if (!g) return true;
+  try {
+    const r = G.gestaltAnlegen(spiel, e.heroId, g.id, e.gestaltName);
+    if (r.neu) { setzeSpiel(r.spiel); speichere(); trackEvent('gestalt_created', {}); }
+    e.gestalt = r.gestalt.id; e.gestaltName = ''; e.fehler = { ...e.fehler, gestalt: undefined };
+    return true;
+  } catch (err) {
+    if (!(err instanceof G.GestaltFehler)) console.warn('Gestalt:', err.message);
+    e.fehler = { ...e.fehler, gestalt: err.message };
+    return false;
+  }
+}
+function faehigkeitUebernehmen(e) {
+  const { setzeSpiel, speichere, spiel } = kx;
+  try {
+    const r = G.faehigkeitAnlegen(spiel, e.heroId, e.faehName, e.faehSo);
+    if (r.spiel !== spiel) { setzeSpiel(r.spiel); speichere(); }
+    if (r.neu) trackEvent('own_skill_created', { mitSo: !!r.faehigkeit.so });
+    e.faehigkeit = r.faehigkeit.id; e.faehName = ''; e.faehSo = ''; e.fehler = { ...e.fehler, faehigkeit: undefined };
+    return true;
+  } catch (err) {
+    if (!(err instanceof G.GestaltFehler)) console.warn('Fähigkeit:', err.message);
+    e.fehler = { ...e.fehler, faehigkeit: err.message };
+    return false;
+  }
+}
+
+function waehle(feld, wert) {
+  const { render, ui } = kx;
+  const e = ui.eintrag;
+  if (!e) return;
+  e[feld] = e[feld] === wert ? null : wert;
+  e.fehler = { ...e.fehler, [feld]: undefined };
+  render();
+}
+// Enter im Namensfeld legt an (wie der Knopf daneben)
+const mitEnter = aktion => ({ enter() { EINTRAG_KLICKS[aktion]({}); } });
+
 // Felder: Text tippen, ohne neu zu zeichnen (Fokus bleibt im Feld).
 export const EINTRAG_FELDER = {
+  'eintrag-gestalt-name': { input({ wert }) { const { ui } = kx; if (ui.eintrag) ui.eintrag.gestaltName = String(wert ?? ''); }, ...mitEnter('eintrag-gestalt-neu') },
+  'eintrag-faehigkeit-name': { input({ wert }) { const { ui } = kx; if (ui.eintrag) ui.eintrag.faehName = String(wert ?? ''); }, ...mitEnter('eintrag-faehigkeit-neu') },
+  'eintrag-faehigkeit-so': { input({ wert }) { const { ui } = kx; if (ui.eintrag) ui.eintrag.faehSo = String(wert ?? ''); } },
   'eintrag-text': { input({ wert }) { const { ui } = kx; if (ui.eintrag) ui.eintrag.text = String(wert ?? '').slice(0, EINTRAG_OPT.textMax); } },
   'eintrag-plan': { input({ wert }) { const { ui } = kx; if (ui.eintrag) ui.eintrag.naechstesMal = String(wert ?? '').slice(0, EINTRAG_OPT.planMax); } }
 };

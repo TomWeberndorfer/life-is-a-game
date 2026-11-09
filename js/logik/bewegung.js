@@ -50,7 +50,43 @@ export function pruefeBewegung(cfg, opt = {}) {
   if (cfg.atmosphaere && cfg.atmosphaere.funkenWann !== undefined && !FUNKEN_WANN.includes(cfg.atmosphaere.funkenWann)) {
     f.push(`Bewegung: funkenWann muss ${FUNKEN_WANN.join(', ')} sein (gilt „treffer“)`);
   }
-  return f.concat(pruefeBedienbar(cfg, opt.pauseMs));
+  return f.concat(pruefeMuster(cfg), pruefeBedienbar(cfg, opt.pauseMs));
+}
+
+// ---------- Übergangs-Muster (Version 162): wie Blatt, Feier, Ruhe-Seite und Tab ins Bild kommen ----------
+export const MUSTER_STANDARD = {
+  blatt: { dauerMs: 280, kurve: 'cubic-bezier(.2,.8,.3,1)' },
+  feier: { dauerMs: 320, kurve: 'ease-out' },
+  ruhe: { dauerMs: 300, kurve: 'ease-in-out' },
+  tab: { dauerMs: 150, kurve: 'ease-out' }
+};
+// Fehlt `muster`, gelten die Standardwerte; vorhanden heißt vollständig und gültig. Wirft nie.
+export function pruefeMuster(cfg) {
+  const m = cfg ? cfg.muster : undefined;
+  if (m === undefined) return [];
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return ['Bewegung: muster muss eine Liste von Mustern sein'];
+  const f = [];
+  for (const id of Object.keys(MUSTER_STANDARD)) {
+    const b = m[id];
+    const wo = `Muster „${id}“`;
+    if (!b || typeof b !== 'object') { f.push(`${wo}: fehlt (gilt der Standard)`); continue; }
+    if (!KEYFRAMES.test(String(b.keyframes))) f.push(`${wo}: keyframes muss mit „bw-“ beginnen`);
+    if (!ms(b.dauerMs) || b.dauerMs === 0) f.push(`${wo}: dauerMs muss zwischen 1 und ${MAX_MS} liegen`);
+    if (!KURVE.test(String(b.kurve))) f.push(`${wo}: unbekannte Kurve „${b.kurve}“`);
+  }
+  for (const id of Object.keys(m)) if (!(id in MUSTER_STANDARD)) f.push(`Muster „${id}“: unbekannt (erlaubt: ${Object.keys(MUSTER_STANDARD).join(', ')})`);
+  return f;
+}
+// CSS-Variablen je Muster ({ '--bw-blatt': '280ms', '--bw-blatt-kurve': '…' }); ungültige oder fehlende Werte → Standard. Wirft nie.
+export function musterVariablen(cfg) {
+  const m = cfg && cfg.muster && typeof cfg.muster === 'object' ? cfg.muster : {};
+  const v = {};
+  for (const [id, std] of Object.entries(MUSTER_STANDARD)) {
+    const b = m[id] && typeof m[id] === 'object' ? m[id] : {};
+    v[`--bw-${id}`] = `${ms(b.dauerMs) && b.dauerMs > 0 ? b.dauerMs : std.dauerMs}ms`;
+    v[`--bw-${id}-kurve`] = KURVE.test(String(b.kurve)) ? String(b.kurve) : std.kurve;
+  }
+  return v;
 }
 
 // ---------- „Der letzte Schlag“ (02.11.2026): Bewegung darf nie warten lassen ----------

@@ -76,3 +76,13 @@ export const FREIGABE = {
   eigenerMoment: ['welten'],
   maxWarteTage: 2
 };
+
+// Schalter „Alles freischalten“ (Version 152, 05.11.2026): zum Testen alle Sperren auf einmal aufheben. Wirkt auf die Regeln
+// oben (TABS, FUNKTIONEN), die Taktung (FREIGABE: alles sofort, keine Ankündigungen), die Weltenwahl vor dem ersten Sieg und
+// die Stützgewohnheiten vor TEILZIELE.nebenAbSiegen Siegen. Inhalte werden nicht vorgegaukelt (Siege, Kapitel, Karte bleiben echt);
+// noch nicht gebaute Bereiche (`bald`) und nicht wählbare Welten (`waehlbar: false`) bleiben, wie sie sind.
+// profile       in welchen Profilen der Schalter erscheint (Hash, z. B. #test); nie im Hauptprofil der Tester
+// nurBesitzer   true = nur für den Besitzer der Seite (auf GitHub Pages gibt es keinen Besitzer, dort also nie)
+// schluessel    Ablage im Browser (+ „.<profil>“); bewusst NICHT im Spielstand, damit nichts davon auf andere Geräte
+//               oder in die echte Nutzung gelangt und das Ausschalten den alten Ablauf sofort wiederherstellt
+export const ALLES_FREI = { profile: ['test'], nurBesitzer: true, schluessel: 'liag.allesFrei' };

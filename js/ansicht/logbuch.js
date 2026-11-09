@@ -11,12 +11,14 @@ import * as K from '../logik/kern.js';
 import { LB_GANZER_TAG, logbuchAnsicht, logbuchEintraege } from '../logik/logbuch.js';
 import { DOMAIN_IDS, LEBENSBEREICHE } from '../daten/lebensbereiche.js';
 import * as TN from '../logik/tagesnotiz.js';
+import { antwortPaare } from '../logik/plancheck.js'; // Version 167: Plan-Check
 import { bereichLabel, bereichName, bereicheText } from './notiz.js'; // Tagesnotiz (04.11.2026)
 import { CHRONIK, CHRONIK_SIEGEL } from '../daten/chronik.js';
 import { chronikAnsicht, chronikAnsichtWahl } from '../logik/chronik.js';
 import { akkusativ, esc, gross, icon, kurzDatum } from './helfer.js';
 import { kx } from './kontext.js';
 import { kopfRechts } from './rahmen.js';
+import { beweisLogbuchKnopf, sternKnopf } from './beweisbuch.js'; // Version 166: Brief und Beweisbuch
 
 export const MIKRO_TEXTE = Object.fromEntries(Object.values(MIKRO).flat().filter(x => Array.isArray(x)).map(([id, t]) => [id, t]));
 export const lbWarn = m => console.warn(m);
@@ -44,6 +46,8 @@ export function lbText(e) {
     case 'sieg': return { titel: T('lb.sieg', { gegner: gegnerName(d.gegner), sieg: wort('sieg') }), detail: '' };
     case 'kapitel': return { titel: T('lb.kapitel', { kapitel: wort('kapitel'), nr: d.nr, gegner: gegnerName(d.gegner) }), detail: '' };
     case 'start': return { titel: T('lb.start', { ziel: d.ziel || '' }), detail: '' };
+    // Kettenende (Version 169): „Abschluss: …“ bzw. „Meilenstein: …“, dazu der gewählte Weg
+    case 'abschluss': return { titel: T(`lb.abschluss.${d.typ === 'dauerhaft' ? 'dauerhaft' : 'endlich'}`, { ziel: d.ziel || '' }), detail: d.wahl ? T(`abschluss.wahl.lb.${d.wahl}`) : '' };
     // Version 75: eigene Einträge; Situation und Stimmung als zweite Zeile, der eigene Text darunter
     case 'geschafft':
     case 'schwer': return {
@@ -62,6 +66,8 @@ export function lbText(e) {
     };
     // Rundenrückblick (02.11.2026): Einschätzung als zweite Zeile, „Was hat geholfen?“ als Notiz
     case 'rueckblick': return { titel: T('lb.rueckblick'), detail: d.wahl ? T(`rb.wahl.lb.${d.wahl}`) : '', notiz: d.text || '' };
+    // Plan-Check (Version 167): Antworten als zweite Zeile, eigener Plan darunter
+    case 'plancheck': return { titel: T('lb.plancheck'), detail: antwortPaare(d.antworten).map(([f, w]) => T(`antwort.lb.${f}.${w}`)).join(' · '), plan: d.naechstesMal ? T('lb.naechstesMal', { text: d.naechstesMal }) : '' };
     case 'ruhetag': return { titel: T('lb.ruhetag'), detail: T('lb.ruhetagDetail') }; // Version 90
     case 'stuetze': return { titel: d.text ? T('lb.stuetze', { text: d.text }) : T('lb.stuetzeOhneText'), detail: T('lb.stuetzeDetail') }; // Schritt „Zähler“
     default: return { titel: T(LOGBUCH_ARTEN[e.art].text, d), detail: '' };
@@ -192,7 +198,7 @@ function sucheHtml(v) {
       ${v.filter.suche ? `<button class="link" data-a="lb-suche-weg">${esc(T('lb.filterWeg'))}</button>` : ''}
     </div>${v.filter.suche ? `<p class="klein" role="status">${esc(v.anzahl ? T('lb.sucheTreffer', { n: v.anzahl }) : T('lb.sucheLeer'))}</p>` : ''}`;
 }
-const notizKnopf = () => { const { T } = kx; return `<button class="lb-chip lb-notiz-knopf" data-a="notiz-oeffnen" data-id="">${icon('stift')} ${esc(T('lb.notizSchreiben'))}</button>`; };
+const notizKnopf = () => { const { T } = kx; return `<button class="lb-chip lb-notiz-knopf" data-a="notiz-oeffnen" data-id="">${icon('stift')} ${esc(T('lb.notizSchreiben'))}</button>${beweisLogbuchKnopf()}`; }; // Version 166: dazu der Weg ins Beweisbuch
 export const lbChip = (aktion, id, label, an) => `<button class="lb-chip ${an ? 'an' : ''}" data-a="${aktion}" data-id="${esc(id)}" aria-pressed="${an}">${label}</button>`;
 export function lbZeile(e, mehrereHelden) {
   const { T, img, nameVon } = kx;
@@ -204,7 +210,7 @@ export function lbZeile(e, mehrereHelden) {
   return `<li class="lb-eintrag lb-g-${esc(art.gruppe)} art-${esc(e.art)}">
       <span class="lb-ic" aria-hidden="true">${icon(art.icon)}</span>
       <span class="lb-text">${esc(t.titel)}${t.detail || mitHeld ? `<small>${bildTeil}${esc([mitHeld ? nameVon(e.heroId) : '', t.detail].filter(Boolean).join(' · '))}</small>` : ''}${t.notiz ? `<span class="lb-notiz">${esc(t.notiz)}</span>` : ''}${t.plan ? `<span class="lb-notiz lb-plan">${esc(t.plan)}</span>` : ''}</span>
-      ${e.xp ? `<span class="lb-xp">${esc(T('lb.xp', { xp: e.xp }))}</span>` : ''}${bearbeiten}
+      ${e.xp ? `<span class="lb-xp">${esc(T('lb.xp', { xp: e.xp }))}</span>` : ''}${bearbeiten}${sternKnopf(e.art, e.daten)}
     </li>`;
 }
 // Filter eingeklappt (Version 56): Standard „Alles“, die Chips erst auf Tipp. Ein aktiver Filter steht im Knopf

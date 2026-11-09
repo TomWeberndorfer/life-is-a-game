@@ -27,6 +27,7 @@ import { artSchluessel, artText, bogenTeile, comebackHtml, erledigtIcon, erledig
 import { nachtragHtml, nachtragModus, nachtragName, nachtragZeile, nachtragZusatz } from './nachtrag.js';
 import { arenaHtml, beginntText, besiegtHeuteVorNeuem, vorstellungHinweisHtml, botschaftGesehen, botschaftHeute, bossReaktion, eintragLinks, heldenHeute, storyMorgen, weiterZuKnopf } from './startseite.js';
 import { vorsatzZeileHtml } from './wochenrunde.js'; // Vorsatz der Woche unter der Tagesfrage (05.11.2026)
+import { bedingungenHtml } from './bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
 
 // ---------- Kampfbühne (31.10.2026, Entscheidungen Abschnitt 18) ----------
 // Crew-Botschaft, Heldentat und Duell in EINER Karte: oben die Arena mit dem Gegner (Kraft, Sprechblase der Crew),
@@ -100,7 +101,7 @@ export function buehneHtml({ v, f, g, a }) {
   const kraft = bid ? 0 : a.anzahl - a.treffer;
   // Siegtag: Segmente nach dem Ziel der gewonnenen Runde, nicht der nächsten (02.11.2026, Fehler: 3 statt 2 Balken)
   const anzahl = bid ? (K.siegRundenZiel(kx.stand, a.heute) ?? a.anzahl) : a.anzahl;
-  const besiegt = !!bid || a.bossKraft === 0;
+  const besiegt = !!bid || (a.bossKraft === 0 && !a.bedingungenOffen); // 06.11.2026: offene Bedingung = noch nicht besiegt
   // „Der letzte Schlag“ (02.11.2026): am Siegtag erlischt der Gegner im Ablauf selbst (erst danach dauerhaft grau)
   const letzterSchlag = !!ablaufId && z.art === 'sieg';
 
@@ -144,9 +145,9 @@ export function buehneHtml({ v, f, g, a }) {
         : ablaufId ? `<span class="treffer-wort" aria-hidden="true"${bw('trefferWort')}>${esc(T('buehne.treffer'))}</span>` : ''}
       ${erfolg}${bossBlase}${crew}
       <div class="arena-text"${bw('arenaText')}>
-        <span class="gegner-zeile">${name}<small>${esc(unter)}</small></span>
+        <span class="gegner-zeile">${name}<small${bid ? ' class="besiegt-text"' : ''}>${esc(unter)}</small></span>
         <span class="segmente" role="img" aria-label="${esc(T('gegner.kraftAria', { kraft, anzahl }))}">${Array.from({ length: anzahl }, (_, i) => `<i class="${i < kraft ? 'voll' : segBricht && i === kraft ? 'bricht' : ''}"></i>`).join('')}</span>
-        <span class="kraft-zeile"><span>${esc(T('buehne.kraft'))}</span><span>${kraft} / ${anzahl}${a.wocheZaehler > a.anzahl ? ` · ${esc(T('duell.extra'))}` : ''}${!bid && a.rundeTag < 0 ? ` · ${esc(T('gegner.abMorgen'))}` : ''}</span></span>
+        <span class="kraft-zeile${a.wocheZaehler > a.anzahl || (!bid && a.rundeTag < 0) ? '' : ' schlicht'}"><span>${esc(T('buehne.kraft'))}</span><span>${kraft} / ${anzahl}${a.wocheZaehler > a.anzahl ? ` · ${esc(T('duell.extra'))}` : ''}${!bid && a.rundeTag < 0 ? ` · ${esc(T('gegner.abMorgen'))}` : ''}</span></span>
       </div>
     </div>`;
 
@@ -165,7 +166,7 @@ export function buehneHtml({ v, f, g, a }) {
     // Startpaket (18a): Quest beginnt erst später → keine Siegel, nur ein ruhiger Hinweis (heute ist nichts zu tun)
     tat = nt ? kopf + regel + nachtragHtml(nt, f)
       : K.vorBeginn(kx.stand, K.tagKey(jetzt())) ? `${kopf}${regel}<div class="ruhe-zeile vor-beginn" role="status"><span class="eyebrow">${esc(beginntText(kx.stand).toUpperCase())}</span><p class="ruhe-text">${esc(T('beginn.titel'))}</p><p class="klein">${esc(T('beginn.text', { faehigkeit: f.name }))}</p></div>`
-      : `${kopf}${nachtragZeile()}${ruhetagHeuteZeile()}
+      : `${kopf}${nachtragZeile()}${ruhetagHeuteZeile()}${bid ? '' : bedingungenHtml(a)}
       <div class="tat-daumen${ersterTag() ? ' erster' : ''}">${regel.replace('class="tat-regel"', 'class="tat-regel im-daumen"')}<p class="tat-frage">${esc(tagesfrage(v, f, T(artSchluessel('frage', 'tat.frage'), { faehigkeit: f.name })))}</p>${ersterTagHtml()}${vorsatzZeileHtml(spiel.fokus)}
       ${a.ohneFrage ? `<p class="klein tat-zw-hinweis">${esc(artText('hinweis', 'tat.frage'))}</p>` : ''}
       ${siegelReiheHtml(a.ohneFrage)}
@@ -174,8 +175,9 @@ export function buehneHtml({ v, f, g, a }) {
     const erledigt = `<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}${antw ? ' art-' + esc(antw) : ''}" role="status">${erledigtIcon(antw)}<span>${esc(erledigtText(antw, f))}</span><button class="link" data-a="check" data-id="">${esc(T('tat.aendern'))}</button></div>`;
     // Im Ablauf schon die leisen Links (festhalten, schwerer Moment), damit man nicht 9 Sekunden warten muss
     // Schritt „Zähler“: Stützgewohnheiten erst nach der Antwort des Tages, als leise Haken (ohne XP, ohne Treffer)
-    tat = z.zustand === 'ablauf' ? `${erledigt}${stuetzenHakenHtml()}${eintragLinks(antw)}` : feuer ? lagerfeuerHtml(feuer, a, antw, reaktion) : `${siegelleisteHtml(spiel.fokus, 'ruhe')}${ruheBilanzHtml(a)}${ruheZeile(bwRuhe('ruheZeile'))}${erledigt}${stuetzenHakenHtml()}${stuetzeBereitHtml(a)}
-      ${comebackHtml()}${reaktion ? `<p class="buehne-reaktion art-${esc(reaktion.art)}">${esc(reaktion.text)}</p>` : ''}
+    const bed = bid ? '' : bedingungenHtml(a);
+    tat = z.zustand === 'ablauf' ? `${erledigt}${bed}${stuetzenHakenHtml()}${eintragLinks(antw)}` : feuer ? lagerfeuerHtml(feuer, a, antw, reaktion) : `${siegelleisteHtml(spiel.fokus, 'ruhe')}${ruheBilanzHtml(a)}${ruheZeile(bwRuhe('ruheZeile'))}${erledigt}${bed}${stuetzenHakenHtml()}${stuetzeBereitHtml(a)}
+      ${comebackHtml()}${auffrischungHtml(a)}${reaktion ? `<p class="buehne-reaktion art-${esc(reaktion.art)}">${esc(reaktion.text)}</p>` : ''}
       ${storyRuheHtml()}${eintragLinks(antw, { nachtrag: true })}${nachtragZusatz()}${ruheWeiter()}`;
   }
   return `<section class="karte buehne ${z.zustand}${mitHeld ? ' mit-held' : ''}${feuer ? ' feuer' : ''}${besiegt ? ' besiegt' : ''}${nt ? ' nachtrag' : ''}" aria-label="${esc(T('buehne.aria', { gegner: gg.name }))}">
@@ -495,6 +497,12 @@ const FEUER_SVG = `<svg class="feuer-glut" viewBox="0 0 120 80" aria-hidden="tru
   <path class="feuer-flamme f2" d="M60 64c-8-2-10-10-6-16 1 4 4 6 6 6-1-6 2-11 7-14-1 6 3 9 4 13 1 6-3 10-11 11Z"/>
   <path class="feuer-holz" d="M28 70l60-10M32 60l58 12" stroke-linecap="round"/>
 </svg>`;
+// Auffrischung nach langer Pause (Version 159): leise Zeile am ersten guten Tag nach einer langen Pause (a.auffrischungHeute
+// = Bonus-XP von heute, abgeleitet in logik/kern.js auswertung); sonst ''. Informativ, ohne Wertung (wie 'tat.erledigtJa').
+function auffrischungHtml(a) {
+  const xp = a && Number.isInteger(a.auffrischungHeute) ? a.auffrischungHeute : 0;
+  return xp > 0 ? `<p class="buehne-reaktion art-auffrischung" role="status">${esc(kx.T('tat.auffrischung', { xp }))}</p>` : '';
+}
 function lagerfeuerHtml(st, a, antw, reaktion) {
   const { T, img, nameVon, spiel, ui } = kx;
   const titel = T('feuer.titel');
@@ -509,7 +517,7 @@ function lagerfeuerHtml(st, a, antw, reaktion) {
     <div class="feuer-gruss"><span class="feuer-portraet">${img(st.sprecher, sprecher, 'held', 'cover', '')}</span>
       <p class="feuer-satz"><b>${esc(sprecher.toUpperCase())}</b>„${esc(feuerSatz(st.sprecher))}“</p></div>
     ${siegelleisteHtml(st.sprecher, 'feuer')}${st.sprecher === spiel.fokus ? ruheBilanzHtml(a) : ''}
-    ${comebackHtml()}${reaktion && reaktion.art === 'morgen' ? `<p class="buehne-reaktion art-morgen">${esc(reaktion.text)}</p>` : ''}
+    ${comebackHtml()}${auffrischungHtml(a)}${reaktion && reaktion.art === 'morgen' ? `<p class="buehne-reaktion art-morgen">${esc(reaktion.text)}</p>` : ''}
     <ul class="feuer-zeilen" aria-label="${esc(T('feuer.zeilenAria'))}">${(() => { const h = st.zeilen.findIndex(z => storyWartet(z.id)); return st.zeilen.map((z, i) => feuerZeile(z, st.mitNamen, i === h)).join(''); })()}</ul>
     ${mehr ? `<div class="feuer-mehr${offen ? ' offen' : ''}"><button class="link feuer-mehr-knopf" data-a="feuer-mehr" aria-expanded="${offen}">${esc(T('feuer.mehr'))}${icon('runter')}</button>${offen ? `<div class="feuer-mehr-liste">${mehr}</div>` : ''}</div>` : ''}
   </div>`;

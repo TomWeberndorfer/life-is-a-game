@@ -62,6 +62,8 @@ export const SYMBOLE = {
   // Version 89: Nachtragen (Kalender mit Pfeil zurück), ruhig und neutral, kein Warnzeichen
   kalenderZurueck: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/><path d="M15 15h-6M11.5 12.5L9 15l2.5 2.5"/>',
   // Version 139: Rettungsring für den Schnellweg „Gerade schwer“ (ruhig, kein Warnzeichen)
+  // Version 153: Notizbuch für die Tagesnotiz (vorher der Stift, den auch „Quest bearbeiten“ trägt: zwei Bedeutungen, ein Zeichen)
+  notizbuch: '<path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 3v18M11.5 8h4M11.5 12h4"/>',
   rettungsring: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M6.3 6.3l3.2 3.2M14.5 14.5l3.2 3.2M17.7 6.3l-3.2 3.2M9.5 14.5l-3.2 3.2"/>'
 };
 
@@ -73,5 +75,6 @@ export const AKTION_SYMBOLE = Object.freeze({
   'aktion.schwer': 'welle',             // „Heute war es schwer“
   'aktion.nachtragen': 'kalenderZurueck', // „Anderen Tag eintragen“, „Gestern noch offen?“
   'aktion.notfall': 'herz',             // Notfallkarte
-  'aktion.schnellweg': 'rettungsring'   // Knopf „Gerade schwer“ in der Kopfzeile (Version 139)
+  'aktion.schnellweg': 'rettungsring',  // Knopf „Gerade schwer“ in der Kopfzeile (Version 139)
+  'aktion.notiz': 'notizbuch'           // Tagesnotiz „Wie war dein Tag?“ (Version 153)
 });

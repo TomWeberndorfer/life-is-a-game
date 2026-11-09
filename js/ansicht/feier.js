@@ -5,6 +5,9 @@ import { BEWERTUNGEN, SKALA } from '../daten/forschung.js';
 import { BOTSCHAFTEN } from '../daten/inhalte.js';
 import { TABELLE } from '../daten/vorlagen.js';
 import * as I from '../logik/inhalte.js';
+import { AURA } from '../daten/aura.js'; // Aura je Gegner (05.11.2026)
+import { STILE } from '../daten/stile.js';
+import { auraFuer, auraLauf, auraTeile, pruefeAuraDaten, pruefeEffekte } from '../logik/aura.js';
 import { bwStil, esc, gegnerKopfHtml, grossAnfang, icon } from './helfer.js';
 import { kx } from './kontext.js';
 
@@ -28,6 +31,26 @@ export function frageBild(art) {
   if (b === 'verbuendeter') return img(v.held, nameVon(v.held), 'held', 'cover');
   if (b === 'banner') return img('banner-' + v.held, T('feier.bildHeld'), 'szene', 'cover');
   return img('szene', T('feier.bildStory'), 'szene', 'cover');
+}
+// Aura je Gegner (05.11.2026, Entscheidung 25): ein kurzer Effekt über dem Gegnerbild, genau einmal je Vorstellung.
+// Register und Angaben werden einmal geprüft (Warnungen beim Start). f = ui.feier: f.auraStart merkt den ersten Zeitpunkt,
+// damit ein Neuzeichnen mitten im Effekt an derselben Stelle weiterläuft und danach nichts mehr kommt (logik/aura.js).
+// Echte Uhr statt jetzt(): der Zeitsprung im Testprofil darf den Effekt nicht abschneiden.
+const AURA_EFFEKTE = pruefeEffekte(AURA, m => console.warn(m));
+pruefeAuraDaten(STILE, TABELLE.gegner, AURA_EFFEKTE).forEach(m => console.warn(m));
+export function auraHtml(gid, f) {
+  const { bewegungAus, stand } = kx;
+  if (bewegungAus) return ''; // Anzeige „Bewegung aus“; „Bewegung reduzieren“ im System regelt index.html
+  let e = null;
+  try { e = auraFuer(gid, stand && stand.stil ? stand.stil.aktiv : null, { stile: STILE, gegner: TABELLE.gegner, effekte: AURA_EFFEKTE }); }
+  catch (err) { console.warn('Aura:', err.message); return ''; }
+  if (!e || !f || typeof f !== 'object') return '';
+  const jetztMs = Date.now();
+  if (!Number.isFinite(f.auraStart)) f.auraStart = jetztMs;
+  const lauf = auraLauf(f.auraStart, jetztMs, e.dauerMs);
+  if (!lauf.zeigen) return '';
+  const teile = auraTeile(e).map(t => `<i style="--x:${t.x}%;--y:${t.y}%;--s:${t.skala};animation-delay:${t.verzugMs - lauf.versatzMs}ms"></i>`).join('');
+  return `<span class="aura-ebene ${esc(e.klasse)}" aria-hidden="true" data-aura="${esc(e.id)}" style="--aura-ms:${e.dauerMs}ms;animation-delay:${-lauf.versatzMs}ms">${teile}</span>`;
 }
 // Ein Satz der Crew zum neuen Gegner (Anlass „neuer_gegner“ der Crew-Botschaften) oder ''. Wirft nie.
 function crewSatz(v, gid) {
@@ -130,7 +153,7 @@ export function feierHtml() {
     const knopf = f.morgen ? T('vorstellung.knopfMorgen') : T('neuerGegner.knopf');
     return `<div class="feier" role="dialog" aria-modal="true" aria-labelledby="feier-t">
       <div class="feier-karte auftritt-karte erscheint">
-        ${gegnerKopfHtml({ bild: img('boss-' + gid, gn.name, 'boss', 'cover', '', 'auftritt'), klasse: 'feier-bild auftritt', id: 'feier-t', name: gn.name,
+        ${gegnerKopfHtml({ bild: img('boss-' + gid, gn.name, 'boss', 'cover', '', 'auftritt') + auraHtml(gid, f), klasse: 'feier-bild auftritt', id: 'feier-t', name: gn.name,
           chip: T('neuerGegner.chip', { KAPITEL: wort('kapitel').toUpperCase(), nr: f.kapitel, GEGNER: wort('gegner').toUpperCase() }) })}
         <div class="auftritt-text">
           <p>${esc(gn.text)}</p>

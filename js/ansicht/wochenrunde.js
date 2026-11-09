@@ -4,6 +4,7 @@
 // Vorsatz (Punkt 3a, 4): optional einem Helden zugeordnet; während der Woche als leise Zeile unter dessen Tagesfrage
 // (vorsatzZeileHtml), ohne Abhaken und ohne Zähler.
 // Gespeichert wird erst mit „Runde abschließen“ (spiel.wochen); Moduswechsel in Schritt 3 gelten sofort (echte Wahl).
+// Schritt 3 zeigt seit 06.11.2026 die Crew-Übersicht (ansicht/crew.js: Fokus · Erhalt · Ruhe mit Quest, Mindestaufgabe, Stützen).
 // Wheel (Entscheidung 10a): Tipp in einen Ring des Bereichs setzt den Wert (außen = zufriedener), − und + stellen den
 // gewählten Bereich genauer ein; die Bereiche stehen zusätzlich als Knöpfe darunter (Tastatur, Bildschirmleser).
 // Psychologie: keine XP, keine Serie, keine Wertung der Zahlen; die Einladung bei sinkendem Wert ist eine Frage.
@@ -12,9 +13,9 @@ import { trackEvent } from '../analytics.js';
 import { HELDENMODI } from '../daten/heldenmodi.js';
 import { LEBENSBEREICHE, DOMAIN_IDS } from '../daten/lebensbereiche.js';
 import { WOCHENRUNDE } from '../daten/wochenrunde.js';
-import * as HM from '../logik/heldenmodi.js';
 import * as K from '../logik/kern.js';
 import * as W from '../logik/wochenrunde.js';
+import { crewHtml, modusWechseln } from './crew.js';
 import { esc, icon } from './helfer.js';
 import { kx } from './kontext.js';
 
@@ -140,20 +141,14 @@ function schrittRueckblick(w) {
 }
 
 function schrittEnergie(w) {
-  const { T, img, nameVon, spiel } = kx;
+  const { T, nameVon, spiel } = kx;
   const fokus = modusName(HELDENMODI.standard);
   const einl = W.einladungen(spiel, w.wheel, w.vorher).map(e => `<div class="wr-einladung"><p class="klein">${esc(T('wr.en.einladung', { bereich: bereichName(e.bereich), alt: e.alt, neu: e.neu, held: nameVon(e.heroId), fokus }))}</p>
       <button class="btn" data-a="woche-modus" data-id="${esc(e.heroId)}:${esc(HELDENMODI.standard)}">${esc(T('wr.en.einladungKnopf', { held: nameVon(e.heroId), fokus }))}</button></div>`).join('');
-  const zeilen = spiel.helden.map(h => {
-    const m = HM.modusGewaehlt(spiel, h.heroId);
-    const knoepfe = HELDENMODI.modi.map(x => `<button class="opt kurz ${m === x ? 'sel' : ''}" aria-pressed="${m === x}" data-a="woche-modus" data-id="${esc(h.heroId)}:${esc(x)}">${esc(modusName(x))}</button>`).join('');
-    return `<li class="wr-held">${img(h.heroId, nameVon(h.heroId), 'held', 'rund-klein', '')}<span class="spalte"><b id="wr-m-${esc(h.heroId)}">${esc(nameVon(h.heroId))}</b>
-      <span class="wahl" role="group" aria-labelledby="wr-m-${esc(h.heroId)}">${knoepfe}</span></span></li>`;
-  }).join('');
+  // Crew-Übersicht (06.11.2026): dieselbe Ansicht wie „Crew planen“ in der Heldenwahl (ansicht/crew.js), gruppiert nach Modus
   return `<p class="lead">${esc(T('wr.en.frage'))}</p>
     ${einl}
-    <ul class="wr-modi klein">${HELDENMODI.modi.map(x => `<li><b>${esc(modusName(x))}:</b> ${esc(T('wr.en.modus.' + x))}</li>`).join('')}</ul>
-    <ul class="wr-helden">${zeilen}</ul>
+    ${crewHtml()}
     <p class="klein">${esc(T('wr.en.hinweis', { max: HELDENMODI.fokusMax, fokus }))}</p>
     ${w.info ? `<p class="klein modus-info" role="status">${esc(w.info)}</p>` : ''}`;
 }
@@ -222,22 +217,9 @@ export const WOCHE_KLICKS = {
   'woche-minus'({ id }) { const { render, ui } = kx; if (!ui.woche || !DOMAIN_IDS.includes(id)) return; ui.woche.wheel = W.wertAendern(ui.woche.wheel, id, -1); render(); },
   // id = „heroId:modus“. Gilt sofort (wie im Heldenbogen); Grenzen der Heldenmodi bleiben.
   'woche-modus'({ id }) {
-    const { T, jetzt, nameVon, render, setzeSpiel, speichere, spiel, ui } = kx;
+    const { render, ui } = kx;
     if (!ui.woche) return;
-    const [heroId, modus] = teile(id);
-    const werte = { fokus: modusName(HELDENMODI.standard), erhalt: modusName(HELDENMODI.neuOhnePlatz) };
-    try {
-      const r = HM.modusSetzen(spiel, heroId, modus, K.tagKey(jetzt()));
-      if (r.geaendert) {
-        setzeSpiel(r.spiel); speichere();
-        trackEvent('hero_mode_set', { modus, fokus: HM.fokusHelden(r.spiel).length });
-        ui.woche.info = T(r.ab && r.ab > K.tagKey(jetzt()) ? 'modus.abMorgen' : 'modus.gesetzt', { held: nameVon(heroId), modus: modusName(modus) });
-      } else ui.woche.info = T('modus.gesetzt', { held: nameVon(heroId), modus: modusName(modus) });
-    } catch (e) {
-      if (e instanceof HM.ModusFehler && e.code === 'voll') ui.woche.info = T('wr.en.voll', werte);
-      else if (e instanceof HM.ModusFehler && e.code === 'letzter') ui.woche.info = T('modus.letzter', werte);
-      else { console.warn('Wochenrunde (Modus):', e.message); ui.woche.info = T('modus.fehler'); }
-    }
+    ui.woche.info = modusWechseln(id); // Crew-Übersicht (06.11.2026): gemeinsame Regel mit „Crew planen“
     render();
   },
   'woche-abschliessen'() {

@@ -1,4 +1,4 @@
-// ERZEUGT aus claude/inhalte.md (02.11.2026, 14:17) mit claude/werkzeuge/inhalte-uebernehmen.mjs – nicht von Hand ändern.
+// ERZEUGT aus claude/inhalte.md (06.11.2026, 10:51) mit claude/werkzeuge/inhalte-uebernehmen.mjs – nicht von Hand ändern.
 // Texte ändern: in der Markdown-Datei, dann „Geschichten übernehmen“. Einstellungen (Anzahl je Tag, Rückfall) stehen in inhalte.js.
 
 export const BOTSCHAFTEN = [
@@ -35,6 +35,15 @@ export const BOTSCHAFTEN = [
       "{Gegner} wankt. Ein Treffer noch. Heute vielleicht?",
       "Nur noch ein Treffer. {Gegner} weiß das, und {er} wird nervös.",
       "Ich spüre, dass es kippt. Noch ein Treffer, und {gegner} liegt am Boden."
+    ]
+  },
+  {
+    "anlass": "bedingung_offen",
+    "texte": [
+      "Fast geschafft. Was noch fehlt, ist kein weiterer Treffer, sondern ein neuer Moment, in dem du {faehigkeit} zeigst.",
+      "{Gegner} wankt. Jetzt zählt nicht mehr, wie oft du triffst, sondern wo und wie.",
+      "{Gegner} hat gelernt, dir an einer Stelle auszuweichen. Wir suchen {ihn} dort, wo {er} sich sicher fühlt.",
+      "Die Treffer sitzen. Ein Schritt fehlt noch, und er hat keine Eile. Wenn der Moment kommt, bist du bereit."
     ]
   },
   {
@@ -138,16 +147,6 @@ export const BOTSCHAFTEN = [
     ]
   },
   {
-    "anlass": "notfall_mitgefuehl",
-    "texte": [
-      "Das ist gerade schwer. Und es ist menschlich, dass es schwer ist.",
-      "Du musst das nicht allein lösen, und nicht heute alles.",
-      "Sprich mit dir so, wie du mit einem guten Freund sprechen würdest.",
-      "Viele Menschen kennen dieses Gefühl. Du bist damit nicht falsch.",
-      "Es ist in Ordnung, gerade nicht stark zu sein. Ein kleiner Schritt reicht."
-    ]
-  },
-  {
     "anlass": "erfolg_erster",
     "texte": [
       "Du bist jemand, der anfängt, statt zu warten. {n} von {anzahl} in dieser Runde.",
@@ -175,6 +174,16 @@ export const BOTSCHAFTEN = [
     "texte": [
       "Du bist jemand, der seine Vorsätze lebt. {n} von {anzahl} in dieser Runde.",
       "Geschafft. Du bist jemand, der dranbleibt. {n} von {anzahl} in dieser Runde."
+    ]
+  },
+  {
+    "anlass": "notfall_mitgefuehl",
+    "texte": [
+      "Das ist gerade schwer. Und es ist menschlich, dass es schwer ist.",
+      "Du musst das nicht allein lösen, und nicht heute alles.",
+      "Sprich mit dir so, wie du mit einem guten Freund sprechen würdest.",
+      "Viele Menschen kennen dieses Gefühl. Du bist damit nicht falsch.",
+      "Es ist in Ordnung, gerade nicht stark zu sein. Ein kleiner Schritt reicht."
     ]
   }
 ];
@@ -1102,6 +1111,11 @@ export const BOSS_REAKTIONEN = {
     "morgen": [
       "Ruh dich aus. Irgendwo zieht schon etwas Neues auf. Morgen zeigt es sich.",
       "Der Kampf ist vorbei. Doch in der Ferne wartet schon jemand auf dich."
+    ],
+    "bedingung": [
+      "Der Treffer sitzt. {Gegner} steht noch, aber {er} wartet nur noch auf deinen nächsten Schritt.",
+      "{Gegner} wankt. Um {ihn} zu besiegen, braucht es jetzt mehr als Wiederholung.",
+      "Wieder getroffen. {Gegner} hält sich noch, doch {er} spürt: Du findest {ihn} bald überall."
     ]
   },
   "drycha": {

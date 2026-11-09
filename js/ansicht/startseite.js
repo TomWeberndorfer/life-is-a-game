@@ -26,9 +26,15 @@ import { abschnittZiel, bonusAnsicht, erfolgGroesse, heldenKopf, klappStandardKl
 import * as W from '../logik/weg.js';
 import { entw } from './blatt.js';
 import { einwKarte } from './einstellungen.js';
+import { denkenKarte } from './denken.js'; // Version 165
+import { testerKarte } from './testerhinweis.js'; // 09.11.2026: einmaliger Tester-Hinweis
+import { beweisKarte } from './beweisbuch.js'; // Version 166: leise Anregung „Schreib dir einen Brief“
+import { plancheckKarte } from './plancheck.js'; // Version 167: Plan- und Warum-Check
+import { abschlussKarte } from './abschluss.js'; // Version 169: Kettenende
 import { blitzEbene, bwStil, esc, fortschrittHier, fortschrittRegister, icon, kachelLeiste, kurzDatum, markiere, prozent } from './helfer.js';
 import { notizKarteHtml, notizKopfKnopf } from './notiz.js'; // Tagesnotiz (04.11.2026)
 import { wochenKarteHtml } from './wochenrunde.js'; // Wochenrunde (05.11.2026)
+import { crewKnopfHtml } from './crew.js'; // Crew-Übersicht (06.11.2026): „Crew planen“ in der Heldenwahl
 import { kx } from './kontext.js';
 import { eintragLink } from './eintrag.js';
 import { notfallKnopf } from './notfall.js';
@@ -40,6 +46,7 @@ import { hinweisBox, kopfRechts } from './rahmen.js';
 import { buehneHtml, lagerfeuerSichtbar } from './buehne.js'; // Kampfbühne (eigenes Modul seit 02.11.2026)
 import { pausiertHeute, rastHtml } from './heldenmodi.js'; // Heldenmodi (04.11.2026)
 import * as HM from '../logik/heldenmodi.js';
+import { bedingungenJetzt, gegnerJetzt } from './bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
 import { nachtragHtml, nachtragKachel, nachtragModus, nachtragName, nachtragZeile, nachtragZusatz } from './nachtrag.js';
 export { buehneDauerMs, buehneLauf, buehneLesezeiten } from './buehne.js'; // app.js liest die Dauer weiter hier
 
@@ -92,7 +99,7 @@ export function vorstellungHinweisHtml() {
 export function bossReaktion(v, a) {
   const { jetzt, nameVon, stand, stilWerte } = kx;
   const gid = a.gegner || v.gegner;
-  const art = BR.reaktionsArt({ antwort: a.heuteAntwort, kraft: a.anzahl - a.treffer, anzahl: a.anzahl, rundeTag: a.rundeTag, siegHeute: a.siegHeute, neuerGegner: a.neuerGegner }, BOSS_REAKTION_EINSTELLUNG.phaseAb);
+  const art = BR.reaktionsArt({ antwort: a.heuteAntwort, kraft: a.anzahl - a.treffer, anzahl: a.anzahl, rundeTag: a.rundeTag, siegHeute: a.siegHeute, neuerGegner: a.neuerGegner, bedingungOffen: a.bedingungenOffen === true }, BOSS_REAKTION_EINSTELLUNG.phaseAb);
   if (!art) return null;
   // „morgen“: Text nach dem besiegten Gegner, Bild = der Neue als Silhouette (Name bleibt verborgen)
   const textId = art === 'morgen' ? besiegtHeuteVorNeuem(a) || '_allgemein' : gid;
@@ -242,7 +249,7 @@ export function wegHtml(a, v, g) {
       rundeStand: T('weg.stand', { treffer: a.treffer, anzahl: a.anzahl }),
       rest: rest ? T('weg.rest', { rest, gegner: g.kurz }) : '',
       kapitel: T('weg.kapitel', { kapitel: wort('kapitel'), nr: w.kapitel })
-    }, T('weg.rundeGeschafft', { gegner: g.kurz, sieg: wort('sieg') }));
+    }, a.bedingungenOffen ? T('weg.bedingung', { gegner: g.kurz }) : T('weg.rundeGeschafft', { gegner: g.kurz, sieg: wort('sieg') })); // 06.11.2026
   if (wegForm(KOPFLEISTE) === 'kette') return wegKetteHtml(a, v, g, w, text, neuVerborgen);
   if (wegForm(KOPFLEISTE) === 'streifen') return wegStreifenHtml(a, v, g, w, text, neuVerborgen);
   return wegRahmen(`<span class="weg">
@@ -398,7 +405,8 @@ export function kopfleisteHtml({ v, g, a }) {
   const kapitelHier = a.gegnerAnzahl > 1 && fortschrittHier('kapitel', 'kopfleiste'); // Version 140
   const zeile = [name, bereichName(h.domainId), kapitelHier ? `${wort('kapitel')} ${a.gegnerNr}` : ''].filter(Boolean).join(' · ');
   const stift = funktionFrei('quests_bearbeiten')
-    ? `<button class="icbtn kl-stift" data-a="quest-bearbeiten" aria-label="${esc(T('qe.titel', { quest: wort('quest') }))}">${icon('stift')}</button>` : '';
+    // Version 153: Knopf mit Wort statt nur Stift (war zu unauffällig für eine Grundfunktion); langer Text bleibt als aria-label
+    ? `<button class="kl-bearbeiten" data-a="quest-bearbeiten" aria-label="${esc(T('qe.titel', { quest: wort('quest') }))}">${icon('stift')}<span>${esc(T('qe.knopf'))}</span></button>` : '';
   return `${wechselBannerHtml(h)}<div class="karte kopfleiste" role="group" aria-label="${esc(T('kopf.leisteAria', { held: name, quest: wort('quest') }))}">
     <div class="kl-oben">
       <div class="kl-portraet">
@@ -425,24 +433,36 @@ const NEU_KARTEN = {
   angebot: () => angebotKarte(),
   welten: () => weltenKarte(),
   zielstand: () => zielstandKarte(), // Ziel-Quests (31.10.2026): Ziel erreicht oder Stichtag vorbei
-  rueckblick: () => rueckblickKarte() // Rundenrückblick (02.11.2026): Runde vorbei, Brief des Helden
+  rueckblick: () => rueckblickKarte(), // Rundenrückblick (02.11.2026): Runde vorbei, Brief des Helden
+  testerhinweis: () => testerKarte(), // 09.11.2026: „Du testest eine frühe Version“, einmalig, leise
+  denken: () => denkenKarte(), // Version 165: „Wie diese App denkt“, einmalig
+  brief: () => beweisKarte(), // Version 166: „Schreib dir einen Brief“, einmalig nach dem ersten Sieg
+  plancheck: () => plancheckKarte(), // Version 167: „Trägt dein Plan noch?“, nach je 4 Rückblicken
+  abschluss: () => abschlussKarte(false), // Version 169: Kette geschafft, noch nichts gewählt
+  abschlussSpaeter: () => abschlussKarte(true) // Version 169: „Später entscheiden“, leise
 };
-const NEU_IDS = (NEU_PLATZ && Array.isArray(NEU_PLATZ.vorrang) ? NEU_PLATZ.vorrang : []).filter(id => {
+const kartenIds = (liste, name) => (Array.isArray(liste) ? liste : []).filter(id => {
   if (Object.prototype.hasOwnProperty.call(NEU_KARTEN, id)) return true;
-  console.warn(`Startseite: unbekannte Neuigkeit „${id}“ in NEU_PLATZ.vorrang`);
+  console.warn(`Startseite: unbekannte Neuigkeit „${id}“ in NEU_PLATZ.${name}`);
   return false;
 });
+const NEU_IDS = kartenIds(NEU_PLATZ && NEU_PLATZ.vorrang, 'vorrang');
+const NEU_LEISE = kartenIds(NEU_PLATZ && NEU_PLATZ.leise, 'leise');
 export function neuigkeitenHtml() {
   const { T, jetzt } = kx;
   const html = {};
-  for (const id of NEU_IDS) {
+  for (const id of [...NEU_IDS, ...NEU_LEISE]) {
     try { html[id] = NEU_KARTEN[id]() || ''; } catch (e) { console.warn(`Neuigkeit ${id}:`, e.message); html[id] = ''; }
   }
   const p = neuPlatz(NEU_IDS.filter(id => String(html[id]).trim()), merkmal('neu_platz'), K.tagKey(jetzt()), NEU_PLATZ && NEU_PLATZ.max);
   if (p.merken) merke('neu_platz', p.merken);
-  if (!p.sichtbar.length && !p.warten.length) return '';
+  // Leise Karten: nur wenn noch Platz ist, nie wartend
+  const max = NEU_PLATZ && Number.isInteger(NEU_PLATZ.max) ? NEU_PLATZ.max : 2;
+  const leise = NEU_LEISE.filter(id => String(html[id]).trim()).slice(0, Math.max(0, max - p.sichtbar.length));
+  const sichtbar = [...p.sichtbar, ...leise];
+  if (!sichtbar.length && !p.warten.length) return '';
   const n = p.warten.length;
-  return `<div class="neuigkeiten" data-neu-platz>${p.sichtbar.map(id => markiere(html[id], id, 'neu')).join('')}${n ? `<p class="neu-wartet">${esc(T(n === 1 ? 'neu.wartetEine' : 'neu.wartenMehr', { n }))}</p>` : ''}</div>`;
+  return `<div class="neuigkeiten" data-neu-platz>${sichtbar.map(id => markiere(html[id], id, 'neu')).join('')}${n ? `<p class="neu-wartet">${esc(T(n === 1 ? 'neu.wartetEine' : 'neu.wartenMehr', { n }))}</p>` : ''}</div>`;
 }
 // „Beginnt morgen“ bzw. „Beginnt am …“ für eine Quest, die erst später startet (Startpaket, 18a). Wirft nie.
 export function beginntText(a) {
@@ -491,7 +511,7 @@ export function heldenWahlHtml() {
   }).join('');
   return `<div class="feier unten" role="dialog" aria-modal="true" aria-labelledby="wahl-t">
     <button class="hintergrund" data-a="helden-wahl-zu" aria-label="${esc(T('nav.schliessen'))}" tabindex="-1"></button>
-    <div class="blatt erscheint"><div class="blatt-inhalt"><h2 id="wahl-t">${esc(T('kopf.wahlTitel', { crew: wort('crew') }))}</h2>${zeilen}${H.heldFrei(kx.spiel) ? `<button class="btn wahl-neu" data-a="neues-abenteuer">${esc(T('kopf.neuerHeld'))}</button>` : ''}<button class="cta" data-a="helden-wahl-zu">${esc(T('nav.schliessen'))}</button></div></div>
+    <div class="blatt erscheint"><div class="blatt-inhalt"><h2 id="wahl-t">${esc(T('kopf.wahlTitel', { crew: wort('crew') }))}</h2>${zeilen}${crewKnopfHtml()}${H.heldFrei(kx.spiel) ? `<button class="btn wahl-neu" data-a="neues-abenteuer">${esc(T('kopf.neuerHeld'))}</button>` : ''}<button class="cta" data-a="helden-wahl-zu">${esc(T('nav.schliessen'))}</button></div></div>
   </div>`;
 }
 export function angebotKarte() {
@@ -702,7 +722,7 @@ export const START_TEILE = {
     }
     const kraft = a.anzahl - a.treffer;
     const unter = a.gegnerAnzahl > 1 ? T('weg.kapitel', { kapitel: wort('kapitel'), nr: a.gegnerNr }) : a.siege ? T('gegner.siege', { n: a.siege, sieg: wort('sieg') }) : T('gegner.unbesiegt');
-    return `<button class="karte duell tippbar ${ui.wackeln ? 'wackelt' : ''} ${a.bossKraft === 0 ? 'besiegt' : ''}" data-a="blatt" data-id="boss" aria-label="${esc(T('duell.ansehen', { gegner: g.name }))}">
+    return `<button class="karte duell tippbar ${ui.wackeln ? 'wackelt' : ''} ${a.bossKraft === 0 && !a.bedingungenOffen ? 'besiegt' : ''}" data-a="blatt" data-id="boss" aria-label="${esc(T('duell.ansehen', { gegner: g.name }))}">
       <span class="duell-bildrahmen"${bwStil('tagesCheck', 'duellBild', ui.einmal.has('treffer'))}>${img('boss-' + v.gegner, g.name, 'boss', 'duell-bild', '')}${arenaHtml()}${blitzEbene('tagesCheck', 'duellBlitz', ui.einmal.has('treffer'))}
         <span class="duell-titel">${esc(held)} <span class="duell-vs">${esc(T('duell.vs'))}</span> ${esc(g.kurz)}</span></span>
       <span class="duell-text">
@@ -755,7 +775,11 @@ function klappen({ id, aktion }) {
 // festhalten / schwerer Tag; Ruhetag; mit nachtrag zuletzt „Nachtragen“ (die Tageswahl erscheint darunter, nachtragZusatz).
 export function eintragLinks(antw, { nachtrag = false } = {}) {
   const k = { alsKachel: true };
-  const teile = antw === 'ja' ? [eintragLink('geschafft', 'eintrag.link.geschafft', k), eintragLink('schwer', 'eintrag.link.schwer', k)]
+  // Bosskette mit Bedingungen (06.11.2026): wartet der Gegner auf eine Gestalt, Fähigkeit oder Schwierigkeit, sagt die Kachel,
+  // wofür das Festhalten zählt (sonst geht der Gegner nie, ohne dass man weiß, warum)
+  const offen = antw === 'ja' ? bedingungenJetzt().offen.size > 0 : false;
+  const g = offen ? gegnerJetzt() : null;
+  const teile = antw === 'ja' ? [g ? eintragLink('geschafft', 'bed.festhalten', { ...k, werte: { gegner: g.kurz } }) : eintragLink('geschafft', 'eintrag.link.geschafft', k), eintragLink('schwer', 'eintrag.link.schwer', k)]
     : antw === 'nein' ? [eintragLink('schwer', 'eintrag.link.schwerNein', k)]
     : antw === 'schwer' ? [eintragLink('schwer', 'eintrag.link.schwerFesthalten', k)] // Version 141: Eintrag nachholen
     : [eintragLink('schwer', 'eintrag.link.schwer', k)];

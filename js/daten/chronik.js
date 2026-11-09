@@ -9,7 +9,7 @@
 //                Hat er keine davon, aber Notizen oder Zusätze, gilt `ohneSiegel`.
 //   notizArten   Arten, deren eigener Text (Notiz, „Nächstes Mal“) unter der Zeile steht
 //   zusatzArten  Arten, die als kleine Zeile unter dem Helden stehen (Sieg, Mikroquest, Stütze, Morgenprobe)
-//   markenArten  Arten, die als Trennzeile unter dem Tag stehen (Neuer Anfang, Wieder da)
+//   markenArten  Arten, die als Trennzeile unter dem Tag stehen (Neuer Anfang, Wieder da, Abschluss der Kette)
 //   zierArten    Arten, die als Zierseite unter dem Tag stehen (neues Kapitel, Abenteuer begonnen)
 //   tagesArten   Arten ohne Held (Tagesnotiz), die oben in der Tageskarte stehen (04.11.2026)
 //   tageJeSeite  Tage auf einmal; „Ältere Seiten“ lädt die nächsten
@@ -25,9 +25,9 @@ export const CHRONIK = {
     { art: 'geschafft', siegel: 'notiz' }
   ],
   ohneSiegel: 'leise',
-  notizArten: ['geschafft', 'schwer', 'rueckblick'], // Rundenrückblick (02.11.2026): „Was hat geholfen?“ unter dem Tag
+  notizArten: ['geschafft', 'schwer', 'rueckblick', 'plancheck'], // Rundenrückblick (02.11.2026): „Was hat geholfen?“ unter dem Tag
   zusatzArten: ['sieg', 'probe', 'mikro', 'stuetze'],
-  markenArten: ['neustart', 'wiederda'],
+  markenArten: ['neustart', 'wiederda', 'abschluss'], // Version 169: Kettenende (Abschluss oder Meilenstein) als schlichte Trennzeile
   zierArten: ['kapitel', 'start'],
   tagesArten: ['notiz'], // Tagesnotiz (04.11.2026): ohne Held, oben in der Tageskarte
   tageJeSeite: 14,

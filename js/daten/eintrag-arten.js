@@ -29,6 +29,8 @@
 //   zustaende    erlaubte Werte für das Feld `zustand` (Version 127: aus der Notfallkarte, „Was ist gerade da?“).
 //                Fehlt das Feld im Eintrag, ist der Zustand unbekannt (Altbestand und „weiß nicht“).
 //   verweise     höchstens so viele IDs anderer Einträge im Feld `verweise` (Rundenrückblick: „Was hat geholfen?“)
+//   antworten    Fragen mit erlaubten Antworten { frage: [werte] } im Feld `antworten` { frage: wert } (Plan-Check, Version 167);
+//                Texte 'antwort.<frage>.<wert>' (Knopf) und 'antwort.lb.<frage>.<wert>' (Logbuch). Fehlt die Frage, wurde sie nicht gestellt.
 //   nurMitInhalt true = im Logbuch nur, wenn Text, Wahl oder Verweise da sind (übersprungener Rückblick bleibt still)
 //   bereiche     true = gehört zu Lebensbereichen statt zu einem Helden (Tagesnotiz, 04.11.2026): heroId ist null, das Feld
 //                `bereiche` ist eine Liste von Lebensbereich-IDs (daten/lebensbereiche.js), leer = „ganzer Tag“.
@@ -36,6 +38,15 @@
 //                fest, Helden kommen und gehen; ein Bereich ohne Helden (z. B. Familie) ist trotzdem wählbar.
 //   textFelder   Liste von Namen freier Textfelder im Feld `felder` (Tagesnotiz: gut, schwer), je bis EINTRAG_TEXT_MAX;
 //                Beschriftung 'notiz.feld.<name>'. Leere Felder fehlen im Eintrag.
+//   heldOptional true = darf an einem Helden hängen oder ohne Held stehen (heroId null = gilt für alle; Brief, Version 166).
+//                Ein unbekannter Held (gelöscht) macht den Eintrag zu „ohne Held“, nichts geht verloren.
+//   textMax      eigene Obergrenze für `text` (sonst EINTRAG_TEXT_MAX); Brief: BRIEF_TEXT_MAX
+//   maxJeHeld    höchstens so viele Einträge dieser Art je Held (heroId null zählt als eigene Gruppe), damit der Spielstand
+//                nicht unbemerkt wächst (Brief: BRIEFE_JE_HELD)
+//   merkbar      true = trägt das Feld `merken` (true, nur wenn gesetzt; Stern „Das will ich mir merken“, Version 166).
+//                Markierte Einträge bilden das Beweisbuch (logik/beweisbuch.js). Altbestand ohne Feld = nicht markiert.
+//   ohneLogbuch  true = erscheint nie im Logbuch und braucht darum kein Feld `logbuch` (Brief: sein Ort ist das Beweisbuch,
+//                privat und nicht Teil des Tagesstroms)
 // Jeder Eintrag darf zusätzlich `geaendert` (ISO-Zeitpunkt der letzten Bearbeitung) tragen (Tagesnotiz, 04.11.2026).
 // Tonregel (Entscheidung 28.10.2026): nie das Wort „Rückfall“, nie Rot. Ein schwerer Tag zählt nie gegen XP, Runde
 // oder Gegnerkraft (wer bestraft wird, schreibt bald nichts mehr hinein).
@@ -44,9 +55,16 @@ import { RUECKBLICK } from './rueckblick.js';
 import { WILLKOMMEN } from './willkommen.js';
 import { NOTFALL } from './notfall.js';
 import { DOMAIN_IDS } from './lebensbereiche.js';
+import { PLANCHECK } from './plancheck.js';
+
+// Brief an mein künftiges Ich (Version 166): kurz genug, um ihn in einem schweren Moment ganz zu lesen; höchstens 10 je Held.
+export const BRIEF_TEXT_MAX = 600;
+export const BRIEFE_JE_HELD = 10;
 
 export const EINTRAG_ARTEN = {
-  geschafft: { logbuch: 'geschafft', frage: 'eintrag.frage.geschafft', zustaende: NOTFALL.merken, situationen: ['vorgenommen', 'erinnert', 'unterstuetzt', 'leichter', 'anderes'] },
+  // begegnung (06.11.2026, Bosskette mit Bedingungen): darf Gestalt, Fähigkeit und Schwierigkeit 0–10 tragen (alle freiwillig;
+  // das Blatt fragt sie nur, wenn der Gegner eine offene Bedingung dafür hat).
+  geschafft: { logbuch: 'geschafft', frage: 'eintrag.frage.geschafft', zustaende: NOTFALL.merken, begegnung: true, merkbar: true, situationen: ['vorgenommen', 'erinnert', 'unterstuetzt', 'leichter', 'anderes'] },
   // Version 81: Morgenprobe ausführlich, „Könnte heute kommen“ je Held. Ein Merker ohne Inhalt, höchstens einer je Held und Tag.
   probe: { logbuch: 'probe', frage: 'probe.frage', situationen: [], jeTag: 1, ohneBlatt: true },
   // Version 90: Ruhetag, bewusst ausgesetzter Tag (Regeln: daten/ruhetag.js). Ein Merker ohne Inhalt, auch für künftige
@@ -59,9 +77,16 @@ export const EINTRAG_ARTEN = {
   // Rundenrückblick (Etappe 2 D, 02.11.2026, daten/rueckblick.js): je besprochener Runde einer (bezug = Rundenbeginn).
   // text = „Was hat geholfen?“ (freiwillig, nie in Analytics), wahl = Einschätzung, verweise = angetippte Notizen der Runde.
   rueckblick: { logbuch: 'rueckblick', frage: 'rb.titel', text: 'rb.geholfen', situationen: [], jeTag: 3, ohneBlatt: true, bezug: true, wahlen: RUECKBLICK.wahlen, verweise: RUECKBLICK.verweiseMax, nurMitInhalt: true },
+  // Plan- und Warum-Check (Version 167, daten/plancheck.js): antworten = „Hat dein Wenn-dann gegriffen?“ und „Gilt dein Warum noch?“,
+  // naechstesMal = eigener Plan bei „Manchmal“ oder „Nein“. Ein Eintrag ohne Inhalt (Diesmal nicht) bleibt im Logbuch still.
+  // Keine XP, Texte nie in Analytics. Ansicht: ansicht/plancheck.js.
+  plancheck: { logbuch: 'plancheck', frage: 'pc.titel', plan: 'pc.plan', situationen: [], jeTag: 1, ohneBlatt: true, antworten: PLANCHECK.antworten, nurMitInhalt: true },
   // Tagesnotiz (04.11.2026): „Wie war dein Tag?“, für einen, mehrere oder keinen Lebensbereich (= ganzer Tag).
   // Keine XP (eigener Grund zu schreiben statt Belohnung von außen), Texte nie in Analytics. Ansicht: ansicht/notiz.js.
-  notiz: { logbuch: 'notiz', frage: 'notiz.titel', situationen: [], jeTag: 9, ohneBlatt: true, bereiche: true, textFelder: ['gut', 'schwer'] },
+  notiz: { logbuch: 'notiz', frage: 'notiz.titel', situationen: [], jeTag: 9, ohneBlatt: true, bereiche: true, textFelder: ['gut', 'schwer'], merkbar: true },
+  // Brief an mein künftiges Ich (Version 166, 08.11.2026): ein Text in der eigenen Stimme für einen schweren Moment. Hängt
+  // optional an einem Helden (heroId) oder gilt für alle (null). Keine XP, nie Pflicht, nie in Analytics. Ansicht: ansicht/beweisbuch.js.
+  brief: { frage: 'brief.titel', situationen: [], jeTag: 3, ohneBlatt: true, heldOptional: true, textPflicht: true, textMax: BRIEF_TEXT_MAX, maxJeHeld: BRIEFE_JE_HELD, ohneLogbuch: true },
   schwer: { logbuch: 'schwer', frage: 'eintrag.frage.schwer', zustaende: NOTFALL.merken, text: 'eintrag.text.schwer', plan: 'eintrag.plan', situationen: ['stress', 'muede', 'langeweile', 'gefuehl', 'andere', 'gewohnheit', 'anderes'] }
 };
 
@@ -69,6 +94,7 @@ export const EINTRAG_ARTEN = {
 export const STIMMUNGEN = [1, 2, 3, 4, 5];
 
 export const EINTRAG_TEXT_MAX = 1000;
+
 // Plan fürs nächste Mal: ein Satz, kein Aufsatz (Version 81).
 export const EINTRAG_PLAN_MAX = 300;
 // Obergrenze im Spielstand (Speicherplatz). Darüber fallen die ältesten weg (mit Warnung in der Konsole).

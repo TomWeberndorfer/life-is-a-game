@@ -1,5 +1,5 @@
 // Auswahl der täglichen Inhalte. Reine Funktionen; Texte kommen aus daten/inhalte.js.
-import { tagKey, ausTagKey, auswertung } from './kern.js';
+import { tagKey, ausTagKey, auswertung, bedingungenStand } from './kern.js';
 import { antwortArt } from './antworten.js'; // Version 141
 
 // Stabiler Zahlenwert je Text (gleicher Tag → gleiche Variante, jeden Tag eine andere).
@@ -73,6 +73,12 @@ export function anlass(stand, heute) {
   if (start === k || (start && start > k)) return 'erster_tag';
   if (a.neuerGegner && (a.siegHeute || a.rundeTag <= 0)) return 'neuer_gegner';
   if (a.siegHeute) return 'besiegt';
+  // Bosskette mit Bedingungen (06.11.2026): Höchstens noch ein Treffer, aber eine Bedingung des Gegners ist offen.
+  // Dann passt „noch ein Treffer, dann fällt …“ nicht; ohne Texte für den Anlass gilt „sonst“ (botschaft()).
+  if (a.anzahl - a.wocheZaehler <= 1) {
+    const b = bedingungenStand(stand, k);
+    if (b.liste.length && !b.erfuellt) return 'bedingung_offen';
+  }
   if (a.anzahl - a.wocheZaehler === 1) return 'fast';
   // Erster Tag einer neuen Runde (Anlass-IDs „montag…“ aus Version 5 beibehalten)
   if (a.rundeTag === 0 && a.wocheNr > 1) return a.vorigeGewonnen ? 'montag_sieg' : 'montag';

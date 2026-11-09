@@ -18,7 +18,7 @@
 //   - <id>: <Text>                             feste ID (Haken bleiben beim Umformulieren erhalten)
 //   # Bossreaktionen                           (Version 69, optional: fehlt er, bleiben die bisherigen Reaktionen)
 //   ## <gegner-id>                             z. B. drycha; „_allgemein“ = Rückfall für jeden Gegner (Pflicht)
-//   ### <art>                                  treffer, ruhe, phase, morgen (Bedeutung: js/daten/boss-reaktionen.js)
+//   ### <art>                                  treffer, ruhe, phase, morgen, bedingung (Bedeutung: js/daten/boss-reaktionen.js)
 //   - <Text>                                   eine Zeile je Variante
 // Zeilen, die mit „>“ beginnen, sind Notizen und werden ignoriert. Ein einfacher Absatz darf über mehrere Zeilen gehen
 // (wird zu einer Zeile verbunden); „Andeutung:“, „Ja:“ und „Nein:“ stehen je in EINER Zeile.

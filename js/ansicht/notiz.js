@@ -8,12 +8,14 @@
 import { trackEvent } from '../analytics.js';
 import { EINTRAG_ARTEN, EINTRAG_OPT, STIMMUNGEN } from '../daten/eintrag-arten.js';
 import { LEBENSBEREICHE } from '../daten/lebensbereiche.js';
+import { AKTION_SYMBOLE } from '../daten/symbole.js';
 import { TAGESNOTIZ } from '../daten/tagesnotiz.js';
 import * as EN from '../logik/eintraege.js';
 import * as K from '../logik/kern.js';
 import * as TN from '../logik/tagesnotiz.js';
 import { esc, icon, kurzDatum } from './helfer.js';
 import { kx } from './kontext.js';
+import { merkenChip, sternSetzen } from './beweisbuch.js'; // Version 166: Stern „Das will ich mir merken“
 
 export const NOTIZ_ART = 'notiz';
 let notizNr = 0;
@@ -47,11 +49,14 @@ export function bereicheText(liste) {
   return Array.isArray(liste) && liste.length ? liste.map(bereichName).join(' · ') : T('lb.ganzerTag');
 }
 
-// Stift in der Kopfzeile der Startseite: öffnet die Tagesnotiz jederzeit, auch tagsüber (04.11.2026).
+// Version 153: eigenes Symbol (Notizbuch) statt des Stifts, der auch „Quest bearbeiten“ bedeutet. Ein Stil kann es in
+// stile.js `symbole` mit dem Schlüssel 'aktion.notiz' überschreiben.
+const notizSymbol = () => kx.symbol('aktion.notiz', AKTION_SYMBOLE['aktion.notiz']);
+// Notizbuch in der Kopfzeile der Startseite: öffnet die Tagesnotiz jederzeit, auch tagsüber (04.11.2026).
 export function notizKopfKnopf() {
   const { T } = kx;
   const t = esc(T('notiz.kopf'));
-  return `<button class="icbtn einst-btn notiz-kopf" data-a="notiz-oeffnen" data-id="" aria-label="${t}" title="${t}">${icon('stift')}</button>`;
+  return `<button class="icbtn einst-btn notiz-kopf" data-a="notiz-oeffnen" data-id="" aria-label="${t}" title="${t}">${icon(notizSymbol())}</button>`;
 }
 
 // ---------- Karte auf der Startseite (am Abend) ----------
@@ -67,13 +72,13 @@ export function notizKarteHtml() {
   if (z === 'aus') return '';
   if (z === 'da') {
     const letzte = heuteNotizen[heuteNotizen.length - 1];
-    return `<div class="hinweis notiz-da" role="status"><span>${icon('stift')} ${esc(T('notiz.karte.da'))}</span><span class="notiz-da-knoepfe"><button class="link" data-a="notiz-oeffnen" data-id="">${esc(T('notiz.weitere'))}</button><button class="link" data-a="notiz-oeffnen" data-id="${esc(letzte.id)}">${esc(T('notiz.karte.ansehen'))}</button></span></div>`;
+    return `<div class="hinweis notiz-da" role="status"><span>${icon(notizSymbol())} ${esc(T('notiz.karte.da'))}</span><span class="notiz-da-knoepfe"><button class="link" data-a="notiz-oeffnen" data-id="">${esc(T('notiz.weitere'))}</button><button class="link" data-a="notiz-oeffnen" data-id="${esc(letzte.id)}">${esc(T('notiz.karte.ansehen'))}</button></span></div>`;
   }
   return `<div class="karte spalte notiz-karte">
     <span class="eyebrow">${esc(T('notiz.karte.eyebrow'))}</span>
     <span class="nm">${esc(T('notiz.titel'))}</span>
     <p class="klein">${esc(T('notiz.karte.text'))}</p>
-    <div class="zwei"><button class="btn voll" data-a="notiz-oeffnen" data-id="">${icon('stift')} ${esc(T('notiz.karte.schreiben'))}</button><button class="btn" data-a="notiz-karte-weg">${esc(T('notiz.karte.weg'))}</button></div>
+    <div class="zwei"><button class="btn voll" data-a="notiz-oeffnen" data-id="">${icon(notizSymbol())} ${esc(T('notiz.karte.schreiben'))}</button><button class="btn" data-a="notiz-karte-weg">${esc(T('notiz.karte.weg'))}</button></div>
   </div>`;
 }
 
@@ -106,6 +111,7 @@ export function notizBlattHtml() {
         <div class="feld"><span id="notiz-b-l">${esc(T('notiz.bereiche'))}</span>
           <div class="wahl eintrag-wahl notiz-bereiche" role="group" aria-labelledby="notiz-b-l">${bereiche.map(b => `<button ${an(n.bereiche.includes(b.id))} data-a="notiz-bereich" data-id="${esc(b.id)}">${bereichLabel(b.id)}</button>`).join('')}</div>
           <p class="klein">${esc(T('notiz.bereicheHinweis'))}</p></div>
+        ${merkenChip(n.merken, 'notiz-merken')}
         ${f.allgemein ? `<p class="fehler" role="alert">${esc(f.allgemein)}</p>` : ''}
         <p class="klein">${esc(T('eintrag.privat'))}</p>
         <button class="cta" data-a="notiz-speichern">${esc(T('notiz.speichern'))}</button>
@@ -124,12 +130,12 @@ export function notizOeffnen(id, tag = null) {
   if (id) {
     const e = EN.eintragVon(spiel, id);
     if (!e || e.art !== NOTIZ_ART) { kx.bestaetige(T('notiz.weg')); return false; }
-    ui.notiz = { id: e.id, tag: e.tag, bereiche: [...(e.bereiche || [])], stimmung: e.stimmung, felder: { ...(e.felder || {}) }, fehler: {}, loeschenSicher: false };
+    ui.notiz = { id: e.id, tag: e.tag, bereiche: [...(e.bereiche || [])], stimmung: e.stimmung, felder: { ...(e.felder || {}) }, merken: e.merken === true, fehler: {}, loeschenSicher: false };
   } else {
     const t = tag && TN.waehlbareTage(TAGESNOTIZ, jetzt()).some(x => x.tag === tag) ? tag : K.tagKey(jetzt());
     const stimmung = TN.stimmungVorschlag(EN.notizenAm(spiel, t, EINTRAG_ARTEN), STIMMUNGEN);
     notizNr += 1; // „Festhalten und weitere“: neues Blatt = neue Ebene (Einblendung, Scroll oben)
-    ui.notiz = { id: null, nr: notizNr, tag: t, bereiche: [], stimmung, felder: {}, fehler: {}, loeschenSicher: false };
+    ui.notiz = { id: null, nr: notizNr, tag: t, bereiche: [], stimmung, felder: {}, merken: false, fehler: {}, loeschenSicher: false };
   }
   trackEvent(id ? 'note_edit_opened' : 'note_opened', {});
   return true;
@@ -151,6 +157,7 @@ export function notizSpeichern({ weitere = false } = {}) {
       r = EN.eintragHinzufuegen(spiel, null, eingabe, jetzt(), { ...EINTRAG_OPT, tag: n.tag });
     }
   } catch (err) { n.fehler = { allgemein: err.message }; render(); return; }
+  r = { ...r, spiel: sternSetzen(r.spiel, r.eintrag.id, !!n.merken) }; // Version 166: Stern gilt für neue und bearbeitete Notizen
   setzeSpiel(r.spiel);
   speichere();
   // Analytics: nur dass es eine Notiz gibt und ob Felder gesetzt sind, nie Text oder Bereiche
@@ -181,6 +188,7 @@ export const NOTIZ_KLICKS = {
   'notiz-oeffnen'({ id }) { const { render } = kx; notizOeffnen(id || null); render(); },
   'notiz-zu'() { const { render, ui } = kx; ui.notiz = null; render(); },
   'notiz-speichern'() { notizSpeichern(); },
+  'notiz-merken'() { const { render, ui } = kx; if (!ui.notiz) return; ui.notiz.merken = !ui.notiz.merken; render(); },
   'notiz-speichern-weitere'() { notizSpeichern({ weitere: true }); },
   'notiz-loeschen'() { notizLoeschen(); },
   // Erneuter Tipp auf die gewählte Stimmung nimmt sie zurück (alles freiwillig)

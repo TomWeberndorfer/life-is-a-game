@@ -8,6 +8,7 @@ import * as I from '../logik/inhalte.js';
 import * as K from '../logik/kern.js';
 import { akkusativ, esc, fortschrittHier, gegnerKopfHtml, icon, kurzDatum } from './helfer.js';
 import { kx } from './kontext.js';
+import { kapitelListe } from '../logik/kapitel.js'; // Version 171
 import { messzielBogenHtml, messzielKnopf } from './messziele.js';
 import { LEBENSBEREICHE } from '../daten/lebensbereiche.js';
 import { wennDann } from '../logik/startseite.js'; // Charakterbogen: Wenn-dann wie auf der Bühne
@@ -17,6 +18,7 @@ import { modusAbschnittHtml } from './heldenmodi.js'; // Heldenmodi (04.11.2026)
 import { wochenBogenHtml } from './wochenrunde.js'; // Wochenrunde (05.11.2026)
 import { fokusSetzen, heldFrei } from '../logik/helden.js'; // Version 147: neuen Helden aus dem Heldenbogen holen
 import { bogenZeileHtml, istBestaendigkeit } from './bestaendigkeit.js'; // Beständigkeit (04.11.2026)
+import { bedingungenHtml } from './bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
 
 // Fortschritt im Leben (Version 21): echtes Verhalten seit Questbeginn, nicht nur XP.
 // Charakterbogen (Etappe 3, Teil E, 02.11.2026): das Heldenblatt (ui.blatt 'crew') als Bogen mit Abschnitten
@@ -108,6 +110,7 @@ export function blattHtml() {
       ${wochenBogenHtml()}
       ${neuerHeldBogenHtml()}
       ${entwicklungHtml(v)}
+      ${kapitelBogenHtml(spiel.fokus)}
       ${bogenFaehigkeitHtml(f)}
       ${messzielBogenHtml(spiel.fokus)}
       </div>
@@ -124,6 +127,7 @@ export function blattHtml() {
         ? T('bst.kraftWoche', { n: a.treffer, ziel: a.anzahl, stand: a.siege ? T('gegner.siege', { n: a.siege, sieg: wort('sieg') }) : T('gegner.unbesiegt') })
         : T('blatt.kraftWoche', { kraft: a.anzahl - a.treffer, anzahl: a.anzahl, stand: a.siege ? T('gegner.siege', { n: a.siege, sieg: wort('sieg') }) : T('gegner.unbesiegt') }))}</p>
       <p class="klein">${esc(a.rundeTag < 0 ? T('gegner.rundeMorgen', { bis: kurzDatum(a.rundeBis) }) : a.rundeOffen ? T('zw.wache.runde') : T('gegner.rundeLaeuft', { bis: kurzDatum(a.rundeBis) }))}${a.rundeOffen ? '' : esc(ruhetagRundeText(a))}</p>
+      ${a.rundeTag < 0 ? '' : bedingungenHtml(a)}
       <p class="lead">${esc(g.text)}</p>
       <div class="zwei"><div class="box schlecht"><b>${esc(T('gegner.wirdStaerker'))}</b>${esc(g.staerker)}</div><div class="box gut"><b>${esc(T('gegner.verliertKraft'))}</b>${esc(g.schwaecher)}</div></div>
       ${naechsterGegnerHtml(a, g)}`;
@@ -155,6 +159,19 @@ export function blattHtml() {
 // Register ein Held frei ist. Vorher nur über die Heldenwahl (erst ab 2 Helden) oder das Angebot nach einem Sieg; wer
 // mit einem Helden „Später“ tippte, hatte bis zum nächsten Sieg keinen Weg. Die App drängt weiter nicht (Angebot nur nach
 // einem Sieg), aber wer selbst will, findet den Weg (Autonomie).
+// Frühere Kapitel des Helden (Version 171, Kapitel-Archiv): einfache, ruhige Liste; ohne Kapitel nichts. Wirft nie.
+function kapitelBogenHtml(heroId) {
+  const { T } = kx;
+  try {
+    const l = kapitelListe(kx.spiel, heroId);
+    if (!l.length) return '';
+    return `<section class="bogen-abschnitt bogen-kapitel"><span class="eyebrow">${esc(T('kapitel.eyebrow'))}</span>
+      <p class="klein">${esc(T('kapitel.klein'))}</p>
+      ${l.map(k => `<div class="zeile"><p class="klein"><b>${esc(T('kapitel.zeile', { nr: k.nr, ziel: k.ziel }))}</b><br>${esc(T('kapitel.zeitraum', { von: kurzDatum(k.von), ende: kurzDatum(k.ende), tage: k.tage, siege: k.siege }))}</p></div>`).join('')}
+    </section>`;
+  } catch (e) { console.warn('Heldenbogen (Kapitel):', e.message); return ''; }
+}
+
 function neuerHeldBogenHtml() {
   const { T, spiel } = kx;
   let frei = false;

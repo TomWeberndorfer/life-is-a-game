@@ -173,7 +173,7 @@ export function rueckblickSeiteHtml() {
   const l = rueckblickHelden();
   if (!l.length) { z.offen = false; return ''; }
   if (!z.gezeigt) { z.gezeigt = true; trackEvent('round_review_shown', {}); }
-  return `<div class="feier ruhe-seite willkommen-seite rueckblick-seite" role="dialog" aria-modal="true" aria-labelledby="rb-titel">
+  return `<div class="feier ruhe-seite willkommen-seite rueckblick-seite erscheint" role="dialog" aria-modal="true" aria-labelledby="rb-titel">
     <div class="nf-seite">
       <div class="nf-kopf"><span></span><button class="link" data-a="rb-zu">${esc(T('rb.spaeter'))}</button></div>
       <div class="nf-inhalt rb-inhalt">

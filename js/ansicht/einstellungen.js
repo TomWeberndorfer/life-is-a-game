@@ -12,6 +12,9 @@ import { probeEinstellung } from './probe.js'; // Version 81
 import { anzeigeEinstellung } from './anzeige.js'; // Version 125: Blatt „Anzeige“
 import { SPRECHBLASEN } from '../daten/bewegung.js'; // 02.11.2026
 import { STARTPAKETE } from '../daten/startpakete.js'; // Startpaket (02.11.2026)
+import { denkenEinstellung } from './denken.js'; // Version 165: Seite „Wie diese App denkt“
+import { beweisEinstellung } from './beweisbuch.js'; // Version 166: Brief und Beweisbuch
+import { testerEintrag } from './testerhinweis.js'; // 09.11.2026: „Info & Datenschutz“
 
 export const EINSTELLUNGEN_SCREENS = {
   einstellungen() {
@@ -37,17 +40,21 @@ export const EINSTELLUNGEN_SCREENS = {
         ${anzeigeEinstellung()}
         ${probeEinstellung()}
         ${blasenEinstellung()}
+        ${beweisEinstellung()}
+        ${denkenEinstellung()}
         ${sprungKarten()}
         <div class="karte spalte">
           <span class="eyebrow">${esc(T('einst.testphase'))}</span>
           <p class="klein">${esc(einwStatus())}</p>
           ${EW.istOffen(einw) ? einwKarte(false, true) : `<button class="btn voll" data-a="daten" data-id="${einw.stand === 'ja' ? 'nein' : 'ja'}">${esc(T(einw.stand === 'ja' ? 'daten.zuruecknehmen' : 'daten.erlauben'))}</button>`}
           ${EW.istOffen(einw) ? '' : einwDetails()}
+          ${testerEintrag()}
           <div class="zwei"><button class="btn" data-a="feedback-oeffnen">${esc(T(hatFeedback() ? 'einst.feedbackAendern' : 'einst.feedbackGeben'))}</button><button class="btn" data-a="premium">${esc(T('einst.premium'))}</button></div>
           ${EW.darfSenden(einw) && analyticsStatus() !== 'zentral' ? exportHtml() : ''}
           ${ui.istBesitzer ? `<button class="btn voll" data-a="admin">${esc(T('einst.auswertung'))}</button>` : ''}
           ${ui.istBesitzer && ui.db ? `<button class="btn" data-a="pflege">${esc(T('einst.pflege'))}</button>` : ''}
         </div>
+        ${allesFreiKarte()}
         ${startpaketKarte()}
         <div class="karte spalte">
           <span class="eyebrow">${esc(T('einst.neu'))}</span>
@@ -60,14 +67,12 @@ export const EINSTELLUNGEN_SCREENS = {
   }
 };
 // Startpaket (02.11.2026): nur für den Besitzer und im Testprofil #test. Auch im ersten Onboarding-Schritt (ansicht/onboarding.js).
-// Zweistufig wie „Zurücksetzen“ (ui.startpaketFrage). Helden, die schon da sind, werden ergänzt (fehlende Ziele, Messziele, Ideen).
+// Seit 06.11.2026 öffnet der Knopf die Auswahl (ansicht/onboarding.js, obmehr) mit allen Helden des Pakets vorausgewählt;
+// die Rückfrage ist die Auswahl selbst. Helden, die schon da sind, werden ergänzt (fehlende Ziele, Messziele, Ideen).
 export function startpaketKnopf(id, klasse = 'btn voll') {
-  const { T, ui } = kx;
   const p = STARTPAKETE[id];
   if (!p) return '';
-  const frage = ui.startpaketFrage === id;
-  // Scheitert das Anlegen, steht die Meldung direkt unter dem Knopf (bleibt bis zum nächsten Tipp)
-  return `<button class="${klasse} ${frage ? 'warn' : ''}" data-a="startpaket" data-id="${esc(id)}">${esc(frage ? T('einst.startpaketFrage') : p.name)}</button>${ui.startpaketInfo ? `<p class="fehler" role="alert">${esc(ui.startpaketInfo)}</p>` : ''}`;
+  return `<button class="${klasse}" data-a="startpaket" data-id="${esc(id)}">${esc(p.name)}</button>`;
 }
 function startpaketKarte() {
   const { T, startpaketErlaubt } = kx;
@@ -75,6 +80,18 @@ function startpaketKarte() {
   return `<div class="karte spalte">
           <span class="eyebrow">${esc(T('einst.startpaket'))}</span>
           ${Object.entries(STARTPAKETE).map(([id, p]) => `<p class="klein">${esc(p.text)}</p>${startpaketKnopf(id)}`).join('')}
+        </div>`;
+}
+// Schalter „Alles freischalten“ (Version 152, daten/freischaltung.js ALLES_FREI): nur im Testprofil für den Besitzer.
+// Ein Tipp schaltet um (jederzeit zurück, darum ohne Rückfrage); gilt nur in diesem Browser, der Spielstand bleibt unberührt.
+function allesFreiKarte() {
+  const { T, allesFrei, allesFreiMoeglich } = kx;
+  if (!allesFreiMoeglich()) return '';
+  const an = allesFrei();
+  return `<div class="karte spalte">
+          <span class="eyebrow">${esc(T('einst.allesFrei'))}</span>
+          <p class="klein">${esc(T(an ? 'einst.allesFreiAn' : 'einst.allesFreiText'))}</p>
+          <button class="btn ${an ? 'warn' : ''}" aria-pressed="${an}" data-a="alles-frei">${esc(T(an ? 'einst.allesFreiAus' : 'einst.allesFreiEin'))}</button>
         </div>`;
 }
 // Sprechblasen (02.11.2026): automatisch nach Lesezeit oder nur per Tippen (spiel.einstellungen.blasen).
@@ -168,6 +185,7 @@ export const EINSTELLUNGEN_KLICKS = {
     render();
   },
   startpaket({ id }) { const { startpaket } = kx; startpaket(id); },
+  'alles-frei'() { const { allesFrei, render, setzeAllesFrei } = kx; if (setzeAllesFrei(!allesFrei())) render(); },
   stilwahl() { const { geheZu, stand, ui } = kx; ui.stilAuswahl = stand.stil.aktiv; geheZu('stilwahl'); },
   admin() { const { geheZu, ladeAdmin } = kx; geheZu('admin'); ladeAdmin(); },
   pflege() { const { geheZu, pflegeZustand } = kx; pflegeZustand(); geheZu('pflege'); },

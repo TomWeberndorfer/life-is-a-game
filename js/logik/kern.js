@@ -2,11 +2,15 @@
 // Alle Zahlen (XP, Level, Bosskraft) werden aus dem Stand abgeleitet,
 // damit Rückgängig, Neuladen und Nachträge nie doppelte oder fehlende XP erzeugen.
 
-import { anzahlFuer, bereinigeTeilziele, hauptAnzahl, hauptArtId, hauptGrenzen, setzeHauptAnzahl, teilzielAusAnzahl, TEILZIEL_ID, zaehltAntworten, hauptZaehlweise, zaehlweiseVon, setzeHauptZaehlweise, zaehlweisenFuerQuest } from './teilziele.js'; // Teilziele: Fundament (31.10.2026)
+import { anzahlFuer, bereinigeTeilziele, hauptAnzahl, hauptArtId, hauptGrenzen, setzeHauptAnzahl, teilzielAusAnzahl, TEILZIEL_ID, zaehltAntworten, hauptZaehlweise, zaehlweiseVon, setzeHauptZaehlweise, zaehlweisenFuerQuest, bereinigeZaehlweise } from './teilziele.js'; // Teilziele: Fundament (31.10.2026)
 import { TEILZIELE } from '../daten/zielarten.js'; // Schritt „Zähler“ (31.10.2026)
 import { bereinigeZielLink } from './zielquest.js'; // Ziel-Quests (31.10.2026)
 import { pausenTage } from './heldenmodi.js'; // Heldenmodi (04.11.2026)
 import { MINDEST } from '../daten/heldenmodi.js'; // Mindestaufgabe im Erhalt (04.11.2026)
+import { bedingungenAm, bereinigeBedingungen, werteBedingungen } from './bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
+import { tageMit } from './antworten.js';
+import { AUFFRISCHUNG } from '../daten/auffrischung.js'; // Auffrischung nach langer Pause (Version 159)
+import { auffrischungTage } from './auffrischung.js';
 
 export const STAND_VERSION = 1;
 export const XP = Object.freeze({ anwendung: 10, sieg: 50, mikro: 5 });
@@ -334,6 +338,9 @@ export function migriere(roh, profilId, stilIds = ['fantasy']) {
     const warum = bereinigeWarum(q.warum); // Warum-Feld (Version 75): fehlt bei älteren Quests → bleibt ohne
     if (warum) s.quest.warum = warum;
     bereinigeZielLink(q, s.quest); // Ziel-Quests (31.10.2026): Verknüpfung zum Messziel; fehlt bei allen älteren Quests
+    // Bosskette mit Bedingungen (06.11.2026): nur Quests, die mit dem Feld angelegt wurden (auch []), behalten es. Fehlt es
+    // (alle älteren Quests), bleibt es weg: dort gelten weiter nur die Treffer (Entscheidung 4, 06.11.2026).
+    if (Array.isArray(q.bedingungen)) s.quest.bedingungen = bereinigeBedingungen(q.bedingungen, s.quest.kette.length);
   }
   if (s.onboarding.fertig && !s.quest) s.onboarding.fertig = false;
 
@@ -427,6 +434,9 @@ export function questAnlegen(stand, vorlage, zielText, heute, rampe = null, waru
   // Teilziele (31.10.2026): ein Haupt-Teilziel; seine Art kommt aus der Vorlage (Beständigkeit, 04.11.2026), sonst Zähler.
   // Die Anzahl richtet sich nach den Grenzen der Art (Beständigkeit höchstens 6), quest.anzahl bleibt ihr Spiegel.
   const tz = teilzielAusAnzahl(Math.min(7, Math.max(1, anzahl)), 'tz1', undefined, undefined, typeof vq.art === 'string' ? vq.art : undefined);
+  // Zählweise der Vorlage (06.11.2026, z. B. Wutwald: Wache); passt sie nicht zur Art, gilt der Standard (täglich)
+  const zw = bereinigeZaehlweise(vq.zaehlweise, tz.art);
+  if (zw && zw !== zaehlweiseVon(null).id) tz.zaehlweise = zw;
   s.quest = {
     vorlageId: vorlage.id,
     ziel: String(zielText || vorlage.ziel || 'Mein Ziel').trim().slice(0, 120) || 'Mein Ziel',
@@ -434,6 +444,9 @@ export function questAnlegen(stand, vorlage, zielText, heute, rampe = null, waru
     start: tagKey(heute),
     kette: gegnerKette(vorlage)
   };
+  // Bosskette mit Bedingungen (06.11.2026): immer als Feld (auch []), damit spätere Bedingungen der Vorlage beim Laden
+  // ankommen (helden.js, ketteAuffrischen). Ältere Quests haben das Feld nicht und bekommen keine.
+  s.quest.bedingungen = bereinigeBedingungen(vorlage.bedingungen, s.quest.kette.length);
   s.quest.teilziele = [tz];
   // Eigene Rampe der Vorlage (04.11.2026, z. B. Wutwald 3 · 4 · 5 · 6) geht vor der allgemeinen aus daten/rampe.js
   const r = bereinigeRampe(vq.rampe) || bereinigeRampe(rampe);
@@ -472,7 +485,13 @@ export function auswertung(stand, heute) {
   const siege = (stand.siege || []).length;
   // Mindestaufgabe im Erhalt (04.11.2026): Tage mit XP kommen aus spiel.mindest (helden.ansicht → stand.mindestXp)
   const mindestZahl = new Set((Array.isArray(stand.mindestXp) ? stand.mindestXp : []).filter(t => ausTagKey(t))).size;
-  const xp = jaTage.length * XP.anwendung + siege * XP.sieg + mikroZahl * XP.mikro + mindestZahl * (XP[MINDEST.xp] || 0);
+  // Auffrischung nach langer Pause (Version 159, Entscheidungen Abschnitt 29): einmaliger Bonus am ersten guten Tag nach einer
+  // Lücke von AUFFRISCHUNG.abTage Tagen (Ruhetage und Pausen zählen nicht). Abgeleitet wie alle XP: nichts gespeichert, kein Feld.
+  const auffrischung = auffrischungTage({ tage: stand.tage, ruhe: [...ruhetageVon(stand), ...pausenVon(stand, heuteK)], zaehlt: zaehltAntworten(stand.quest), bisK: heuteK });
+  // Kapitel-Archiv (Version 171): XP früherer Kapitel dieses Helden (helden.ansicht → stand.xpFrueher, abgeleitet aus dem Archiv)
+  const xpFrueher = Number.isInteger(stand.xpFrueher) && stand.xpFrueher > 0 ? stand.xpFrueher : 0;
+  const siegeFrueher = Number.isInteger(stand.siegeFrueher) && stand.siegeFrueher > 0 ? stand.siegeFrueher : 0;
+  const xp = jaTage.length * XP.anwendung + siege * XP.sieg + mikroZahl * XP.mikro + mindestZahl * (XP[MINDEST.xp] || 0) + auffrischung.length * AUFFRISCHUNG.xp + xpFrueher;
   const vorige = alle.length > 1 ? alle[alle.length - 2] : null;
   const k = kette(stand);
   const zw = zaehlweiseVon(hauptZaehlweise(stand.quest, r.nr));
@@ -506,9 +525,15 @@ export function auswertung(stand, heute) {
     wocheZaehler,
     treffer,
     bossKraft: anzahl ? (anzahl - treffer) / anzahl : 1,
+    // Bosskette mit Bedingungen (06.11.2026): Treffer sind voll, aber eine Bedingung des Gegners ist noch offen. Dann gilt er
+    // nicht als besiegt (kein grauer Gegner, kein „geschafft“), die Oberfläche zeigt, was noch fehlt.
+    bedingungenOffen: treffer >= anzahl && bedingungenAm(stand.quest, r.gegnerIdx).length > 0 && !bedingungenStand(stand, heuteK, r).erfuellt,
     besiegtDieseWoche: false, // Runde endet mit dem Sieg; die laufende Runde ist nie schon gewonnen
     siege,
+    siegeGesamt: siege + siegeFrueher, // mit früheren Kapiteln (Version 171)
     heuteAntwort: stand.tage[heuteK] || null,
+    // Auffrischung (Version 159): Bonus-XP von heute (0 = keiner) für die leise Zeile nach dem Check (ansicht/buehne.js)
+    auffrischungHeute: auffrischung.includes(heuteK) ? AUFFRISCHUNG.xp : 0,
     mikroHeute: ((stand.mikro || {})[heuteK] || []).slice(),
     eintraegeWoche: Object.keys(stand.tage).filter(t => t >= r.von && t <= heuteK).length,
     ...levelAus(xp)
@@ -554,7 +579,8 @@ function siegPruefen(s, heute) {
 function siegVergeben(s, k, r, anwendungen) {
   const ereignisse = [];
   const ziel = rundenZiel(s.quest, r.siegeVorher, r.nr);
-  if (!r.sieg && anwendungen >= ziel) {
+  // Bosskette mit Bedingungen (06.11.2026): Treffer allein reichen nicht, wenn der Gegner Bedingungen hat
+  if (!r.sieg && anwendungen >= ziel && bedingungenStand(s, k, r).erfuellt) {
     s.siege = [...s.siege, { tag: k, gegner: r.gegner }].sort((a, b) => (a.tag < b.tag ? -1 : 1));
     const danach = auswertung(s, ausTagKey(k));
     // anzahl: was dieser Sieg gebraucht hat; naechsteAnzahl: Ziel der nächsten Runde (Einstiegsrampe)
@@ -565,6 +591,48 @@ function siegVergeben(s, k, r, anwendungen) {
     }
   }
   return ereignisse;
+}
+
+// Sieg nachholen (06.11.2026): Erfüllt ein später gespeicherter Eintrag (Begegnung mit Gestalt, Fähigkeit, Schwierigkeit)
+// die letzte Bedingung, fällt der Gegner heute, ohne dass sich eine Antwort ändert. Gleiche Rückgabe wie tagesCheck;
+// ohne neuen Sieg: { stand (unverändert), ereignisse: [] }. Wirft nicht bei fehlender Quest.
+export function siegNachholen(stand, heute) {
+  if (!stand || !stand.quest) return { stand, ereignisse: [], vorher: null, nachher: null };
+  const vorher = auswertung(stand, heute);
+  const s = kopie(stand);
+  const ereignisse = siegPruefen(s, heute);
+  if (!ereignisse.length) return { stand, ereignisse: [], vorher, nachher: vorher };
+  const nachher = auswertung(s, heute);
+  const delta = nachher.xp - vorher.xp;
+  if (delta !== 0) ereignisse.unshift({ typ: 'xp', xp: delta });
+  if (nachher.level > vorher.level) ereignisse.push({ typ: 'levelup', level: nachher.level, titel: nachher.titel });
+  return { stand: s, ereignisse, vorher, nachher };
+}
+
+// ---------- Bedingungen der Bosskette (06.11.2026, logik/bedingungen.js) ----------
+// Stand der Bedingungen des Gegners in Runde `runde` (Standard: die laufende Runde) am Tag tagK. Gezählt wird über alle
+// Runden gegen denselben Kettenplatz (ab der ersten Runde gegen ihn), nur Begegnungen an gezählten Tagen außerhalb von
+// Pausen. Begegnungen und schwere Tage aus Einträgen kommen von helden.ansicht() (stand.begegnungen, stand.schwerTage),
+// schwere Antworten aus den Tagen. Liefert { gegnerIdx, von, liste, erfuellt, offen } (logik/bedingungen.js,
+// werteBedingungen); ohne Bedingungen erfuellt = true und liste = []. Wirft nie.
+export function bedingungenStand(stand, tagK, runde = null) {
+  const leer = { gegnerIdx: runde ? runde.gegnerIdx : null, von: null, liste: [], erfuellt: true, offen: new Set() };
+  try {
+    if (!stand || !stand.quest || !Array.isArray(stand.quest.bedingungen) || !ausTagKey(tagK)) return leer;
+    const alle = runden(stand, tagK);
+    const r = runde || alle.aktuell;
+    const liste = bedingungenAm(stand.quest, r.gegnerIdx);
+    if (!liste.length) return { ...leer, gegnerIdx: r.gegnerIdx };
+    const erste = alle.runden.find(x => x.gegnerIdx === r.gegnerIdx);
+    const von = erste && erste.von < r.von ? erste.von : r.von;
+    const pause = new Set(pausenVon(stand, tagK));
+    const gute = zaehlTage(stand, tagK).filter(t => t >= von && !pause.has(t));
+    const gut = new Set(gute);
+    const begegnungen = (Array.isArray(stand.begegnungen) ? stand.begegnungen : []).filter(b => b && gut.has(b.tag));
+    const schwerRoh = [...(Array.isArray(stand.schwerTage) ? stand.schwerTage : []), ...tageMit(stand.tage, 'schwer', tagK)];
+    const schwer = schwerRoh.filter(t => typeof t === 'string' && t >= von && t <= tagK && !gut.has(t));
+    return { gegnerIdx: r.gegnerIdx, von, ...werteBedingungen(liste, { begegnungen, gute, schwer }) };
+  } catch (e) { return leer; }
 }
 
 // ---------- Nachtragen (Version 79) ----------
@@ -698,13 +766,27 @@ export function questBearbeiten(stand, eingabe, heute) {
 // ---------- Stil ----------
 // waehlbar (Version 33): Stile, die gewählt werden dürfen; ohne Angabe alle bekannten.
 // Der aktive Stil darf immer erneut übernommen werden (kein Zwangswechsel für bestehende Stände).
-export function stilWaehlen(stand, stilId, stilIds, waehlbar = stilIds) {
+// ohneSieg (Version 152, Schalter „Alles freischalten“): Weltenwahl auch vor dem ersten Sieg; `waehlbar` gilt weiter.
+export function stilWaehlen(stand, stilId, stilIds, waehlbar = stilIds, ohneSieg = false) {
   if (!stilIds.includes(stilId)) throw new Error(`Unbekannter Stil: ${stilId}`);
   if (!waehlbar.includes(stilId) && stilId !== stand.stil.aktiv) throw new Error('Diese Welt ist noch gesperrt.');
-  if (stilId !== 'fantasy' && !stand.stil.frei) throw new Error('Weitere Stile werden nach dem ersten Sieg freigeschaltet.');
+  if (stilId !== 'fantasy' && !stand.stil.frei && ohneSieg !== true) throw new Error('Weitere Stile werden nach dem ersten Sieg freigeschaltet.');
   const s = kopie(stand);
   s.stil.aktiv = stilId;
   s.stil.angeboten = true;
+  return s;
+}
+
+// Stilfrage am Start (Version 163): Stil schon im ersten Onboarding-Schritt wählen, ohne die Weltenwahl nach dem ersten
+// Sieg zu verbrauchen. Setzt nur den aktiven Stil; `frei` und `angeboten` bleiben unberührt, die Weltenwahl kommt wie
+// bisher (Vorauswahl = der gewählte Stil). Nur wählbare Welten; gesperrte und unbekannte werfen einen lesbaren Fehler.
+// Gleicher Stil erneut: Ergebnis unverändert (eine Kopie). Der übergebene Stand wird nie verändert.
+export function stilStartWaehlen(stand, stilId, stilIds, waehlbar = stilIds) {
+  if (!stand || !stand.stil) throw new Error('Kein Spielstand für die Stilwahl.');
+  if (!Array.isArray(stilIds) || !stilIds.includes(stilId)) throw new Error(`Unbekannter Stil: ${stilId}`);
+  if (!Array.isArray(waehlbar) || !waehlbar.includes(stilId)) throw new Error('Diese Welt ist noch gesperrt.');
+  const s = kopie(stand);
+  s.stil.aktiv = stilId;
   return s;
 }
 

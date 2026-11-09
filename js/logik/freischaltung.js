@@ -6,6 +6,7 @@
 // Neue Arten = neuer Eintrag in PRUEFER und PARAMETER. Unbekannte oder kaputte Regeln sperren (sicherer Rückfall) und melden das.
 import * as K from './kern.js';
 import { ansicht } from './helden.js';
+import { ALLES_FREI } from '../daten/freischaltung.js';
 
 // Höchste Stufe aller Helden am Tag `heute` (Date). Ohne Helden 0. Ein defekter Held wird übersprungen.
 export function hoechsteStufe(spiel, heute, warn = () => {}) {
@@ -249,4 +250,24 @@ export function freigabeSetzen(freigaben, ids, tag) {
   const out = { ...alt };
   for (const id of neu) if (!TAG.test(String(out[id]))) out[id] = tag;
   return bereinigeFreigaben(out);
+}
+
+// Schalter „Alles freischalten“ (Version 152, daten/freischaltung.js ALLES_FREI). Kaputte Konfiguration oder Eingaben → aus.
+// erlaubt: darf der Schalter in diesem Profil für diese Person erscheinen? aktiv: erlaubt UND eingeschaltet (an === true).
+export function allesFreiErlaubt({ profil, istBesitzer } = {}, cfg = ALLES_FREI) {
+  if (!cfg || !Array.isArray(cfg.profile) || typeof profil !== 'string') return false;
+  return cfg.profile.includes(profil) && (cfg.nurBesitzer === false || istBesitzer === true);
+}
+export function allesFreiAktiv({ profil, istBesitzer, an } = {}, cfg = ALLES_FREI) {
+  return an === true && allesFreiErlaubt({ profil, istBesitzer }, cfg);
+}
+// Prüft die Konfiguration (Liste der Fehler, leer = gut).
+export function pruefeAllesFrei(cfg = ALLES_FREI) {
+  const f = [];
+  if (!cfg || typeof cfg !== 'object') return ['ALLES_FREI fehlt'];
+  if (!Array.isArray(cfg.profile) || !cfg.profile.every(p => typeof p === 'string' && /^[a-z]+$/.test(p))) f.push('ALLES_FREI.profile muss eine Liste von Profilnamen sein');
+  else if (cfg.profile.includes('haupt')) f.push('ALLES_FREI gilt nie im Hauptprofil');
+  if (typeof cfg.nurBesitzer !== 'boolean') f.push('ALLES_FREI.nurBesitzer muss true oder false sein');
+  if (typeof cfg.schluessel !== 'string' || !/^[a-z][a-zA-Z.]*$/.test(cfg.schluessel)) f.push('ALLES_FREI.schluessel ist ungültig');
+  return f;
 }

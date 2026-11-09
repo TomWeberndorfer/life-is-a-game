@@ -16,6 +16,9 @@ import { BOTSCHAFTEN } from '../daten/inhalte.js';
 import * as I from '../logik/inhalte.js';
 import { TABELLE } from '../daten/vorlagen.js';
 import * as ID from '../logik/ideen.js';
+import { BEWEISBUCH } from '../daten/beweisbuch.js'; // Version 166: Brief und Beweisbuch
+import { EINTRAG_ARTEN } from '../daten/eintrag-arten.js';
+import * as BB from '../logik/beweisbuch.js';
 import * as K from '../logik/kern.js';
 import * as H from '../logik/helden.js';
 import { AKTION_SYMBOLE } from '../daten/symbole.js';
@@ -104,6 +107,10 @@ function schrittHtml(art, n, f) {
     const e = fruehererVon(n);
     inhalt = e ? `<p class="klein">${esc(T('notfall.frueherAm', { datum: kurzDatum(e.tag) }))}</p><p class="notfall-warum">${esc(e.text)}</p>`
       : `<p class="lead">${esc(T('notfall.frueherLeer'))}</p>`;
+  } else if (art === 'beleg') {
+    // Version 166: ein Brief an mich oder ein markierter Eintrag, einmal gezogen; „vom früheren Ich“ statt Befehl oder Versprechen
+    const b = belegVon(n);
+    inhalt = b ? `<p class="klein">${esc(T('notfall.beleg.' + b.art, { datum: kurzDatum(b.eintrag.tag) }))}</p><p class="notfall-warum">${esc(BB.belegText(b.eintrag))}</p>` : '';
   } else if (art === 'mitgefuehl') inhalt = `<p class="notfall-warum">${esc(mitgefuehlSatz(n))}</p>`;
   else if (art === 'wenndann') inhalt = f ? `<div class="notfall-schritt"><p class="notfall-wenn">${esc(f.wenn)}</p>
       <ul class="haken">${(f.schritte || []).map(s => `<li>${icon('check')}${esc(s)}</li>`).join('')}</ul></div>` : '';
@@ -126,7 +133,11 @@ function schrittHtml(art, n, f) {
 function schritteVon(n) {
   const { spiel } = kx;
   const held = spiel.helden.find(x => x.heroId === n.heroId);
-  return ID.notfallSchritte(ID.notfallPfad(NOTFALL.pfade, n.zustand), { wenndann: !!faehigkeitVon(n.heroId), warum: !!(held && held.quest && held.quest.warum) });
+  // Version 166: Beleg nur, wenn es einen gibt; er ersetzt dann die Abschnitte aus BEWEISBUCH.notfall.ersetzt (sonst dieselbe Aussage doppelt)
+  const hat = !!belegVon(n);
+  const hatAbschnitte = { wenndann: !!faehigkeitVon(n.heroId), warum: !!(held && held.quest && held.quest.warum), [BEWEISBUCH.notfall.abschnitt]: hat };
+  if (hat) for (const a of BEWEISBUCH.notfall.ersetzt) hatAbschnitte[a] = false;
+  return ID.notfallSchritte(ID.notfallPfad(NOTFALL.pfade, n.zustand), hatAbschnitte);
 }
 
 // Gegner klein und gedämpft, nur in Pfaden aus NOTFALL.gegnerIn (Wut), weicht ruhig zurück (ohne Bewegung: steht still).
@@ -149,6 +160,21 @@ function fruehererVon(n) {
     n.frueher = e ? e.id : '';
   }
   return n.frueher ? liste.find(e => e.id === n.frueher) || null : null;
+}
+// Beleg (Version 166): einmal gezogen (n.beleg = Eintrags-ID, '' = keiner da), damit Neuzeichnen ihn nicht wechselt.
+// Liefert { art, eintrag } oder null. Wirft nie (kaputte Daten → kein Beleg).
+function belegVon(n) {
+  const { spiel } = kx;
+  try {
+    if (n.beleg === undefined || n.beleg === null) {
+      const b = BB.belegFuer(spiel, n.heroId, { arten: EINTRAG_ARTEN });
+      n.beleg = b ? b.eintrag.id : '';
+      n.belegArt = b ? b.art : null;
+    }
+    if (!n.beleg) return null;
+    const e = (Array.isArray(spiel.eintraege) ? spiel.eintraege : []).find(x => x && x.id === n.beleg);
+    return e && BB.belegText(e) ? { art: n.belegArt === 'merken' ? 'merken' : 'brief', eintrag: e } : null;
+  } catch (err) { console.warn('Notfallkarte (Beleg):', err.message); return null; }
 }
 // Satz Selbstmitgefühl aus dem Anlass NOTFALL.mitgefuehl (inhalte.md), einmal je Karte gezogen; sonst Ersatztext.
 function mitgefuehlSatz(n) {
@@ -226,7 +252,7 @@ export function oeffneNotfall({ ausLink = false } = {}) {
   const { funktionFrei, render, spiel, ui } = kx;
   if (!spiel.fokus || ui.screen !== 'start' || !(ausLink || funktionFrei('notfallkarte'))) return false;
   ui.eintrag = null;
-  ui.notfall = { heroId: spiel.fokus, schritt: 0, idee: null, verwalten: false, neuText: '', neuKat: IDEEN_OPT.kats[0], fehler: null, frage: false, ausLink, zustand: null, frueher: null, satz: null, erinnert: false };
+  ui.notfall = { heroId: spiel.fokus, schritt: 0, idee: null, verwalten: false, neuText: '', neuKat: IDEEN_OPT.kats[0], fehler: null, frage: false, ausLink, zustand: null, frueher: null, beleg: null, belegArt: null, satz: null, erinnert: false };
   trackEvent('emergency_opened', {});
   if (ausLink) trackEvent('emergency_link_opened', {}); // zählt, wie oft der Link genutzt wird (nur Zähler)
   render();
@@ -265,7 +291,7 @@ export const NOTFALL_KLICKS = {
     const n = ui.notfall;
     if (!n) return;
     if (!NOTFALL.zustaende.includes(id)) { console.warn('Notfallkarte: unbekannter Zustand', id); return; }
-    if (n.zustand !== id) { n.zustand = id; n.frueher = null; n.satz = null; }
+    if (n.zustand !== id) { n.zustand = id; n.frueher = null; n.beleg = null; n.belegArt = null; n.satz = null; }
     trackEvent('emergency_state', {}); // nur ein Zähler: der Zustand selbst ist ein Gefühl und bleibt auf dem Gerät
     const liste = schritteVon(n);
     const hier = liste.indexOf('zustand');

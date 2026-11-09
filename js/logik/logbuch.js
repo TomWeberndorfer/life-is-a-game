@@ -5,6 +5,8 @@
 import * as K from './kern.js';
 import { ansicht } from './helden.js';
 import { antwortArt } from './antworten.js'; // Version 141: Logbuch-Art je Antwort aus dem Register
+import { ABSCHLUSS } from '../daten/abschluss.js'; // Version 169: Kettenende
+import { abschlussEreignisse } from './abschluss.js';
 
 const TAG = /^\d{4}-\d{2}-\d{2}$/;
 const gueltigerTag = t => TAG.test(String(t)) && !!K.ausTagKey(t);
@@ -17,9 +19,11 @@ export const LB_GANZER_TAG = '_tag';
 function eigeneDaten(e) {
   const daten = { eintragId: e.id, situation: e.situation, stimmung: e.stimmung, text: e.text };
   if (e.wahl) daten.wahl = e.wahl; // Rundenrückblick
+  if (e.antworten) daten.antworten = { ...e.antworten }; // Plan-Check (Version 167)
   if (e.naechstesMal) daten.naechstesMal = e.naechstesMal; // Version 81: nur wenn gesetzt (wie im Eintrag)
   if (e.felder) daten.felder = { ...e.felder }; // Tagesnotiz: „Was war gut?“, „Was war schwer?“
   if (e.geaendert) daten.geaendert = e.geaendert;
+  if (e.merken === true) daten.merken = true; // Version 166: Stern „Das will ich mir merken“
   return daten;
 }
 
@@ -69,11 +73,12 @@ function eintraegeHeld(heroId, domainId, a, heuteK, mikroTexte, warn, eigene = [
   // Eigene Einträge (Version 75): Art laut Register (ohne Register gleich der Eintrags-Art). Zeitsprung: nach heute nicht.
   for (const e of eigene) {
     if (!e || !gueltigerTag(e.tag) || e.tag > heuteK) continue;
+    if (eintragArten && eintragArten[e.art] && eintragArten[e.art].ohneLogbuch) continue; // Version 166: Brief gehört ins Beweisbuch, nicht in den Tagesstrom
     const lbArt = eintragArten ? eintragArten[e.art] && eintragArten[e.art].logbuch : e.art;
     if (!lbArt) { warn(`Logbuch: Eintrag ${e.id} hat unbekannte Art ${e.art}`); continue; }
     // Rundenrückblick (02.11.2026): ein übersprungener Rückblick (ohne Text, Wahl, Verweise) bleibt still
     const reg = eintragArten && eintragArten[e.art];
-    if (reg && reg.nurMitInhalt && !e.text && !e.wahl && !(Array.isArray(e.verweise) && e.verweise.length)) continue;
+    if (reg && reg.nurMitInhalt && !e.text && !e.wahl && !e.antworten && !e.naechstesMal && !(Array.isArray(e.verweise) && e.verweise.length)) continue;
     add(lbArt, e.tag, e.id, eigeneDaten(e));
   }
   // Neues Kapitel = erste Runde gegen einen neuen Gegner, sobald sie begonnen hat.
@@ -96,6 +101,7 @@ export function logbuchEintraege(spiel, heute, { arten, mikroTexte = {}, warn = 
   if (!arten) throw new Error('logbuchEintraege: Arten fehlen');
   const heuteK = K.tagKey(heute);
   const alle = [];
+  const abschluesse = abschlussEreignisse(spiel); // Version 169: eine Zeile je abgeschlossener Kette, aus spiel.abschluss abgeleitet
   for (const h of (spiel && Array.isArray(spiel.helden) ? spiel.helden : [])) {
     try {
       const a = ansicht(spiel, h.heroId);
@@ -104,6 +110,11 @@ export function logbuchEintraege(spiel, heute, { arten, mikroTexte = {}, warn = 
         const art = arten[e.art];
         if (!art) { warn(`Logbuch: unbekannte Art ${e.art}`); continue; }
         alle.push({ ...e, xp: art.xp ? K.XP[art.xp] || 0 : 0 });
+      }
+      // Kettenende (Version 169): die Entscheidung als Meilenstein-Zeile (ohne XP); Zeitsprung zurück: nicht vor ihrem Tag
+      for (const x of abschluesse) {
+        if (x.heroId !== h.heroId || x.tag > heuteK || !arten[ABSCHLUSS.ereignis]) continue;
+        alle.push({ id: `${h.heroId}:${ABSCHLUSS.ereignis}:${x.tag}`, heroId: h.heroId, domainId: h.domainId, bereiche: h.domainId ? [h.domainId] : [], art: ABSCHLUSS.ereignis, tag: x.tag, daten: { typ: x.typ, wahl: x.wahl, ziel: a.quest ? a.quest.ziel : '' }, xp: 0 });
       }
     } catch (err) {
       warn(`Logbuch: Held ${h && h.heroId} übersprungen (${err.message})`);

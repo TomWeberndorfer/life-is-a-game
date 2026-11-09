@@ -13,6 +13,9 @@
 // neuOhnePlatz  Modus eines neuen Helden, wenn der Fokus voll ist
 // verlaufMax  so viele Wechsel je Held werden höchstens gemerkt (die ältesten fallen weg, der Rest bleibt gültig)
 // pauseTageMax  Sicherheitsnetz: so viele Pausentage werden höchstens je Held gezählt (rund 10 Jahre)
+// bisMaxTage    Pause mit Rückkehr-Datum (09.11.2026, Urlaub und Krankheit): so weit im Voraus darf die Rückkehr liegen.
+//               Ein Eintrag im Verlauf trägt dann `bis` (letzter Pausentag, einschließlich); am Tag danach kehrt der Held
+//               automatisch in den Modus davor zurück (Fokus ohne Platz: Erhalt). Ohne `bis` gilt die Pause wie bisher unbefristet.
 export const HELDENMODI = Object.freeze({
   modi: ['fokus', 'erhalt', 'ruhe'],
   standard: 'fokus',
@@ -20,7 +23,8 @@ export const HELDENMODI = Object.freeze({
   fokusMax: 3,
   neuOhnePlatz: 'erhalt',
   verlaufMax: 60,
-  pauseTageMax: 3700
+  pauseTageMax: 3700,
+  bisMaxTage: 366
 });
 
 // Mindestaufgabe im Erhalt (04.11.2026, zweiter Teil der Heldenmodi, Entscheidungen Abschnitt 36): „Was ist das Kleinste,

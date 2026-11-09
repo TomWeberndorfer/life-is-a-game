@@ -1,6 +1,8 @@
 // Einträge (Version 75): eigene Einträge des Spielers (geschafft, schwerer Tag), Modell in daten/eintrag-arten.js.
 // Reine Funktionen ohne Zustand; ändern den Spielstand nie direkt, sondern liefern eine Kopie.
 // Ein Eintrag ändert nie XP, Runden, Siege oder Gegnerkraft (Tonregel, Entscheidung 28.10.2026).
+import { istBegegnungsId } from './bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
+import { BEDINGUNG_OPT } from '../daten/bedingungen.js';
 import * as K from './kern.js';
 
 const TAG = /^\d{4}-\d{2}-\d{2}$/;
@@ -8,8 +10,12 @@ const ID = /^e-[a-z0-9-]{4,40}$/;
 const HELD = /^[a-z0-9-]{1,40}$/;
 const gueltigerTag = t => TAG.test(String(t)) && !!K.ausTagKey(t);
 const kopie = x => JSON.parse(JSON.stringify(x));
+const istSchwierigkeit = x => Number.isInteger(x) && x >= BEDINGUNG_OPT.schwierigkeit.min && x <= BEDINGUNG_OPT.schwierigkeit.max;
 
 export class EintragFehler extends Error {}
+
+// Obergrenze des Textes einer Art (Version 166): eigene Grenze der Art (Brief), sonst die allgemeine.
+const textGrenze = (art, textMax) => (art && Number.isInteger(art.textMax) && art.textMax > 0 ? art.textMax : textMax);
 
 // Neue ID: Zeit + Zufall, nur Kleinbuchstaben und Ziffern. zufall() für Tests austauschbar.
 export function neueEintragId(jetzt = Date.now(), zufall = Math.random) {
@@ -30,7 +36,7 @@ export function pruefeEintragArten(arten, { texte = {}, logbuchArten = {}, stimm
   if (!arten || typeof arten !== 'object' || !Object.keys(arten).length) return ['Keine Eintrag-Arten festgelegt'];
   for (const [id, a] of Object.entries(arten)) {
     if (!a || typeof a !== 'object') { f.push(`Art ${id}: kein Objekt`); continue; }
-    if (!(a.logbuch in logbuchArten)) f.push(`Art ${id}: Logbuch-Art ${a.logbuch} fehlt`);
+    if (!a.ohneLogbuch && !(a.logbuch in logbuchArten)) f.push(`Art ${id}: Logbuch-Art ${a.logbuch} fehlt`); // Version 166: ohneLogbuch braucht keine
     if (typeof a.frage !== 'string' || !(a.frage in texte)) f.push(`Art ${id}: Text ${a.frage} fehlt`);
     for (const k of ['text', 'plan']) if (a[k] !== undefined && (typeof a[k] !== 'string' || !(a[k] in texte))) f.push(`Art ${id}: Text ${a[k]} fehlt`);
     if (a.jeTag !== undefined && !(Number.isInteger(a.jeTag) && a.jeTag >= 1)) f.push(`Art ${id}: jeTag muss eine ganze Zahl ab 1 sein`);
@@ -41,12 +47,24 @@ export function pruefeEintragArten(arten, { texte = {}, logbuchArten = {}, stimm
     }
     if (a.zustaende !== undefined && (!Array.isArray(a.zustaende) || a.zustaende.some(z => typeof z !== 'string' || !z))) f.push(`Art ${id}: zustaende ist keine Liste`);
     if (a.verweise !== undefined && !(Number.isInteger(a.verweise) && a.verweise >= 1 && a.verweise <= 20)) f.push(`Art ${id}: verweise muss eine ganze Zahl von 1 bis 20 sein`);
+    // Plan-Check (Version 167): Fragen mit erlaubten Antworten; Texte 'antwort.<frage>.<wert>' und 'antwort.lb.<frage>.<wert>'
+    if (a.antworten !== undefined) {
+      if (!a.antworten || typeof a.antworten !== 'object' || Array.isArray(a.antworten) || !Object.keys(a.antworten).length) f.push(`Art ${id}: antworten ist keine Liste von Fragen`);
+      else for (const [frage, werte] of Object.entries(a.antworten)) {
+        if (!/^[a-z]+$/.test(frage) || !Array.isArray(werte) || !werte.length || werte.some(w => typeof w !== 'string' || !/^[a-z]+$/.test(w))) { f.push(`Art ${id}: antworten.${frage} ist ungültig`); continue; }
+        for (const w of werte) for (const k of [`antwort.${frage}.${w}`, `antwort.lb.${frage}.${w}`]) if (!(k in texte)) f.push(`Art ${id}: Text ${k} fehlt`);
+      }
+    }
     // Tagesnotiz (04.11.2026): freie Textfelder mit Beschriftung 'notiz.feld.<name>'
     if (a.textFelder !== undefined) {
       if (!Array.isArray(a.textFelder) || !a.textFelder.length || a.textFelder.some(k => typeof k !== 'string' || !/^[a-z]+$/.test(k))) f.push(`Art ${id}: textFelder ist keine Liste`);
       else for (const k of a.textFelder) if (!(`notiz.feld.${k}` in texte)) f.push(`Art ${id}: Text notiz.feld.${k} fehlt`);
     }
     if (a.bereiche !== undefined && typeof a.bereiche !== 'boolean') f.push(`Art ${id}: bereiche muss true oder false sein`);
+    // Version 166 (Brief und Beweisbuch): heldOptional, merkbar, ohneLogbuch (Wahrheitswerte), textMax und maxJeHeld (ganze Zahlen)
+    for (const k of ['heldOptional', 'merkbar', 'ohneLogbuch']) if (a[k] !== undefined && typeof a[k] !== 'boolean') f.push(`Art ${id}: ${k} muss true oder false sein`);
+    for (const k of ['textMax', 'maxJeHeld']) if (a[k] !== undefined && !(Number.isInteger(a[k]) && a[k] >= 1)) f.push(`Art ${id}: ${k} muss eine ganze Zahl ab 1 sein`);
+    if (a.heldOptional && a.bereiche) f.push(`Art ${id}: heldOptional und bereiche schließen sich aus`);
     if (!Array.isArray(a.situationen)) { f.push(`Art ${id}: situationen ist keine Liste`); continue; }
     if (new Set(a.situationen).size !== a.situationen.length) f.push(`Art ${id}: Situation doppelt`);
     for (const s of a.situationen) if (!(`eintrag.sit.${s}` in texte)) f.push(`Art ${id}: Text eintrag.sit.${s} fehlt`);
@@ -63,9 +81,21 @@ function zusatzFelder(art, roh) {
   if (Array.isArray(art.wahlen) && art.wahlen.includes(roh.wahl)) z.wahl = roh.wahl;
   // Version 127: Zustand aus der Notfallkarte (fehlt = unbekannt, Altbestand braucht nichts)
   if (Array.isArray(art.zustaende) && art.zustaende.includes(roh.zustand)) z.zustand = roh.zustand;
+  // Plan-Check (Version 167): nur bekannte Fragen mit erlaubter Antwort; keine gültige → das Feld fehlt
+  if (art.antworten && roh.antworten && typeof roh.antworten === 'object' && !Array.isArray(roh.antworten)) {
+    const a = {};
+    for (const [frage, werte] of Object.entries(art.antworten)) if (Array.isArray(werte) && werte.includes(roh.antworten[frage])) a[frage] = roh.antworten[frage];
+    if (Object.keys(a).length) z.antworten = a;
+  }
   if (Number.isInteger(art.verweise) && Array.isArray(roh.verweise)) {
     const v = [...new Set(roh.verweise.filter(x => ID.test(String(x))))].slice(0, art.verweise);
     if (v.length) z.verweise = v;
+  }
+  // Begegnung (06.11.2026): Gestalt, Fähigkeit (IDs) und Schwierigkeit 0–10; fehlt = nicht angegeben
+  if (art.begegnung) {
+    if (istBegegnungsId(roh.gestalt)) z.gestalt = roh.gestalt;
+    if (istBegegnungsId(roh.faehigkeit)) z.faehigkeit = roh.faehigkeit;
+    if (istSchwierigkeit(roh.schwierigkeit)) z.schwierigkeit = roh.schwierigkeit;
   }
   return z;
 }
@@ -96,13 +126,13 @@ export function bereinigeEintrag(roh, { arten, stimmungen, textMax, planMax = 30
   if (!roh || typeof roh !== 'object') return null;
   const art = arten[roh.art];
   if (!art || !ID.test(String(roh.id)) || !gueltigerTag(roh.tag)) return null;
-  if (!art.bereiche) {
-    if (!HELD.test(String(roh.heroId))) return null;
-    if (heroIds && !heroIds.has(roh.heroId)) return null;
-  }
+  // Version 166: bei Arten mit `heldOptional` (Brief) ist ein fehlender oder unbekannter Held kein Fehler: der Eintrag gilt dann für alle
+  const heldOk = HELD.test(String(roh.heroId)) && (!heroIds || heroIds.has(roh.heroId));
+  if (!art.bereiche && !art.heldOptional && !heldOk) return null;
+  textMax = textGrenze(art, textMax);
   const e = {
     id: roh.id,
-    heroId: art.bereiche ? null : roh.heroId,
+    heroId: art.bereiche ? null : art.heldOptional ? (heldOk ? roh.heroId : null) : roh.heroId,
     art: roh.art,
     tag: roh.tag,
     gegner: typeof roh.gegner === 'string' && HELD.test(roh.gegner) ? roh.gegner : null,
@@ -117,6 +147,8 @@ export function bereinigeEintrag(roh, { arten, stimmungen, textMax, planMax = 30
   const felder = textFelderWerte(art, roh.felder, textMax);
   if (felder) e.felder = felder;
   if (gueltigeZeit(roh.geaendert)) e.geaendert = roh.geaendert;
+  // Version 166: Stern „Das will ich mir merken“, nur bei Arten mit `merkbar` und nur, wenn gesetzt (Altbestand ohne Feld = nicht markiert)
+  if (art.merkbar && roh.merken === true) e.merken = true;
   return Object.assign(e, zusatzFelder(art, roh));
 }
 
@@ -146,6 +178,7 @@ export function eintragPruefen(eingabe, { arten, stimmungen, textMax, planMax = 
   const fehler = {};
   const e = eingabe || {};
   const art = arten[e.art];
+  textMax = textGrenze(art, textMax);
   if (!art) fehler.art = 'Unbekannte Art des Eintrags.';
   const situation = e.situation === null || e.situation === undefined || e.situation === '' ? null : e.situation;
   if (art && situation !== null && !art.situationen.includes(situation)) fehler.situation = 'Bitte eine Situation aus der Liste wählen.';
@@ -153,6 +186,7 @@ export function eintragPruefen(eingabe, { arten, stimmungen, textMax, planMax = 
   if (stimmung !== null && !stimmungen.includes(stimmung)) fehler.stimmung = 'Bitte eine Stimmung von 1 bis 5 wählen.';
   if (e.text !== null && e.text !== undefined && typeof e.text !== 'string') fehler.text = 'Ungültige Eingabe.';
   else if (typeof e.text === 'string' && e.text.trim().length > textMax) fehler.text = `Höchstens ${textMax} Zeichen.`;
+  if (art && art.textPflicht && !fehler.text && !(typeof e.text === 'string' && e.text.trim())) fehler.text = 'Bitte schreib etwas auf.'; // Version 166: ein leerer Brief ist keiner
   // Version 81: Plan fürs nächste Mal, nur bei Arten mit `plan` (sonst wäre es ein stiller Datenverlust)
   const planRoh = e.naechstesMal;
   if (planRoh !== null && planRoh !== undefined && planRoh !== '') {
@@ -165,6 +199,23 @@ export function eintragPruefen(eingabe, { arten, stimmungen, textMax, planMax = 
   if (!leer(e.bezug) && !(art && art.bezug && gueltigerTag(e.bezug))) fehler.bezug = 'Ungültiger Bezug.';
   if (!leer(e.wahl) && !(art && Array.isArray(art.wahlen) && art.wahlen.includes(e.wahl))) fehler.wahl = 'Bitte eine Einschätzung aus der Liste wählen.';
   if (!leer(e.zustand) && !(art && Array.isArray(art.zustaende) && art.zustaende.includes(e.zustand))) fehler.zustand = 'Unbekannter Zustand.';
+  // Plan-Check (Version 167): Antworten nur bei Arten mit `antworten`, jede aus der Liste ihrer Frage
+  if (!leer(e.antworten)) {
+    if (!art || !art.antworten || typeof e.antworten !== 'object' || Array.isArray(e.antworten)) fehler.antworten = 'Diese Art hat keine Antworten.';
+    else for (const [frage, wert] of Object.entries(e.antworten)) {
+      if (!Object.prototype.hasOwnProperty.call(art.antworten, frage) || !art.antworten[frage].includes(wert)) { fehler.antworten = 'Bitte eine Antwort aus der Liste wählen.'; break; }
+    }
+  }
+  // Begegnung (06.11.2026): nur bei Arten mit `begegnung`; Unbekanntes ist ein Fehler, kein stiller Verlust
+  for (const k of ['gestalt', 'faehigkeit']) {
+    if (leer(e[k])) continue;
+    if (!art || !art.begegnung) fehler[k] = 'Diese Art hält keine Begegnung fest.';
+    else if (!istBegegnungsId(e[k])) fehler[k] = 'Ungültige Auswahl.';
+  }
+  if (!leer(e.schwierigkeit)) {
+    if (!art || !art.begegnung) fehler.schwierigkeit = 'Diese Art hält keine Begegnung fest.';
+    else if (!istSchwierigkeit(e.schwierigkeit)) fehler.schwierigkeit = `Bitte eine Zahl von ${BEDINGUNG_OPT.schwierigkeit.min} bis ${BEDINGUNG_OPT.schwierigkeit.max} wählen.`;
+  }
   if (!leer(e.verweise)) {
     if (!art || !Number.isInteger(art.verweise) || !Array.isArray(e.verweise)) fehler.verweise = 'Ungültige Verweise.';
     else if (e.verweise.some(x => !ID.test(String(x)))) fehler.verweise = 'Ungültige Verweise.';
@@ -203,6 +254,11 @@ export function eintragHinzufuegen(spiel, heroId, eingabe, heute, opt) {
     if (!spiel || !Array.isArray(spiel.helden)) throw new EintragFehler('Kein Spielstand.');
     if (heroId !== null && heroId !== undefined) throw new EintragFehler('Diese Art gehört zu Lebensbereichen, nicht zu einem Helden.');
     heroId = null;
+  } else if (artReg && artReg.heldOptional) {
+    // Version 166 (Brief): mit Held (muss es geben) oder ohne (null/leer = gilt für alle)
+    if (!spiel || !Array.isArray(spiel.helden)) throw new EintragFehler('Kein Spielstand.');
+    if (heroId === undefined || heroId === '') heroId = null;
+    if (heroId !== null && !spiel.helden.some(h => h.heroId === heroId)) throw new EintragFehler('Unbekannter Held.');
   } else if (!spiel || !Array.isArray(spiel.helden) || !spiel.helden.some(h => h.heroId === heroId)) throw new EintragFehler('Unbekannter Held.');
   const p = eintragPruefen(eingabe, opt);
   if (!p.ok) throw new EintragFehler(Object.values(p.fehler).join(' '));
@@ -213,6 +269,10 @@ export function eintragHinzufuegen(spiel, heroId, eingabe, heute, opt) {
   const grenze = Number.isInteger(opt.arten[p.werte.art].jeTag) ? opt.arten[p.werte.art].jeTag : opt.jeTag; // Version 81: je Art
   if (liste.filter(x => x.heroId === heroId && x.tag === tag && x.art === p.werte.art).length >= grenze)
     throw new EintragFehler(`Für ${opt.tag ? 'diesen Tag' : 'heute'} sind schon ${grenze} solche Einträge da.`);
+  // Version 166: Obergrenze je Held (Brief), damit der Spielstand nicht unbemerkt wächst
+  const jeHeld = opt.arten[p.werte.art].maxJeHeld;
+  if (Number.isInteger(jeHeld) && liste.filter(x => x.heroId === heroId && x.art === p.werte.art).length >= jeHeld)
+    throw new EintragFehler(`Mehr als ${jeHeld} davon passen hier nicht. Lösch einen alten, dann ist wieder Platz.`);
   const eintrag = bereinigeEintrag({
     ...p.werte, heroId, tag,
     id: opt.id || neueEintragId(),
@@ -241,7 +301,7 @@ export function eintragBearbeiten(spiel, id, eingabe, opt) {
   const neu = bereinigeEintrag({ ...p.werte, id: alt.id, heroId: alt.heroId, art: alt.art, tag: alt.tag, gegner: alt.gegner, erstellt: alt.erstellt, geaendert }, opt);
   if (!neu) throw new EintragFehler('Der Eintrag ließ sich nicht ändern.');
   // Unveränderte Felder, die die Eingabe nicht kennt (z. B. bezug, verweise des Rundenrückblicks), bleiben erhalten
-  for (const k of ['bezug', 'verweise']) if (alt[k] !== undefined && neu[k] === undefined && (eingabe || {})[k] === undefined) neu[k] = kopie(alt[k]);
+  for (const k of ['bezug', 'verweise', 'merken', 'antworten']) if (alt[k] !== undefined && neu[k] === undefined && (eingabe || {})[k] === undefined) neu[k] = kopie(alt[k]); // Version 166: auch der Stern bleibt
   const s = kopie(spiel);
   s.eintraege = liste.map(x => (x.id === id ? neu : kopie(x)));
   return { spiel: s, eintrag: neu };
@@ -252,6 +312,24 @@ export function eintragLoeschen(spiel, id) {
   const liste = Array.isArray(spiel && spiel.eintraege) ? spiel.eintraege : [];
   if (!liste.some(x => x.id === id)) throw new EintragFehler('Eintrag nicht gefunden.');
   return { ...kopie(spiel), eintraege: liste.filter(x => x.id !== id).map(kopie) };
+}
+
+// Stern „Das will ich mir merken“ (Version 166): setzt oder nimmt das Feld `merken` (an = true/false, ohne Angabe: umschalten).
+// Nur bei Arten mit `merkbar`. Ändert nie `geaendert`, XP, Runden oder Zähler. Wirft EintragFehler (unbekannte ID, Art nicht merkbar).
+export function eintragMerken(spiel, id, an, arten) {
+  const liste = Array.isArray(spiel && spiel.eintraege) ? spiel.eintraege : [];
+  const alt = liste.find(x => x && x.id === id);
+  if (!alt) throw new EintragFehler('Eintrag nicht gefunden.');
+  if (!arten || !arten[alt.art] || !arten[alt.art].merkbar) throw new EintragFehler('Diesen Eintrag kann man nicht markieren.');
+  const neu = typeof an === 'boolean' ? an : alt.merken !== true;
+  const s = kopie(spiel);
+  s.eintraege = liste.map(x => {
+    if (!x || x.id !== id) return kopie(x);
+    const k = kopie(x);
+    if (neu) k.merken = true; else delete k.merken;
+    return k;
+  });
+  return { spiel: s, merken: neu };
 }
 
 // Einen Eintrag per ID (oder null). Wirft nie.

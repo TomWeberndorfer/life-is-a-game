@@ -17,7 +17,13 @@ const plusTage = (k, n) => { const d = K.ausTagKey(k); d.setDate(d.getDate() + n
 
 // Sind Stützgewohnheiten für diesen Helden frei? (Siege des Haupt-Teilziels)
 export function nebenFrei(stand, cfg = TEILZIELE) {
-  return !!(stand && stand.quest) && (stand.siege || []).length >= cfg.nebenAbSiegen;
+  return !!(stand && stand.quest) && (stand.siege || []).length + (Number.isInteger(stand.siegeFrueher) ? stand.siegeFrueher : 0) >= cfg.nebenAbSiegen; // Version 171: frühere Kapitel zählen mit
+}
+
+// Grenzen mit Schalter „Alles freischalten“ (Version 152): Stützgewohnheiten ohne Mindestzahl an Siegen. Alles andere
+// (Höchstzahl, „zählt ab der nächsten Runde“, Namen) gilt weiter. Ohne Schalter die unveränderten Grenzen.
+export function stuetzenKonfig(allesFrei, cfg = TEILZIELE) {
+  return allesFrei === true ? { ...cfg, nebenAbSiegen: 0 } : cfg;
 }
 
 // Runde, zu der heute gehört (nach einem Sieg heute: die gewonnene Runde, nicht die von morgen).

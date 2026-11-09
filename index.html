@@ -382,6 +382,10 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .welt { position: relative; height: 112px; border-radius: var(--r); overflow: hidden; border: 2px solid var(--edge); padding: 0; background: var(--nacht); cursor: pointer; }
 .welt img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .welt span { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 10px 8px; background: linear-gradient(180deg, transparent, rgba(var(--schleier),.88)); color: var(--auf-bild); font: 700 calc(14px * var(--text-skala, 1)) var(--fh); text-align: left; }
+/* Stilfrage am Start (Version 163): drei Kacheln nebeneinander, niedriger als in der Weltenwahl */
+.welten.start { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.welten.start .welt { height: 96px; }
+.welten.start .welt span { padding: 16px 6px 6px; font-size: calc(13px * var(--text-skala, 1)); }
 .welt.sel { border: 3px solid var(--glanz); box-shadow: 0 0 0 3px rgba(var(--glanz-rgb),.35); }
 .welt.gesperrt { cursor: not-allowed; }
 .welt.gesperrt img { filter: grayscale(1) brightness(.45); }
@@ -423,6 +427,25 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 /* Version 115: Vorstellung am Siegtag (Einführung vor Anzeige) */
 .auftritt-fuss { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .auftritt-fuss .cta { align-self: stretch; }
+/* Aura je Gegner (05.11.2026, daten/aura.js, Entscheidung 25): ein kurzer Effekt über dem Gegnerbild, einmal bei der
+   Vorstellung, nie dauernd. Grundzustand unsichtbar (opacity 0): ohne Bewegung bleibt er weg. Kein z-index, damit Name und
+   Chip (später im DOM) darüber liegen. Farben nur aus Stil-Tokens. Flackern bewusst schwach (kein heller Blitz). */
+.aura-ebene { position: absolute; inset: 0; pointer-events: none; overflow: hidden; opacity: 0; animation: bw-aura-huelle var(--aura-ms, 2800ms) ease-out both; }
+.aura-ebene i { position: absolute; left: var(--x, 50%); top: var(--y, 50%); opacity: 0; animation-duration: calc(var(--aura-ms, 2800ms) * .66); animation-timing-function: ease-out; animation-fill-mode: both; }
+@keyframes bw-aura-huelle { 0% { opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
+.aura-funken i { top: auto; bottom: 6%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--feuer-kern); box-shadow: 0 0 10px 3px var(--feuer-funke), 0 0 18px 6px var(--feuer-glut); animation-name: bw-aura-funke; }
+@keyframes bw-aura-funke { 0% { opacity: 0; transform: translate(0, 0) scale(var(--s, 1)); } 10% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(calc((var(--s, 1) - 1) * 60px), -240px) scale(calc(var(--s, 1) * .35)); } }
+.aura-glut i { top: auto; bottom: -50px; width: 150px; height: 150px; margin-left: -75px; border-radius: 50%; background: radial-gradient(circle, var(--feuer-kern) 0%, var(--feuer-glut) 30%, transparent 68%); mix-blend-mode: screen; animation-name: bw-aura-glut; }
+@keyframes bw-aura-glut { 0% { opacity: 0; transform: translateY(0) scale(calc(var(--s, 1) * .6)); } 35% { opacity: .9; } 70% { opacity: .75; } 100% { opacity: 0; transform: translateY(-110px) scale(calc(var(--s, 1) * 1.4)); } }
+.aura-nebel i { left: -40%; width: 180%; height: 55%; margin-top: -14%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(var(--auf-bild-rgb), .75) 0%, rgba(var(--auf-bild-rgb), .3) 40%, transparent 68%); filter: blur(4px); animation-name: bw-aura-nebel; animation-duration: var(--aura-ms, 3600ms); animation-timing-function: ease-in-out; }
+@keyframes bw-aura-nebel { 0% { opacity: 0; transform: translateX(-22%); } 40% { opacity: 1; } 75% { opacity: .8; } 100% { opacity: 0; transform: translateX(22%); } }
+.aura-flackern i, .aura-schatten i { left: 0; top: 0; width: 100%; height: 100%; animation-duration: var(--aura-ms, 2200ms); }
+.aura-flackern i { background: radial-gradient(ellipse at center, rgba(var(--glanz-rgb), .45) 0%, rgba(var(--glanz-rgb), .2) 60%, transparent 100%); mix-blend-mode: screen; animation-name: bw-aura-flackern; animation-timing-function: steps(1, end); }
+@keyframes bw-aura-flackern { 0% { opacity: 0; } 8% { opacity: 1; } 16% { opacity: .25; } 26% { opacity: .9; } 38% { opacity: .15; } 50% { opacity: .8; } 64% { opacity: .3; } 76% { opacity: .7; } 90%, 100% { opacity: 0; } }
+.aura-schatten i { background: radial-gradient(ellipse at center, transparent 22%, rgba(var(--schleier), .92) 100%); animation-name: bw-aura-schatten; }
+@keyframes bw-aura-schatten { 0% { opacity: 0; transform: scale(1.4); } 35% { opacity: 1; transform: scale(1); } 75% { opacity: .9; transform: scale(1.02); } 100% { opacity: 0; transform: scale(1.15); } }
+:root[data-bewegung="aus"] .aura-ebene { display: none; }
+@media (prefers-reduced-motion: reduce) { .aura-ebene { display: none; } }
 .vorstellung-crew { display: flex; align-items: flex-start; gap: 10px; margin: 0; font-style: italic; }
 .vorstellung-crew b { font-style: normal; letter-spacing: .04em; font-size: .8em; }
 .vorstellung-morgen { margin: 0; }
@@ -431,6 +454,19 @@ li.jetzt .dot { background: var(--ac); border-color: var(--ac); animation: puls 
 .grau { filter: grayscale(.7) brightness(.8); }
 .erscheint { animation: auf .55s ease-out; }
 @keyframes auf { 0% { transform: scale(.85); opacity: 0; } 60% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1); } }
+/* Übergangs-Muster (Version 162, Werte aus daten/bewegung.js → --bw-blatt/-feier/-ruhe/-tab): Blatt von unten, Feier sanft ein,
+   Ruhe-Seite überblenden, Tab kurz überblenden. Alles hängt an .erscheint (ohneEinblendung() entfernt es bei jedem Neuzeichnen
+   derselben Ebene). Schließen ist sofort. Sieg-Karte (Stempel/Kapitelsieg) und Notfallkarte behalten ihr eigenes Verhalten. */
+.blatt.erscheint, .frage-blatt.erscheint { animation: bw-blatt var(--bw-blatt, 280ms) var(--bw-blatt-kurve, cubic-bezier(.2,.8,.3,1)) both; }
+@keyframes bw-blatt { from { transform: translateY(100%); } to { transform: none; } }
+.feier.unten:has(.erscheint) { animation: bw-schleier var(--bw-blatt, 280ms) ease-out both; }
+@keyframes bw-schleier { from { background-color: rgba(var(--schleier), 0); } to { background-color: rgba(var(--schleier), .72); } }
+.feier-karte.erscheint:not(.sieg-karte) { animation: bw-feier var(--bw-feier, 320ms) var(--bw-feier-kurve, ease-out) both; }
+@keyframes bw-feier { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+.feier.ruhe-seite.erscheint { animation: bw-ruhe var(--bw-ruhe, 300ms) var(--bw-ruhe-kurve, ease-in-out) both; }
+@keyframes bw-ruhe { from { opacity: 0; } to { opacity: 1; } }
+.screen.seite-wechsel { animation: bw-tab var(--bw-tab, 150ms) var(--bw-tab-kurve, ease-out) both; }
+@keyframes bw-tab { from { opacity: 0; } to { opacity: 1; } }
 
 /* Testprofil */
 .testleiste { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 8px 4px 12px; background: #B0205F; color: #fff; font: 700 calc(12px * var(--text-skala, 1)) system-ui, sans-serif; letter-spacing: .06em; }
@@ -1068,6 +1104,10 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
 .lb-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 14px; border-radius: 20px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); font: 700 calc(14px * var(--text-skala, 1)) var(--fh); cursor: pointer; }
 .lb-chip .rund-klein { width: 24px; height: 24px; margin-left: -8px; }
 .lb-chip.an { background: var(--ac); border-color: var(--ac); color: var(--auf-ac); }
+/* Version 166: Stern „Das will ich mir merken“ und Beweisbuch (ruhig, kein Rot) */
+.lb-stern { min-height: 40px; min-width: 40px; opacity: .55; }
+.lb-stern.an { opacity: 1; color: var(--ac); }
+.beweis-text { line-height: 1.5; overflow-wrap: anywhere; }
 .lb-tag { display: flex; flex-direction: column; gap: 6px; }
 .lb-tag-kopf { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; font: 700 calc(13px * var(--text-skala, 1)) var(--fh); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
 .lb-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -1266,6 +1306,25 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
 .messziel-einheiten { margin-top: -4px; }
 .eintrag-wahl { display: flex; flex-wrap: wrap; gap: 6px; }
 .eintrag-wahl .opt { width: auto; min-height: 44px; font-size: calc(15px * var(--text-skala, 1)); padding: 6px 12px; }
+/* Bosskette mit Bedingungen (06.11.2026): ruhiger Kasten unter der Arena und Felder im Eintragsblatt. Kein Rot, kein Schloss. */
+.bed-kasten { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; padding: 8px 10px; border-radius: var(--r); background: var(--tief); border: 1px dashed var(--line); }
+.bed-kasten.alle { border-style: solid; }
+.bed-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: calc(15px * var(--text-skala, 1)); }
+.bed-liste li { display: flex; align-items: center; gap: 6px; color: var(--soft); }
+.bed-liste li.erfuellt { color: var(--gut-text); }
+.bed-liste li svg { width: 16px; height: 16px; flex: none; }
+.bed-punkt { width: 10px; height: 10px; margin: 0 3px; border-radius: 50%; border: 1.5px solid var(--edge); flex: none; }
+.bed-fast { color: var(--ink); font-weight: 600; margin: 2px 0 0; }
+.bed-hinweis { margin: 2px 0 0; }
+.bed-eintrag { display: flex; flex-direction: column; gap: 10px; margin: 6px 0; }
+.bed-feld { display: flex; flex-direction: column; gap: 6px; }
+.bed-neu { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Vorgeschlagene Gestalten (06.11.2026): leiser als eigene, gestrichelt = noch nicht deine */
+.bed-vorschlag-l { margin-top: 2px; }
+.bed-vorschlaege .opt.vorschlag { border-style: dashed; opacity: .9; }
+.bed-neu input { flex: 1 1 160px; min-width: 0; min-height: 44px; }
+.bed-skala { gap: 4px; }
+.bed-skala .opt { min-width: 40px; padding: 6px 8px; }
 .lb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: calc(15px * var(--text-skala, 1)); line-height: 1.35; color: var(--ink); overflow-wrap: anywhere; }
 .lb-text small { display: inline-flex; align-items: center; gap: 6px; font-size: calc(13px * var(--text-skala, 1)); color: var(--mute); }
 .lb-text small .rund-klein { width: 18px; height: 18px; }
@@ -1354,6 +1413,18 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
   --k-tabs-bg: linear-gradient(180deg, #3A2414, #1E1108); --k-tabs-rand: 2px solid #B8862F; --k-tabs-schatten: inset 0 1px 0 #F0D58A;
   --k-tab-ink: #C9B27C; --k-tab-an: #F0D58A; --k-tab-schein: drop-shadow(0 0 5px rgba(240,200,110,.55));
   --arena-a: rgba(255,150,60,.35); --arena-b: rgba(255,120,40,.2); --arena-funke: #FFC266; --arena-schein: rgba(255,150,50,.75);
+  /* Namensschild in der Arena (Version 161): Tafel um Name und Kraftsegmente. Fantasy = Holztafel, zugleich Rückfall für alle Stile
+     (wie --k-*). Jeder Stilblock setzt seine eigene Form. --schild-unter/-kraft: none = Beiname und Kraftzeile entfallen;
+     „Extra“, „ab morgen“ und der Siegtag-Satz bleiben sichtbar. Voll gefärbte Segmente: --schild-seg-voll (Rückfall Gegnerfarbe). */
+  --schild-bg: repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 2px, transparent 2px 11px), rgba(30,17,8,.74);
+  --schild-rand: 2px solid #B8862F; --schild-radius: 4px; --schild-pad: 5px 11px 6px; --schild-pad-held: 6px 10px 7px; --schild-gap: 3px;
+  --schild-schatten: inset 0 0 0 1px rgba(240,213,138,.55), 0 4px 12px rgba(0,0,0,.55);
+  --schild-nieten: var(--k-niete), var(--k-niete), var(--k-niete), var(--k-niete);
+  --schild-nieten-lage: left 2px top 2px, right 2px top 2px, left 2px bottom 2px, right 2px bottom 2px; --schild-nieten-groesse: 9px 9px;
+  --schild-ink: #FBF3DE; --schild-text-schatten: none; --schild-unter: none; --schild-kraft: none;
+  --schild-name-gr: 20px; --schild-name-held: 17px; --schild-name-abstand: normal; --schild-name-versal: none;
+  --schild-seg-hoch: 8px; --schild-seg-radius: 2px; --schild-seg-leer: rgba(255,255,255,.22); --schild-seg-rand: rgba(255,255,255,.8); --schild-seg-voll: var(--gegner);
+  --arena-plateau: linear-gradient(to top, rgba(var(--schleier),.5) 0%, rgba(var(--schleier),0) 46%);
 }
 :root[data-stil="scifi"] {
   --k-grund: repeating-linear-gradient(0deg, rgba(43,184,214,.07) 0 1px, transparent 1px 22px), repeating-linear-gradient(90deg, rgba(43,184,214,.07) 0 1px, transparent 1px 22px), radial-gradient(ellipse at 50% 0%, #12304A, #060B16 70%);
@@ -1364,6 +1435,16 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
   --k-tabs-bg: #060B16; --k-tabs-rand: 1px solid #2BB8D6; --k-tabs-schatten: 0 -4px 14px rgba(25,211,243,.18);
   --k-tab-ink: #8FB2C6; --k-tab-an: #19D3F3; --k-tab-schein: drop-shadow(0 0 6px rgba(25,211,243,.7));
   --arena-a: rgba(25,211,243,.30); --arena-b: rgba(61,242,165,.16); --arena-funke: #8CF0FF; --arena-schein: rgba(25,211,243,.8);
+  /* Namensschild */
+  --schild-bg: repeating-linear-gradient(180deg, rgba(25,211,243,.07) 0 1px, transparent 1px 4px), rgba(4,10,20,.82);
+  --schild-rand: 1px solid #2BB8D6; --schild-radius: 0; --schild-pad: 6px 12px 7px; --schild-pad-held: 6px 10px 7px; --schild-gap: 4px;
+  --schild-schatten: 0 0 14px rgba(25,211,243,.28), inset 0 0 12px rgba(25,211,243,.08);
+  --schild-nieten: var(--k-winkel), var(--k-winkel), var(--k-winkel), var(--k-winkel), var(--k-winkel), var(--k-winkel), var(--k-winkel), var(--k-winkel);
+  --schild-nieten-lage: left top, left top, right top, right top, left bottom, left bottom, right bottom, right bottom;
+  --schild-nieten-groesse: 10px 2px, 2px 10px, 10px 2px, 2px 10px, 10px 2px, 2px 10px, 10px 2px, 2px 10px;
+  --schild-ink: #E6F7FF; --schild-text-schatten: 0 0 6px rgba(25,211,243,.7);
+  --schild-name-gr: 17px; --schild-name-held: 14px; --schild-name-abstand: .06em; --schild-name-versal: uppercase;
+  --schild-seg-hoch: 8px; --schild-seg-leer: rgba(25,211,243,.12); --schild-seg-rand: rgba(25,211,243,.7);
 }
 :root[data-stil="strasse"] {
   --k-grund: radial-gradient(ellipse at 50% 108%, rgba(255,77,154,.38), transparent 55%), repeating-linear-gradient(0deg, rgba(255,77,154,.10) 0 1px, transparent 1px 26px), linear-gradient(180deg, #2A0F45 0%, #14061F 55%, #0C0314 100%);
@@ -1374,6 +1455,15 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
   --k-tabs-bg: #0C0314; --k-tabs-rand: 1.5px solid #FF7A2A; --k-tabs-schatten: 0 -4px 16px rgba(255,77,154,.25);
   --k-tab-ink: #C4A8DA; --k-tab-an: #FF7A2A; --k-tab-schein: drop-shadow(0 0 6px rgba(255,122,42,.8));
   --arena-a: rgba(255,77,154,.35); --arena-b: rgba(255,122,42,.25); --arena-funke: #FF7AC8; --arena-schein: rgba(255,77,154,.8);
+  /* Namensschild */
+  --schild-bg: rgba(12,3,20,.8);
+  --schild-rand: 2px solid #FF7A2A; --schild-radius: 5px; --schild-pad: 5px 12px 6px; --schild-pad-held: 6px 10px 7px; --schild-gap: 4px;
+  --schild-schatten: 0 0 0 1px rgba(255,122,42,.4), 0 0 14px rgba(255,77,154,.6), inset 0 0 10px rgba(255,77,154,.22);
+  --schild-nieten: var(--k-punkt), var(--k-punkt), var(--k-punkt), var(--k-punkt);
+  --schild-nieten-lage: left 3px top 3px, right 3px top 3px, left 3px bottom 3px, right 3px bottom 3px; --schild-nieten-groesse: 4px 4px;
+  --schild-ink: #FFFFFF; --schild-text-schatten: 0 0 8px rgba(255,77,154,.85);
+  --schild-name-gr: 24px; --schild-name-held: 21px; --schild-name-abstand: .04em;
+  --schild-seg-hoch: 8px;
 }
 /* Mythologie: heller Marmor mit feinen Adern, Mäanderband unter der Kopfzeile, Arena wie ein Amphitheater im Abendlicht */
 :root[data-stil="myth"] {
@@ -1385,6 +1475,15 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
   --k-tabs-bg: #FBF9F3; --k-tabs-rand: 3px double #B88A2E; --k-tabs-schatten: none;
   --k-tab-ink: #5A6172; --k-tab-an: #1F4E79; --k-tab-schein: none;
   --arena-a: rgba(255,190,90,.38); --arena-b: rgba(120,160,220,.22); --arena-funke: #FFE7A0; --arena-schein: rgba(255,200,110,.75);
+  /* Namensschild */
+  --schild-bg: linear-gradient(180deg, rgba(27,35,51,.9), rgba(20,26,40,.92));
+  --schild-rand: 1px solid #B88A2E; --schild-radius: 0; --schild-pad: 9px 14px 9px; --schild-pad-held: 9px 12px 9px; --schild-gap: 4px;
+  --schild-schatten: inset 0 0 0 3px rgba(20,26,40,.92), inset 0 0 0 4px rgba(216,199,154,.5), 0 4px 12px rgba(0,0,0,.45);
+  --schild-nieten: repeating-linear-gradient(90deg, #B88A2E 0 2px, transparent 2px 6px, #B88A2E 6px 8px, transparent 8px 10px), repeating-linear-gradient(90deg, #B88A2E 0 2px, transparent 2px 6px, #B88A2E 6px 8px, transparent 8px 10px); /* Mäanderband oben und unten */
+  --schild-nieten-lage: left 6px top 3px, left 6px bottom 3px; --schild-nieten-groesse: calc(100% - 12px) 2px, calc(100% - 12px) 2px;
+  --schild-ink: #F7F4EC; --schild-text-schatten: none;
+  --schild-name-gr: 19px; --schild-name-abstand: .03em;
+  --schild-seg-hoch: 8px; --schild-seg-leer: rgba(247,244,236,.14); --schild-seg-voll: #E0705F;
 }
 /* Cozy: warmes, helles Holz, Karten mit gesteppter Patchwork-Naht, Arena in Kerzenlicht mit Glühwürmchen */
 :root[data-stil="cozy"] {
@@ -1395,6 +1494,13 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
   --k-tabs-bg: #FFF8EE; --k-tabs-rand: 2px dashed #C9A77A; --k-tabs-schatten: none;
   --k-tab-ink: #665D4D; --k-tab-an: #B4552F; --k-tab-schein: none;
   --arena-a: rgba(255,200,120,.38); --arena-b: rgba(255,170,90,.22); --arena-funke: #EFFF8A; --arena-schein: rgba(220,255,120,.8);
+  /* Namensschild */
+  --schild-bg: repeating-linear-gradient(0deg, rgba(0,0,0,.1) 0 1px, transparent 1px 14px), rgba(78,53,36,.86);
+  --schild-rand: 2px dashed rgba(255,248,238,.75); --schild-radius: 16px; --schild-pad: 7px 16px 8px; --schild-pad-held: 7px 14px 8px; --schild-gap: 5px;
+  --schild-schatten: 0 0 0 3px rgba(78,53,36,.86), 0 5px 12px rgba(0,0,0,.45);
+  --schild-nieten: none; --schild-nieten-lage: 0 0; --schild-nieten-groesse: auto;
+  --schild-ink: #FFF8EE; --schild-text-schatten: none;
+  --schild-seg-hoch: 10px; --schild-seg-radius: 99px; --schild-seg-leer: rgba(255,248,238,.18); --schild-seg-voll: #C3CEDC;
 }
 /* Monsterjäger: Dschungelgrün mit Fährtenspuren, Karten mit Pixelrand, Arena als Lichtung mit Sporenfunken */
 :root[data-stil="monster"] {
@@ -1405,6 +1511,14 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
   --k-tabs-bg: #F6FBE6; --k-tabs-rand: 2px solid #1D2B12; --k-tabs-schatten: none;
   --k-tab-ink: #46592A; --k-tab-an: #C0392B; --k-tab-schein: none;
   --arena-a: rgba(140,220,90,.30); --arena-b: rgba(90,200,170,.22); --arena-funke: #C8FF8A; --arena-schein: rgba(170,255,110,.8);
+  /* Namensschild */
+  --schild-bg: rgba(29,43,18,.94);
+  --schild-rand: 0; --schild-radius: 0; --schild-pad: 7px 12px 8px; --schild-pad-held: 7px 10px 8px; --schild-gap: 4px;
+  --schild-schatten: 0 -4px 0 0 #F6FBE6, 0 4px 0 0 #F6FBE6, -4px 0 0 0 #F6FBE6, 4px 0 0 0 #F6FBE6, 6px 8px 0 0 rgba(0,0,0,.4); /* Pixelrahmen mit geschnittenen Ecken, Feinschliff mit dem Pixel-Stil */
+  --schild-nieten: none; --schild-nieten-lage: 0 0; --schild-nieten-groesse: auto;
+  --schild-ink: #F6FBE6; --schild-text-schatten: none;
+  --schild-name-gr: 19px; --schild-name-held: 17px;
+  --schild-seg-hoch: 10px; --schild-seg-radius: 0; --schild-seg-leer: rgba(246,251,230,.14); --schild-seg-rand: #F6FBE6; --schild-seg-voll: #B57BE0;
 }
 /* Rom: Marmor und Gold, Rot bleibt den Handlungsknöpfen; Arena als Exerzierfeld im Fackellicht */
 :root[data-stil="rom"] {
@@ -1415,6 +1529,14 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
   --k-tabs-bg: #FBFAF7; --k-tabs-rand: 2px solid #C9A24A; --k-tabs-schatten: none;
   --k-tab-ink: #5F564E; --k-tab-an: #8C6A22; --k-tab-schein: none;
   --arena-a: rgba(255,140,60,.38); --arena-b: rgba(201,162,74,.24); --arena-funke: #FFB45C; --arena-schein: rgba(255,140,60,.8);
+  /* Namensschild */
+  --schild-bg: repeating-linear-gradient(125deg, transparent 0 26px, rgba(140,130,115,.16) 26px 27px, transparent 27px 52px), linear-gradient(180deg, #F7F5F1, #E6E0D5);
+  --schild-rand: 2px solid #A9822F; --schild-radius: 2px; --schild-pad: 5px 12px 6px; --schild-pad-held: 6px 10px 7px; --schild-gap: 4px;
+  --schild-schatten: inset 0 0 0 2px #F7F5F1, inset 0 0 0 3px rgba(169,130,47,.6), 0 4px 12px rgba(0,0,0,.5);
+  --schild-nieten: radial-gradient(circle, #E9CD86 0 1.2px, #A9822F 1.8px 3px, transparent 3.6px), radial-gradient(circle, #E9CD86 0 1.2px, #A9822F 1.8px 3px, transparent 3.6px), radial-gradient(circle, #E9CD86 0 1.2px, #A9822F 1.8px 3px, transparent 3.6px), radial-gradient(circle, #E9CD86 0 1.2px, #A9822F 1.8px 3px, transparent 3.6px);
+  --schild-nieten-lage: left 3px top 3px, right 3px top 3px, left 3px bottom 3px, right 3px bottom 3px; --schild-nieten-groesse: 8px 8px;
+  --schild-ink: #2B2622; --schild-text-schatten: none;
+  --schild-seg-hoch: 8px; --schild-seg-leer: rgba(43,38,34,.12); --schild-seg-rand: rgba(43,38,34,.55);
 }
 /* Schrift direkt auf der Kulisse (z. B. Seitentitel) nimmt --k-ink/--k-mute; in Tafeln gilt wieder die Schrift des Stils.
    Die Stilfarben werden dazu auf .screen.kulisse als --tafel-* gemerkt, bevor .inhalt --ink/--soft/--mute umstellt.
@@ -1457,8 +1579,10 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
 .kl-stufe { font: 700 calc(12px * var(--text-skala, 1))/1 var(--fh); letter-spacing: .04em; white-space: nowrap; padding: 4px 9px; border-radius: 99px; background: var(--ac); color: var(--auf-ac); box-shadow: 0 2px 0 var(--edge); }
 .kopfleiste .kopf-text { gap: 2px; }
 .kopfleiste .questtitel { font-size: calc(20px * var(--text-skala, 1)); }
-.kl-stift { width: 40px; height: 40px; margin: -6px -6px 0 0; color: var(--soft); }
-.kl-stift .ic { width: 20px; height: 20px; }
+/* Version 153: „Quest bearbeiten“ als Knopf mit Wort (vorher nur ein blasser Stift). Leise, aber als Knopf erkennbar. */
+.kl-bearbeiten { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin: -4px -4px 0 0; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--ac); font: 700 calc(12px * var(--text-skala, 1))/1 var(--fh); letter-spacing: .04em; cursor: pointer; }
+.kl-bearbeiten .ic { width: 16px; height: 16px; }
+.kl-bearbeiten:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
 .kopfleiste .quest-warum { font-size: calc(15px * var(--text-skala, 1)); }
 .kopfleiste .weg { margin-top: 2px; }
 .neuigkeiten { display: flex; flex-direction: column; gap: 10px; }
@@ -1489,7 +1613,7 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
 .arena { --arena-hoch: 230px; --arena-ruhe: 104px; --gegner-links: 36%; position: relative; height: var(--arena-hoch); overflow: hidden; background: var(--nacht); color: var(--auf-bild); }
 .buehne.ruhe .arena { height: var(--arena-ruhe); }
 .arena-tipp { cursor: pointer; -webkit-tap-highlight-color: transparent; } /* Version 96: ganze Arena öffnet das Gegnerblatt */
-.arena::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; background: linear-gradient(to top, rgba(var(--schleier),.9) 0%, rgba(var(--schleier),var(--arena-schleier, .72)) 30%, rgba(var(--schleier),.3) 52%, rgba(var(--schleier),0) 72%); } /* Punkt 14 (02.11.2026): Plateau hinter Name und Kraft, vorher .15 auf Höhe des Namens */
+.arena::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; background: var(--arena-plateau); } /* Punkt 14 (02.11.2026): Plateau hinter Name und Kraft, vorher .15 auf Höhe des Namens */
 .arena-bildrahmen { position: absolute; inset: 0; display: block; }
 .arena-bild { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; animation: bw-zoom var(--bw-zoom, 20s) ease-in-out var(--bw-zoom-versatz, 0s) infinite alternate; transform-origin: 60% 40%; }
 .arena-bild.grau { filter: grayscale(.85) brightness(.7); animation: none; }
@@ -1500,8 +1624,7 @@ button.reise-text.rechts.ort-knopf { align-items: flex-end; }
 span.gegner-name { cursor: default; }
 .gegner-zeile small { flex: none; max-width: 50%; font: 500 calc(13px * var(--text-skala, 1))/1.25 var(--fb); opacity: .92; text-align: right; }
 .gegner-zeile .gegner-name { min-width: 0; }
-.arena .segmente i { height: 9px; background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); }
-.arena .segmente i.voll { background: var(--gegner); border-color: var(--gegner); }
+.arena .segmente i.voll { background: var(--schild-seg-voll); border-color: var(--schild-seg-voll); }
 .kraft-zeile { display: flex; justify-content: space-between; gap: 8px; font: 600 calc(12px * var(--text-skala, 1)) var(--fb); opacity: .92; font-variant-numeric: tabular-nums; }
 .buehne.ruhe .gegner-zeile small, .buehne.ruhe .kraft-zeile { display: none; }
 .buehne.ruhe .gegner-name { font-size: calc(17px * var(--text-skala, 1)); }
@@ -1541,7 +1664,7 @@ span.gegner-name { cursor: default; }
 .boss-blase.neben-held::after { content: ""; position: absolute; right: -9px; bottom: 18px; border: 8px solid transparent; border-right: 0; border-left: 9px solid var(--gegner); }
 .held-blase::after { content: ""; position: absolute; left: 22px; top: -9px; border: 8px solid transparent; border-top: 0; border-bottom: 9px solid var(--edge); }
 .buehne.mit-held .gegner-zeile small { display: none; }
-.buehne.mit-held .gegner-name { font-size: calc(17px * var(--text-skala, 1)); overflow-wrap: normal; hyphens: auto; }
+.buehne.mit-held .gegner-name { font-size: calc(var(--schild-name-held) * var(--text-skala, 1)); overflow-wrap: normal; hyphens: auto; }
 @keyframes bw-zeigen { 0% { opacity: 0; transform: translateY(-6px); } 12% { opacity: 1; transform: none; } 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-4px); } }
 .boss-blase { position: absolute; top: 12px; right: var(--rand-r, 12px); left: 28%; z-index: 7; margin: 0; opacity: 0; pointer-events: none; background: var(--nacht); color: var(--nacht-ink); border: 1px solid var(--gegner); border-radius: 14px 4px 14px 14px; padding: 8px 11px; font: italic 500 calc(15px * var(--text-skala, 1))/1.35 var(--fi); box-shadow: 0 3px 10px rgba(0,0,0,.45); }
 .boss-blase b, .blase-text b { display: block; margin-bottom: 2px; font: 700 calc(10px * var(--text-skala, 1)) var(--fh); font-style: normal; letter-spacing: .12em; }
@@ -1802,7 +1925,7 @@ button.sl-tag:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px;
 .kopfleiste .questtitel { font-size: calc(16px * var(--text-skala, 1)); line-height: 1.2; }
 /* Version 146 (Bewertung 05.11.2026, Punkt 10): das eigene Warum ist Motivation, keine Fußnote: größer, kräftiger, gerade */
 .kopfleiste .quest-warum { font-size: calc(15px * var(--text-skala, 1)); font-style: normal; font-weight: 500; color: var(--ink); }
-.kopfleiste .kl-stift { width: 36px; height: 36px; margin: -8px -6px -4px 0; }
+.kopfleiste .kl-bearbeiten { min-height: 32px; margin: -6px -4px -2px 0; padding: 3px 9px; }
 .kopfleiste .weg { height: 60px; margin-top: 10px; }
 .kopfleiste .station.aktuell { width: 36px; height: 36px; }
 .kopfleiste .station.besiegt, .kopfleiste .station.verborgen { width: 26px; height: 26px; }
@@ -1857,11 +1980,19 @@ body:has(.rueck-zeile) #rueck-hinweis { display: none; } /* steht die Zeile in d
 @media (prefers-reduced-motion: reduce) { .rueck-zeile, .rueck-zeile i { animation: none; } }
 .toast { padding: 12px 14px; cursor: pointer; } /* kurze Bestätigungen (Etappe 3), Aussehen wie der Rückgängig-Hinweis */
 /* Etappe 3 (Punkt 14–16a): Arena-Text lesbar auf jedem Bild – dunkler Verlauf unten, Text größer und voll deckend */
-.arena-text { text-shadow: 0 1px 4px rgba(0,0,0,.85); }
+/* Namensschild (Version 160/161): Tafel um Name und Kraftsegmente. Alle Werte stehen als Tokens --schild-* im Grundblock (Fantasy) und
+   in jedem Stilblock; hier keine Rückfallwerte nötig. Beiname und Kraftzeile entfallen, wo der Stil es will (--schild-unter, --schild-kraft);
+   „Extra“, „ab morgen“ und der Siegtag-Satz bleiben sichtbar. Helle Tafeln (Rom) brauchen eigene Schriftfarbe und Leersegmente (--schild-ink, --schild-seg-*). */
+.arena-text { padding: var(--schild-pad); gap: var(--schild-gap); border: var(--schild-rand); border-radius: var(--schild-radius); background: var(--schild-bg); box-shadow: var(--schild-schatten); text-shadow: var(--schild-text-schatten); }
+.arena-text::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: var(--schild-nieten); background-repeat: no-repeat; background-position: var(--schild-nieten-lage); background-size: var(--schild-nieten-groesse); }
+.arena-text .gegner-name { color: var(--schild-ink); text-shadow: var(--schild-text-schatten); font-size: calc(var(--schild-name-gr) * var(--text-skala, 1)); letter-spacing: var(--schild-name-abstand); text-transform: var(--schild-name-versal); }
+.arena-text :is(.besiegt-text, .kraft-zeile) { color: var(--schild-ink); }
+.gegner-zeile small:not(.besiegt-text) { display: var(--schild-unter); }
+.kraft-zeile.schlicht { display: var(--schild-kraft); }
+.buehne.mit-held .arena-text { padding: var(--schild-pad-held); }
 .gegner-zeile small { font-size: calc(14px * var(--text-skala, 1)); opacity: 1; }
 .kraft-zeile { font-size: calc(14px * var(--text-skala, 1)); opacity: 1; }
-.arena .segmente i { height: 10px; background: rgba(255,255,255,.22); border-color: rgba(255,255,255,.8); }
-:root[data-stil="strasse"] .arena, :root[data-stil="scifi"] .arena { --arena-schleier: .62; } /* hellere Neon- und Brückenbilder nicht zu düster */
+.arena .segmente i { height: var(--schild-seg-hoch); border-radius: var(--schild-seg-radius); background: var(--schild-seg-leer); border-color: var(--schild-seg-rand); }
 /* Weg als Kette (KOPFLEISTE.weg = 'kette'): Mini-Bilder in einer Zeile */
 .weg-kette { display: flex; align-items: center; gap: 0; margin-top: 4px; }
 .kette-st, .kette-held { position: relative; flex: none; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; border: 2px solid var(--edge); background: var(--nacht); box-sizing: border-box; }
@@ -2063,6 +2194,17 @@ body:has(.rueck-zeile) #rueck-hinweis { display: none; } /* steht die Zeile in d
 .wr-helden { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .wr-held { display: flex; align-items: center; gap: 10px; }
 .wr-held .wahl { flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* Crew-Übersicht (06.11.2026): Gruppen Fokus · Erhalt · Ruhe, ruhig, ohne Rot */
+.crew-liste { display: flex; flex-direction: column; gap: 14px; margin: 8px 0; }
+.crew-gruppe { display: flex; flex-direction: column; gap: 6px; }
+.crew-helden { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.crew-held { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.crew-held .spalte { min-width: 0; gap: 2px; }
+.crew-held .wahl { flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.crew-quest { overflow-wrap: anywhere; }
+.crew-platz { padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; opacity: .8; font-size: .9em; }
+.crew-ruhe .crew-held { opacity: .85; }
+.crew-klappe { align-self: flex-start; }
 .wr-einladung { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .wr-vorsatz-alt { font-style: italic; }
 .wr-vorsatz-zeile { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0 0; color: var(--tat-leise, var(--mute)); font-style: italic; }
@@ -2071,7 +2213,4 @@ body:has(.rueck-zeile) #rueck-hinweis { display: none; } /* steht die Zeile in d
 <div id="app" aria-live="off"><p style="padding:24px">Life is a Game lädt …</p></div>
 <noscript><p style="padding:24px">Bitte JavaScript aktivieren, um Life is a Game zu spielen.</p></noscript>
 <script type="module" src="js/app.js"></script>
-
-
-
 </body></html>

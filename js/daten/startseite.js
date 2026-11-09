@@ -74,7 +74,10 @@ export const RUECKGAENGIG = { ms: 3000 };
 // Ziel-Quests (31.10.2026): 'zielstand' = Ziel erreicht (Feier mit Rückblick) oder Stichtag vorbei (ruhige Frage).
 // Rundenrückblick (02.11.2026, Entscheidung 26 9a): 'rueckblick' = Runde vorbei, Brief des Helden (zählt ins Tageslimit).
 // Nach der Freigabe: eine Freischaltung ist ein Belohnungsmoment des Tages; der Rückblick darf einen Tag warten (Zeitfenster 3 Tage).
-export const NEU_PLATZ = { max: 2, vorrang: ['einwilligung', 'zielstand', 'freigabe', 'rueckblick', 'angebot', 'welten'] };
+// Version 165: `leise` = Karten, die nur bei freiem Platz erscheinen, nie einen Platz verdrängen und nie als „wartet bis morgen“
+// zählen (z. B. „Wie diese App denkt“, einmalig). Sie stehen nicht in `vorrang`.
+// Version 167: auch der Plan-Check ('plancheck', nach je 4 Rückblicken wieder, nie am Tag eines offenen Rückblicks) ist leise.
+export const NEU_PLATZ = { max: 2, vorrang: ['einwilligung', 'zielstand', 'freigabe', 'rueckblick', 'abschluss', 'angebot', 'welten'], leise: ['denken', 'brief', 'plancheck', 'abschlussSpaeter', 'testerhinweis'] };
 
 // Weg der Bosskette auf der Hauptquest-Karte (30.10.2026): wie viele geschaffte Stationen (besiegte Gegner, am Anfang
 // der Start) links sichtbar bleiben und wie viele kommende Gegner als Silhouette erscheinen; danach immer Nebel.
