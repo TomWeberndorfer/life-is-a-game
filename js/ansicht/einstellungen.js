@@ -8,7 +8,7 @@ import * as H from '../logik/helden.js';
 import * as K from '../logik/kern.js';
 import { esc, icon } from './helfer.js';
 import { kx } from './kontext.js';
-import { probeEinstellung } from './probe.js'; // Version 81
+import { karteEinstellung } from './probe.js'; // Version 173 (Version 81: Morgenprobe)
 import { anzeigeEinstellung } from './anzeige.js'; // Version 125: Blatt „Anzeige“
 import { SPRECHBLASEN } from '../daten/bewegung.js'; // 02.11.2026
 import { STARTPAKETE } from '../daten/startpakete.js'; // Startpaket (02.11.2026)
@@ -38,7 +38,7 @@ export const EINSTELLUNGEN_SCREENS = {
           ${istTest ? `<p class="klein">${esc(T('einst.testprofil'))}</p>` : ''}
         </div>
         ${anzeigeEinstellung()}
-        ${probeEinstellung()}
+        ${karteEinstellung()}
         ${blasenEinstellung()}
         ${beweisEinstellung()}
         ${denkenEinstellung()}

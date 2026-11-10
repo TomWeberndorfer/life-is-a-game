@@ -61,6 +61,16 @@ function stilStartHtml() {
         <p class="klein">${esc(T('ob.stilHinweis'))}</p>`;
 }
 
+// „Mehrere auf einmal“ (seit 10.11.2026 für alle): leiser Zweitweg unter „Held für Held“, im ersten Onboarding-Schritt und im
+// Schritt „Neues Abenteuer“, nicht beim neuen Ziel für einen vorhandenen Helden. Im ersten Start erst nach der Datenfrage
+// (der Knopf ist bis dahin aus, die Karte der Datenfrage steht direkt darüber); es muss Platz für mindestens zwei Helden sein.
+function mehrfachKarte() {
+  const { T, einw, mehrfachErlaubt, spiel, ui } = kx;
+  if (kapitelHeld() || !mehrfachErlaubt() || MF.platzFrei(spiel) < 2) return '';
+  const gesperrt = EW.istOffen(einw) && !ui.neu;
+  return `<div class="karte spalte"><p class="klein">${esc(T('mehr.einstiegText'))}</p><button class="btn" data-a="mehrfach-oeffnen" ${gesperrt ? 'disabled' : ''}>${icon('menschen')} ${esc(T('mehr.einstieg'))}</button></div>`;
+}
+
 export const OB_SCHRITTE = 8;
 export const ANALYSE_ZEILEN = ['ob.analyse1', 'ob.analyse2', 'ob.analyse3', 'ob.analyse4'];
 
@@ -99,20 +109,21 @@ export const ONBOARDING_SCREENS = {
             ? `<button class="opt belegt" disabled>${icon(b.icon)}<span>${esc(b.name)}<small>${esc(T(kapitelHeld() ? 'ob.kapitelAnderer' : 'ob.heldSchonDabei'))}</small></span></button>`
             : `<button class="opt ${ui.bereich === b.id ? 'sel' : ''}" aria-pressed="${ui.bereich === b.id}" data-a="bereich" data-id="${b.id}">${icon(b.icon)}<span>${esc(b.name)}</span></button>`).join('')}
         </div>
-        ${ui.neu && !kapitelHeld() && kx.startpaketErlaubt() && MF.platzFrei(kx.spiel) > 1 ? `<div class="karte spalte"><span class="eyebrow">${esc(T('mehr.eyebrow'))}</span><p class="klein">${esc(T('mehr.einstiegText'))}</p><button class="btn" data-a="mehrfach-oeffnen">${icon('menschen')} ${esc(T('mehr.einstieg'))}</button></div>` : ''}
         ${ui.neu ? '' : einwKarte(true)}
+        ${mehrfachKarte()}
         ${!ui.neu && kx.startpaketErlaubt() ? `<div class="karte spalte"><span class="eyebrow">${esc(T('einst.startpaket'))}</span>${Object.keys(STARTPAKETE).map(id => startpaketKnopf(id, 'btn')).join('')}</div>` : ''}
       </div>
       <div class="fuss"><button class="cta" data-a="weiter" ${ui.bereich && (ui.neu || !EW.istOffen(einw)) ? '' : 'disabled'}>${esc(T('ob.weiter'))}</button></div>
     </section>`;
   },
 
-  // Mehrere Helden auf einmal (05.11.2026): nur bei ui.neu und für Besitzer bzw. Testprofil; sonst zurück zum ersten Schritt.
+  // Mehrere Helden auf einmal (05.11.2026): seit 10.11.2026 für alle, im ersten Start (noch kein Held) und bei ui.neu; sonst
+  // zurück zum ersten Schritt. Das Startpaket (ui.mehrfach.paket) bleibt bei Besitzer und Testprofil.
   // Zustand ui.mehrfach = { auswahl: [Vorlagen-IDs], fehler }. Logik: logik/mehrfach.js, Anlegen: mehrfachAnlegen in app.js.
   obmehr() {
     const { SCREENS, T, nameVon, spiel, ui } = kx;
     if (ui.mehrfach && ui.mehrfach.paket && kx.startpaketErlaubt()) return paketAuswahlHtml(); // Startpaket (06.11.2026)
-    if (!ui.neu || !kx.startpaketErlaubt() || !ui.mehrfach) { ui.screen = 'ob1'; return SCREENS.ob1(); }
+    if (!kx.mehrfachErlaubt() || !ui.mehrfach || ui.mehrfach.paket) { ui.screen = 'ob1'; return SCREENS.ob1(); }
     const ang = MF.angebot(TABELLE, spiel);
     const frei = MF.platzFrei(spiel);
     const gew = ui.mehrfach.auswahl;
@@ -350,10 +361,11 @@ export const ONBOARDING_KLICKS = {
     trackEvent('new_adventure_started', { helden: spiel.helden.length });
     geheZu('ob1');
   },
-  // Mehrere Helden auf einmal (05.11.2026)
+  // Mehrere Helden auf einmal (05.11.2026, seit 10.11.2026 für alle)
   'mehrfach-oeffnen'() {
-    const { geheZu, ui } = kx;
-    if (!ui.neu || !kx.startpaketErlaubt()) { console.warn('Mehrere Helden: nur für den Besitzer oder im Testprofil'); return; }
+    const { einw, geheZu, ui } = kx;
+    if (!kx.mehrfachErlaubt() || kapitelHeld()) { console.warn('Mehrere Helden: hier nicht möglich'); return; }
+    if (!ui.neu && EW.istOffen(einw)) { console.warn('Mehrere Helden: erst die Datenfrage beantworten'); return; }
     ui.mehrfach = { auswahl: [], fehler: null };
     trackEvent('multi_heroes_opened', {});
     geheZu('obmehr');

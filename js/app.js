@@ -77,6 +77,8 @@ import { STUETZEN_FELDER, STUETZEN_KLICKS } from './ansicht/stuetzen.js';
 import * as MF from './logik/mehrfach.js'; // Mehrere Helden auf einmal (05.11.2026)
 import * as SP from './logik/startpaket.js'; // Startpaket mit drei Helden (02.11.2026) // Schritt „Zähler“: Stützgewohnheiten
 import { STILWAHL_KLICKS, STILWAHL_SCREENS } from './ansicht/stilwahl.js';
+import { starteIntro } from './ansicht/intro.js'; // Welten-Intro (Version 175)
+import * as IN from './logik/intro.js';
 import { FEEDBACK_FELDER, FEEDBACK_KLICKS, FEEDBACK_SCREENS } from './ansicht/feedback.js';
 import { ADMIN_FELDER, ADMIN_KLICKS, ADMIN_SCREENS } from './ansicht/admin.js';
 import { BLATT_KLICKS, blattHtml } from './ansicht/blatt.js';
@@ -103,6 +105,7 @@ import { HELDENMODI } from './daten/heldenmodi.js';
 import { LINK_BASIS, PROFILE, SPRUNGZIELE } from './daten/sprungziele.js';
 import { NACHTRAGEN } from './daten/nachtragen.js';
 import * as RT from './logik/ruhetag.js'; // Version 90: Ruhetag
+import * as MKARTE from './logik/morgenkarte.js'; // Version 173: Morgenkarte
 import { hashFuer, leseHash, linkFuer, pruefeSprungziele, sprungEntscheid } from './logik/sprung.js';
 import { MESSZIEL_FELDER, MESSZIEL_KLICKS, messzielBlattHtml, messzielSchluessel } from './ansicht/messziele.js';
 import { ZIELQUEST_FELDER, ZIELQUEST_KLICKS, pruefeZielWahl } from './ansicht/zielquest.js'; // Ziel-Quests (31.10.2026)
@@ -116,7 +119,7 @@ import { START_KLICKS, START_KURZ, START_SCREENS, START_TEILE, buehneDauerMs, bu
 import { BUEHNE_KLICKS } from './ansicht/buehne.js'; // 02.11.2026: aus startseite.js ausgelagert
 import { NACHTRAG_KLICKS } from './ansicht/nachtrag.js';
 
-export const VERSION = { nr: 172, datum: '09.11.2026 · 15:28' };
+export const VERSION = { nr: 177, datum: '10.11.2026 · 12:30' };
 
 // Version 78: Hash aus Profil und Sprungziel (daten/sprungziele.js), z. B. #notfall oder #test+notfall.
 const HASH = leseHash(location.hash, { profile: PROFILE, ziele: SPRUNGZIELE });
@@ -1201,6 +1204,8 @@ function weiter() {
   if (naechster === 'ob6') trackEvent('boss_revealed', { gegner: aktuelleVorlage().gegner });
   merkeAuswahl();
   geheZu(naechster);
+  // Welten-Intro (Version 175): einmal nach der Stilwahl (ob1) im ersten Onboarding; Fehler stoppen nie den Start.
+  if (REIHE[i] === 'ob1' && !ui.neu && !istAdmin) { try { if (IN.introFaellig(spiel)) starteIntro(); } catch (e) { console.warn('Intro:', e.message); } }
 }
 
 function zurueck() {
@@ -1240,18 +1245,28 @@ function startpaketAnlegenAuswahl() {
   geheZu('start');
 }
 
-// Mehrere Helden auf einmal (05.11.2026, logik/mehrfach.js): nur Besitzer und #test, alles oder nichts.
+// Mehrere Helden auf einmal (05.11.2026, logik/mehrfach.js): alles oder nichts. Seit 10.11.2026 für alle (vorher nur Besitzer
+// und #test): im ersten Onboarding (noch kein Held) und im Schritt „Neues Abenteuer“. Das Startpaket bleibt bei Besitzer und #test.
 // Scheitert es, bleibt der Spielstand unverändert und die Meldung steht auf dem Bildschirm.
+const mehrfachErsterStart = () => !(spiel && Array.isArray(spiel.helden) && spiel.helden.length);
+const mehrfachErlaubt = () => !!ui.neu || mehrfachErsterStart();
 function mehrfachAnlegen() {
   if (startpaketErlaubt() && ui.mehrfach && ui.mehrfach.paket) return startpaketAnlegenAuswahl(); // Startpaket (06.11.2026)
-  if (!startpaketErlaubt() || !ui.neu || !ui.mehrfach) { console.warn('Mehrere Helden: nur für den Besitzer oder im Testprofil'); return; }
+  if (!mehrfachErlaubt() || !ui.mehrfach || ui.mehrfach.paket) { console.warn('Mehrere Helden: hier nicht möglich'); return; }
+  // Erster Start: die Einwilligung (Übertragung der Nutzungsdaten) wird vorher entschieden, wie bei „Weiter“ im Onboarding
+  if (!ui.neu && EW.istOffen(einw)) { console.warn('Mehrere Helden: erst die Datenfrage beantworten'); ui.mehrfach.fehler = T('mehr.erstDaten'); render(); return; }
+  const ersterStart = !ui.neu;
   let r;
   try { r = MF.mehrereAnlegen(spiel, ui.mehrfach.auswahl, TABELLE, jetzt(), zuordnung, { rampe: RAMPE_NEU }); }
   catch (e) { console.warn('Mehrere Helden:', e.message); ui.mehrfach.fehler = e.message; render(); return; }
   setzeSpiel(r.spiel);
   Object.assign(ui, { mehrfach: null, neu: false, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null });
   speichere();
-  trackEvent('multi_heroes_added', { helden: r.angelegt.length, gesamt: spiel.helden.length });
+  trackEvent('multi_heroes_added', { helden: r.angelegt.length, gesamt: spiel.helden.length, erster_start: ersterStart });
+  if (ersterStart) { // Trichter wie beim Weg Held für Held (beginnen)
+    if (ui.obStart) merke('onboarding_ms', Date.now() - ui.obStart);
+    trackEvent('onboarding_finished', { vorlage: 'mehrfach' });
+  }
   const erhalt = r.angelegt.map(id => neuImErhaltText(id)).filter(Boolean);
   hinweis = [T('mehr.angelegt', { namen: r.angelegt.map(nameVon).join(', ') }), ...new Set(erhalt)].join(' ');
   geheZu('start');
@@ -1349,6 +1364,7 @@ function check(antwort) {
   }
   setzeStand(r.stand);
   if (antwort === 'ja') setzeSpiel(RT.nachJa(spiel, spiel.fokus, K.tagKey(jetzt()))); // Version 90: „Ja“ hebt einen Ruhetag auf
+  if (antwort) setzeSpiel(MKARTE.karteGesehenSetzen(spiel, K.tagKey(jetzt()))); // Version 173: wer schon antwortet, braucht die Morgenkarte heute nicht mehr
   // 02.11.2026: Bühne erst nach dem Übernehmen starten, die Lesezeit der Gegner-Reaktion hängt von der heutigen Antwort ab
   const buehneArt = starteBuehne(antwort, r);
   speichere();
@@ -1750,7 +1766,7 @@ binde(
     ladeAdmin, mikro, oeffneBlatt, zeichneNachZeiger: renderNachZeiger,
     // Pflege (Pflege-Logik auslagern): Zustand, Umgebung mit Datenbank-Adapter, Bildplätze
     bildPlaetze, eingebautesBild, kartenLuecken, kartenPlatzBekannt, pflegeUmgebung, pflegeZustand, sprungLink, nachtrage,
-    bestaetige, setzeAnzeige, systemRuhig, gegnerVerhuellt, vorstellungSpaeter, vorstellungZeigen, startpaket, startpaketErlaubt, mehrfachAnlegen, pruefeBesuchsMomente, questBearbeitenOeffnen, questBearbeitenSpeichern, render, schliesseBlatt, setzeHinweis, setzeSpiel, setzeStand, speichere, sperrTextVon, stoppeAnalyse,
+    bestaetige, setzeAnzeige, systemRuhig, gegnerVerhuellt, vorstellungSpaeter, vorstellungZeigen, startpaket, startpaketErlaubt, mehrfachErlaubt, mehrfachErsterStart, mehrfachAnlegen, pruefeBesuchsMomente, questBearbeitenOeffnen, questBearbeitenSpeichern, render, schliesseBlatt, setzeHinweis, setzeSpiel, setzeStand, speichere, sperrTextVon, stoppeAnalyse,
     storyGelesenBis, teileExport, weiter, zeigeNaechstes, zeitSprung, zurueck, siegNachholen }
 );
 // </kontext>

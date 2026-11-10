@@ -13,18 +13,18 @@ import * as K from '../logik/kern.js';
 import { lagerfeuerSatz, lagerfeuerStand } from '../logik/lagerfeuer.js';
 import { erfolgsSatz, siegelleiste } from '../logik/siegelleiste.js';
 import { ablaufEndeMs, ablaufJetzt, leisteAnimation, lesedauerMs, mitLesezeit } from '../logik/bewegung.js';
-import { buehneDauer, buehneZustand, naechsterOffener, rueckDauer, tagesfrage, wennDann } from '../logik/startseite.js';
+import { buehneDauer, buehneZustand, naechsterOffener, planFrage, rueckDauer, tagesfrage, wennDann } from '../logik/startseite.js';
+import { AKTION_SYMBOLE } from '../daten/symbole.js'; // Version 174: Symbol des Knopfes „Rat für heute“
 import { blitzEbene, bwStil, esc, fortschrittHier, grossAnfang, icon, kachelLeiste } from './helfer.js';
 import { kx } from './kontext.js';
 import { eintragLink, oeffneEintrag } from './eintrag.js';
 import { ANTWORT_ARTEN, antwortArt, istAntwort, siegelAntworten } from '../logik/antworten.js'; // Version 141: Antwort-Register
-import { notfallKnopf } from './notfall.js';
 import { probeHtml } from './probe.js';
 import { messzielKarte } from './messziele.js'; // Lagerfeuer: Messziele unter „Noch etwas?“ (Entscheidung 02.11., 2b)
 import { ruhetagHeuteZeile, ruhetagLink } from './ruhetag.js';
 import { stuetzeBereitHtml, stuetzenHakenHtml } from './stuetzen.js';
 import { artSchluessel, artText, bogenTeile, comebackHtml, erledigtIcon, erledigtText } from './bestaendigkeit.js'; // Beständigkeit (04.11.2026)
-import { nachtragHtml, nachtragModus, nachtragName, nachtragZeile, nachtragZusatz } from './nachtrag.js';
+import { nachtragHinweis, nachtragHtml, nachtragKachel, nachtragModus, nachtragName, nachtragWahlHtml, nachtragZusatz } from './nachtrag.js';
 import { arenaHtml, beginntText, besiegtHeuteVorNeuem, vorstellungHinweisHtml, botschaftGesehen, botschaftHeute, bossReaktion, eintragLinks, heldenHeute, storyMorgen, weiterZuKnopf } from './startseite.js';
 import { vorsatzZeileHtml } from './wochenrunde.js'; // Vorsatz der Woche unter der Tagesfrage (05.11.2026)
 import { bedingungenHtml } from './bedingungen.js'; // Bosskette mit Bedingungen (06.11.2026)
@@ -155,22 +155,33 @@ export function buehneHtml({ v, f, g, a }) {
   let tat = '';
   if (z.zustand === 'offen') {
     const wd = wennDann(f);
-    const kopf = `<div class="tat-kopf"><span class="tat-medaille" aria-hidden="true">${icon(f.icon || 'stern')}</span>
+    // Version 174: `mehr` = Knopf „Rat für heute“ (drei Punkte) rechts neben dem Titel; nur auf der offenen Karte ohne Nachtrag
+    const kopf = (mehr = '') => `<div class="tat-kopf"><span class="tat-medaille" aria-hidden="true">${icon(f.icon || 'stern')}</span>
         <span class="spalte"><span class="eyebrow tat-eyebrow">${esc(nt ? T('nachtrag.eyebrow', { tag: nachtragName(nt).toUpperCase() }) : T('tat.eyebrow'))}</span>
-        <button class="tat-name tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(T('tat.ansehen', { faehigkeit: f.name }))}">${esc(f.name)}</button></span></div>`;
+        <button class="tat-name tippbar" data-a="blatt" data-id="faehigkeit" aria-label="${esc(T('tat.ansehen', { faehigkeit: f.name }))}">${esc(f.name)}</button></span>${mehr}</div>`;
     // Version 146 (Bewertung 05.11.2026, Punkt 9a): Der Wenn-dann-Plan steht IN der haftenden Daumenleiste direkt über
     // der Tagesfrage. Vorher stand er darüber im mitscrollenden Teil und war am Handy oft hinter der Leiste verborgen,
     // gerade im Moment der Entscheidung. Psychologie: Ein Wenn-dann-Plan wirkt, wenn er vor der Entscheidung abgerufen
     // wird (Gollwitzer). Nachtrag und „beginnt später“ haben keine Daumenleiste: dort bleibt er unter dem Namen.
     const regel = regelHtml(wd);
     // Startpaket (18a): Quest beginnt erst später → keine Siegel, nur ein ruhiger Hinweis (heute ist nichts zu tun)
-    tat = nt ? kopf + regel + nachtragHtml(nt, f)
-      : K.vorBeginn(kx.stand, K.tagKey(jetzt())) ? `${kopf}${regel}<div class="ruhe-zeile vor-beginn" role="status"><span class="eyebrow">${esc(beginntText(kx.stand).toUpperCase())}</span><p class="ruhe-text">${esc(T('beginn.titel'))}</p><p class="klein">${esc(T('beginn.text', { faehigkeit: f.name }))}</p></div>`
-      : `${kopf}${nachtragZeile()}${ruhetagHeuteZeile()}${bid ? '' : bedingungenHtml(a)}
-      <div class="tat-daumen${ersterTag() ? ' erster' : ''}">${regel.replace('class="tat-regel"', 'class="tat-regel im-daumen"')}<p class="tat-frage">${esc(tagesfrage(v, f, T(artSchluessel('frage', 'tat.frage'), { faehigkeit: f.name })))}</p>${ersterTagHtml()}${vorsatzZeileHtml(spiel.fokus)}
+    // Version 174 (Entscheidung 10.11.2026): Plan und Frage in EINEM Block (die Situation steht schon im Plan, die Frage wird kurz,
+    // siehe planFrage); Nebenaktionen (Schwerer Tag, Nachtragen, Ruhetag, Morgenkarte) hinter „⋯“ neben dem Titel, „Gerade schwer“
+    // bleibt in der Kopfzeile. Psychologie: eine Entscheidung je Moment (weniger Wahl, weniger Reibung); die Hilfe steht nicht
+    // dauernd da, sondern erscheint nach „War schwer“ von selbst (Hilfe im Moment der Schwierigkeit).
+    const vorBeginn = !nt && K.vorBeginn(kx.stand, K.tagKey(jetzt()));
+    const rat = nt || vorBeginn ? { knopf: '', liste: '' } : ratHtml(); // Menü nur auf der Karte mit Siegeln
+    const standardFrage = artSchluessel('frage', 'tat.frage');
+    const frage = planFrage(wd, standardFrage === 'tat.frage', T('tat.frageMitPlan'), tagesfrage(v, f, T(standardFrage, { faehigkeit: f.name })));
+    const block = `<div class="tat-block">${regelHtml(wd, true)}<p class="tat-frage">${esc(frage)}</p></div>`;
+    const hilfeLink = schwerSiegelDa(a.ohneFrage) ? '' : eintragLink('schwer', 'eintrag.link.schwer');
+    tat = nt ? kopf() + regel + nachtragHtml(nt, f)
+      : vorBeginn ? `${kopf()}${regel}<div class="ruhe-zeile vor-beginn" role="status"><span class="eyebrow">${esc(beginntText(kx.stand).toUpperCase())}</span><p class="ruhe-text">${esc(T('beginn.titel'))}</p><p class="klein">${esc(T('beginn.text', { faehigkeit: f.name }))}</p></div>`
+      : `${kopf(rat.knopf)}${rat.liste}${nachtragHinweis()}${ruhetagHeuteZeile()}${bid ? '' : bedingungenHtml(a)}
+      <div class="tat-daumen${ersterTag() ? ' erster' : ''}">${block}${ersterTagHtml()}${vorsatzZeileHtml(spiel.fokus)}
       ${a.ohneFrage ? `<p class="klein tat-zw-hinweis">${esc(artText('hinweis', 'tat.frage'))}</p>` : ''}
       ${siegelReiheHtml(a.ohneFrage)}
-      <div class="daumen-hilfen">${ratHtml(wd)}${schwerSiegelDa(a.ohneFrage) ? '' : eintragLink('schwer', 'eintrag.link.schwer')}</div></div>`;
+      ${hilfeLink ? `<div class="daumen-hilfen">${hilfeLink}</div>` : ''}</div>`;
   } else {
     const erledigt = `<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}${antw ? ' art-' + esc(antw) : ''}" role="status">${erledigtIcon(antw)}<span>${esc(erledigtText(antw, f))}</span><button class="link" data-a="check" data-id="">${esc(T('tat.aendern'))}</button></div>`;
     // Im Ablauf schon die leisen Links (festhalten, schwerer Moment), damit man nicht 9 Sekunden warten muss
@@ -187,9 +198,11 @@ export function buehneHtml({ v, f, g, a }) {
   </section>`;
 }
 // Wenn-dann-Zeile der Fähigkeit (leer ohne Text in der Vorlage). Wirft nie.
-function regelHtml(wd) {
+// block = true (Version 174): zwei Zeilen WENN / DANN im Block mit der Frage; sonst eine Zeile mit Pfeil (Nachtrag, „beginnt später“).
+function regelHtml(wd, block = false) {
   const { T } = kx;
   if (!wd || (!wd.wenn && !wd.dann)) return '';
+  if (block) return `<p class="tat-regel im-block">${wd.wenn ? `<b>${esc(T('tat.wenn'))}</b><span>${esc(wd.wenn)}</span>` : ''}${wd.dann ? `<b class="dann">${esc(T('tat.dannLabel'))}</b><span>${esc(wd.dann)}</span>` : ''}</p>`;
   return `<p class="tat-regel">${wd.wenn ? `<b>${esc(T('tat.wenn'))}</b> <span>${esc(wd.wenn)}</span>` : ''}${wd.wenn && wd.dann ? ' <span class="tat-pfeil" aria-hidden="true">→</span> ' : ''}${wd.dann ? `<b class="dann">${esc(T('tat.dannLabel'))}</b> <span>${esc(wd.dann)}</span>` : ''}</p>`;
 }
 // Siegel statt großer Knöpfe: gleich groß, Wort und Symbol je Stil (stile.js `texte` / `symbole`)
@@ -212,17 +225,21 @@ function siegelKnopf(antwort, art, standard, wortKey = null) {
   const { T, symbol } = kx;
   return `<button class="tat-siegel ${art}" data-a="check" data-id="${antwort}"><span class="siegel-rund" aria-hidden="true">${icon(symbol('siegel.' + art, standard))}</span><span class="siegel-wort">${esc(T(wortKey || 'siegel.' + art))}</span></button>`;
 }
-// „Rat für heute“ (Name je Stil): Notfallkarte, Morgenprobe und „Heute war es schwer“ hinter einem leisen Knopf.
-// Grund: Hilfe ist da, wenn man sie sucht, ohne drei Links vor die Hauptaktion zu stellen.
-function ratHtml(wd) {
-  const { T, spiel, ui } = kx;
-  // Version 93: dieselben Kacheln wie nach der Antwort; die Morgenprobe (aufklappbar) bleibt darunter
-  const leiste = kachelLeiste([notfallKnopf('', { alsKachel: true }), eintragLink('schwer', 'eintrag.link.schwer', { alsKachel: true }), ruhetagLink({ ohneHeute: true, alsKachel: true })]);
-  const teile = [leiste, probeHtml(wd)].filter(x => String(x || '').trim());
-  if (!teile.length) return '';
+// „Rat für heute“ (Name je Stil): Schwerer Tag, Nachtragen, Ruhetag und Morgenkarte hinter einem leisen Knopf (drei Punkte) neben
+// dem Titel der Heldentat. Grund: Hilfe ist da, wenn man sie sucht, ohne Links vor die Hauptaktion zu stellen.
+// Version 174: Knopf und Liste getrennt ({ knopf, liste }), weil der Knopf im Kopf der Karte und die Liste darunter steht.
+// Die Notfallkarte fehlt hier bewusst: „Gerade schwer“ in der Kopfzeile öffnet sie jederzeit (gleiche Freigabe, FUNKTIONEN.notfallkarte).
+// Nachtragen (vorher eine eigene Zeile über der Frage) ist die Kachel „Nachtragen“, die Tageswahl steht unter der Leiste.
+function ratHtml() {
+  const { T, spiel, symbol, ui } = kx;
+  const leiste = kachelLeiste([eintragLink('schwer', 'eintrag.link.schwer', { alsKachel: true }), nachtragKachel(), ruhetagLink({ ohneHeute: true, alsKachel: true })]);
+  const teile = [leiste, nachtragWahlHtml(), probeHtml()].filter(x => String(x || '').trim());
+  if (!teile.length) return { knopf: '', liste: '' };
   const offen = ui.ratOffen === spiel.fokus;
-  return `<div class="rat${offen ? ' offen' : ''}"><button class="rat-knopf" data-a="rat" aria-expanded="${offen}">${icon('kompass')}<span>${esc(T('rat.titel'))}</span></button>
-    ${offen ? `<div class="rat-liste" role="group" aria-label="${esc(T('rat.aria'))}">${teile.join('')}</div>` : ''}</div>`;
+  const titel = T('rat.titel');
+  const knopf = `<button class="rat-knopf rat-mehr" data-a="rat" aria-expanded="${offen}" aria-label="${esc(titel)}" title="${esc(titel)}">${icon(symbol('aktion.mehr', AKTION_SYMBOLE['aktion.mehr']))}</button>`;
+  const liste = offen ? `<div class="rat offen"><div class="rat-liste" role="group" aria-label="${esc(T('rat.aria'))}"><span class="eyebrow rat-titel">${esc(titel.toUpperCase())}</span>${teile.join('')}</div></div>` : '';
+  return { knopf, liste };
 }
 // Ruhezustand: „Für heute ist alles getan“ erst, wenn alle Helden fertig sind; sonst „<Held> ist fertig“ + Weiter zu …
 function ruheNaechster() {
@@ -578,6 +595,7 @@ export const BUEHNE_KLICKS = {
     const { render, spiel, ui } = kx;
     ui.ratOffen = ui.ratOffen === spiel.fokus ? null : spiel.fokus;
     if (ui.ratOffen) trackEvent('advice_opened', {});
+    else ui.nachtragWahl = false; // Version 174: die Tageswahl steht im Menü und schließt mit ihm
     render();
   }
 };

@@ -169,10 +169,16 @@ export const TEXTE = {
   'probe.vorbereitet': 'Heute vorbereitet',
   'probe.keinPlan': 'Noch kein Wenn-dann-Plan.',
   'probe.fehler': 'Das ließ sich nicht speichern: {grund}',
-  'einst.probe': 'Morgenprobe',
-  'einst.probeText': 'Kurz: eine Zeile auf der Heldentat. Ausführlich: alle Helden, mit Merker und Muster.',
-  'einst.probe.kurz': 'Kurz',
-  'einst.probe.ausfuehrlich': 'Ausführlich',
+  // Morgenkarte (Version 173): Erinnerung beim ersten Öffnen am Tag; die Sätze der Morgenprobe (probe.*) bleiben für Satz und Blatt
+  'morgen.aria': 'Morgenkarte: woran du heute denken willst',
+  'morgen.eyebrow': 'WORAN DU HEUTE DENKEN WILLST',
+  'morgen.ok': 'Los geht’s',
+  'morgen.alle': 'Alle Helden ansehen',
+  'morgen.aus': 'Nicht mehr zeigen',
+  'einst.karte': 'Morgenkarte',
+  'einst.karteText': 'Beim ersten Öffnen am Tag eine ruhige Erinnerung an Ziel und Wenn-dann-Plan. Nichts wird abgehakt oder gezählt.',
+  'einst.karte.an': 'An',
+  'einst.karte.aus': 'Aus',
   // Blatt „Anzeige“ (Version 125): gilt nur für dieses Gerät
   'einst.anzeige': 'ANZEIGE',
   'einst.anzeigeAnpassen': 'Anzeige anpassen',
@@ -675,6 +681,7 @@ export const TEXTE = {
   'weg.rundeGeschafft': '{gegner} besiegt · diese Runde geschafft', // Version 140: Streifen, wenn kein Rest bleibt
   'weg.bedingung': 'Treffer voll · {gegner} wartet auf deine Fähigkeit', // 06.11.2026: offene Bedingung der Bosskette
   'weg.kapitel': '{kapitel} {nr}',
+  'weg.kapitelVon': '{kapitel} {nr} von {anzahl}', // Version 174: eingeklappte Wegleiste (Kette), der Gegner steht schon in der Arena
   'weg.morgen': 'Neues {kapitel} · der Kampf gegen {gegner} beginnt morgen',
   'weg.morgenNeu': 'Neues {kapitel} · ein neuer Gegner wartet ab morgen',
   'weg.aria': '{held} auf dem Weg: {text}',
@@ -736,6 +743,7 @@ export const TEXTE = {
   'tl.held': '{held}',
   'tl.heldErledigt': '{held}, heute erledigt',
   'tl.heldAktiv': '{held}, gerade gewählt',
+  'tl.heldAbruf': '{held}, {zaehlweise}, auf Abruf',
   'tat.spaeter': 'Später',
   'kopf.offen': '{n} offen',
   'kopf.leisteAria': '{held} · {quest}',
@@ -910,6 +918,7 @@ export const TEXTE = {
   'tat.wenn': 'WENN',
   'tat.dannLabel': 'DANN',
   'tat.frage': 'Hast du heute „{faehigkeit}“ angewendet?',
+  'tat.frageMitPlan': 'Hat dein Plan heute gehalten?', // Version 174: Wenn-dann-Plan und Frage stehen in einem Block, die Situation steht schon im Plan
   'tat.ja': 'Ja, geschafft',
   'tat.nein': 'Heute nicht gebraucht',
   'tat.woche': '{n} von {anzahl} diese Woche',
@@ -1094,7 +1103,8 @@ export const TEXTE = {
   // Mehrere Helden auf einmal (05.11.2026): nur Besitzer und Testprofil
   'mehr.einstieg': 'Mehrere auf einmal',
   'mehr.einstiegText': 'Gleich mehrere Helden in einem Schritt holen.',
-  'mehr.eyebrow': 'NUR FÜR DICH',
+  'mehr.eyebrow': 'Schneller Einstieg',
+  'mehr.erstDaten': 'Beantworte bitte zuerst die Frage zur Übertragung der Nutzungsdaten auf dem ersten Schritt.',
   'mehr.titel': 'Mehrere Helden auf einmal',
   'mehr.text': 'Wähle je Held eine Herausforderung. Jeder startet mit dem ersten Ziel, das du danach jederzeit ändern kannst.',
   'mehr.platz': 'Gewählt: {n} von {frei} freien Plätzen',

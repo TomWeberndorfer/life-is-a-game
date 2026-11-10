@@ -24,6 +24,10 @@ export const START_ABSCHNITTE = [
   { id: 'tagesleiste' }, // Etappe 3, Teil B: „Heute x von n“ mit Porträts, nur ab 2 Helden
   { id: 'kopfleiste' }, // Held und Hauptquest: Porträt mit ⓘ und Stufe, Titel mit Stift, Warum, Weg, Lebenszeile
   { id: 'neuigkeiten' },// fester Platz, höchstens NEU_PLATZ.max am Tag (Einwilligung, Neu freigeschaltet, Abenteuer, Welten)
+  // Morgenkarte (Version 173, Entscheidung 10.11.2026): beim ersten Öffnen am Tag, vor dem Tages-Check, eine ruhige Erinnerung
+  // „woran du heute denken willst“ (Gegner-Bild, Ziel, Wenn-dann). Auswahl und Grenzen: PROBE.karte. Zeigt nichts, wenn kein
+  // Held passt, wenn sie heute gesehen wurde oder in den Einstellungen aus ist.
+  { id: 'morgenkarte', wann: 'vorCheck' },
   { id: 'buehne', ersetzt: ['botschaft', 'heldentat', 'duell'] }, // Kampfbühne: Gegner, Sprechblase, Heldentat, Siegel, Ruhe
   { id: 'botschaft', aus: true },  // alter Ablauf: Crew-Botschaft des Tages als eigene Karte
   { id: 'heldentat', aus: true },  // alter Ablauf: Heutige Heldentat (Version 44)
@@ -91,10 +95,14 @@ export const WEG_FENSTER = { zurueck: 2, voraus: 1 };
 //                antippen klappt große, seitlich wischbare Bilder auf (WEG_FENSTER). Auf/zu wird je Gerät gemerkt
 //                (Merkmal weg_offen). Grund: kleine Bilder waren am Handy kaum zu erkennen und nahmen Platz über der Heldentat.
 // Unbekannter Wert → 'pfad'.
+// streifen (Version 174, 10.11.2026) = eingeklappte Zeile des Streifens: 'kette' (Punkte je Gegner und „Kapitel n von m“, kein
+//                Gegnerbild, kein Balken; die Arena darunter zeigt Gegner, Kraft und Kapitel schon) oder 'status' (wie bis Version 173: Gegnerbild, Balken, „noch n bis …“).
+//                Ein einzelner Gegner hat keine Kette und zeigt immer 'status'. Unbekannter Wert → 'status'.
+//                Grund: derselbe Gegner stand zweimal untereinander (Leiste und Arena), eingeklappt soll die Leiste kaum Platz brauchen.
 // warumZeichen (Etappe 3, Teil A): Warum und Lebenszeile teilen sich eine Zeile. Ist das Warum länger, wird es auf
 // eine Zeile gekürzt und lässt sich aufklappen (nur in der Sitzung gemerkt). 0 = immer ganz zeigen.
 // Version 146: 60 statt 44 Zeichen (das eigene Warum soll meist ganz lesbar sein, Bewertung 05.11.2026 Punkt 10).
-export const KOPFLEISTE = { weg: 'streifen', warumZeichen: 60 };
+export const KOPFLEISTE = { weg: 'streifen', streifen: 'kette', warumZeichen: 60 };
 
 // Heldenkopf: wie viele Mini-Porträts der Knopf „Helden wechseln“ höchstens stapelt.
 export const HELDENKOPF = { stapelMax: 3 };
@@ -102,22 +110,36 @@ export const HELDENKOPF = { stapelMax: 3 };
 // Tagesleiste (Etappe 3, Teil B, 02.11.2026): ersetzt auf der Startseite den Heldenstapel oben rechts. „Heute 1 von 3“,
 // daneben die Porträts mit Haken bei erledigt; ein Tipp wechselt den Helden. Die Karte behält den Stapel.
 // an: false = wieder Stapel; abHelden: ab so vielen Helden sichtbar; max: höchstens so viele Taten am Tag.
-export const TAGESLEISTE = { an: true, abHelden: 2, max: 3 };
+// abrufMax (Version 177): so viele Helden ohne Tagesfrage (Rhythmus, Wache) stehen daneben, der Rest im Stapel.
+export const TAGESLEISTE = { an: true, abHelden: 2, max: 3, abrufMax: 2 };
 
-// Morgenprobe (Version 81, schlanke Variante, Entscheidung 30.10.2026 Punkt 9): leise Zeile „Wo könnte es heute
-// schwierig werden?“ auf der Heldentat-Karte, nur vor dem Tages-Check. Antippen klappt eine kurze Probe auf: den Plan
-// im Kopf durchspielen, dazu der letzte Plan fürs nächste Mal aus einem schweren Tag. Keine eigene Runde, keine XP,
-// nichts gespeichert (ein verpasster Morgen darf keine kleine Niederlage sein).
-// Psychologie: Wer die Situation vorher kurz vor Augen hat, erkennt den Auslöser im Moment eher (mentale Probe des
-// Wenn-dann-Plans, wie bei WOOP).
-// an        false = Zeile ausblenden
-// planTage  Pläne aus schweren Tagen, die höchstens so alt sind, erscheinen in der Probe (0–90, sonst 30)
-// Version 81, Entscheidung 30.10.2026 (Punkt 4, 13a): zwei Varianten, je Person in den Einstellungen wählbar, sofort,
-// ohne Freischaltung. Gespeichert in spiel.einstellungen.probe (geräteübergreifend). Fehlt das Feld: `standard`.
-// varianten   erlaubte Werte; 'kurz' = Zeile mit Box, 'ausfuehrlich' = Blatt mit allen Helden, „Könnte heute kommen“
-//             (Eintrag der Art probe) und Muster-Hinweis
-// musterMin   ab so vielen schweren Tagen am selben Wochentag erscheint der Muster-Hinweis (1–20, sonst 3)
-export const PROBE = { an: true, planTage: 30, varianten: ['kurz', 'ausfuehrlich'], standard: 'kurz', musterMin: 3 };
+// Morgenprobe (Version 81) und Morgenkarte (Version 173, Entscheidung 10.11.2026, claude/entscheidung-morgenkarte.md).
+// Seit Version 173 gibt es keine Zeile mehr auf der Heldentat und keine kurze Box: die Morgenkarte (Abschnitt `morgenkarte`)
+// erinnert einmal am Morgen an das Wichtige; ihr Knopf „Alle Helden ansehen“ und ein leiser Link im „Rat für heute“ öffnen das
+// Blatt der ausführlichen Probe (alle Helden, „Könnte heute kommen“, Muster-Hinweis, letzter Plan).
+// Psychologie: Wenn-dann-Pläne wirken über die Situation (Gollwitzer). Das Durchspielen des eigenen Tuns hilft mehr als das
+// Ausmalen des Ergebnisses (Pham & Taylor; Oettingen), darum zeigt die Karte den Plan, kein Wunschbild. Keine Haken, keine XP,
+// keine Serie, kein Rot; ein ausgelassener Morgen kostet nichts.
+// an        false = Morgenprobe ganz aus (Karte und Blatt)
+// planTage  Pläne aus schweren Tagen, die höchstens so alt sind, erscheinen im Blatt (0–90, sonst 30)
+// musterMin ab so vielen schweren Tagen am selben Wochentag erscheint der Muster-Hinweis (1–20, sonst 3)
+// varianten, standard  Alt (Version 81): Wahl „kurz“ / „ausfuehrlich“. Wird weiter gelesen und gespeichert, aber nicht mehr
+//           ausgewertet (nichts geht verloren, falls die Wahl je zurückkommt).
+// karte     Morgenkarte:
+//   varianten, standard  Wahl der Person in den Einstellungen (spiel.einstellungen.karte): 'an' | 'aus'
+//   max       so viele Zeilen höchstens (1–8, sonst 4); der Held im Rampenlicht steht zuerst, dann nach der Reihenfolge der Regeln
+//   regeln    je Heldenmodus (daten/heldenmodi.js): wer gezeigt wird. Ein Modus ohne Eintrag (Ruhe) wird nie gezeigt.
+//             zaehlweisen  nur diese Zählweisen (daten/zaehlweisen.js); fehlt die Angabe = alle
+//             plan         true = nur mit Wenn-dann-Plan
+//             Grund Erhalt + Wache: eine Wache hat keine Tagesfrage und ist nie „offen“, morgens erinnert sonst nichts an sie
+//             (Abschnitt 36). Täglich gezählte Helden erinnern Tages-Check und Plan in der Daumenleiste schon.
+export const PROBE = {
+  an: true, planTage: 30, varianten: ['kurz', 'ausfuehrlich'], standard: 'kurz', musterMin: 3,
+  karte: {
+    varianten: ['an', 'aus'], standard: 'an', max: 4,
+    regeln: { fokus: { plan: false }, erhalt: { zaehlweisen: ['wache'], plan: true } }
+  }
+};
 
 // Bonus-Aufgaben (Version 45): so viele sind sichtbar, der Rest hinter „+ N weitere“.
 export const BONUS = { sichtbar: 2 };

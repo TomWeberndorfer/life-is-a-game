@@ -22,7 +22,7 @@ import * as EW from '../logik/einwilligung.js';
 import * as H from '../logik/helden.js';
 import * as I from '../logik/inhalte.js';
 import * as K from '../logik/kern.js';
-import { abschnittZiel, bonusAnsicht, erfolgGroesse, heldenKopf, klappStandardKlein, klappUmschalten, klappZustand, nachWann, naechsterOffener, neuAufStart, neuPlatz, tagesfrage, vorziehen, wechselBanner, wegForm, wegText, wennDann, tagesleiste } from '../logik/startseite.js';
+import { abschnittZiel, bonusAnsicht, erfolgGroesse, heldenKopf, klappStandardKlein, klappUmschalten, klappZustand, kettenPunkte, nachWann, naechsterOffener, neuAufStart, neuPlatz, streifenForm, tagesfrage, vorziehen, wechselBanner, wegForm, wegText, wennDann, tagesleiste } from '../logik/startseite.js';
 import * as W from '../logik/weg.js';
 import { entw } from './blatt.js';
 import { einwKarte } from './einstellungen.js';
@@ -38,7 +38,7 @@ import { crewKnopfHtml } from './crew.js'; // Crew-Übersicht (06.11.2026): „C
 import { kx } from './kontext.js';
 import { eintragLink } from './eintrag.js';
 import { notfallKnopf } from './notfall.js';
-import { probeHtml } from './probe.js'; // Version 81: Morgenprobe
+import { morgenkarteHtml } from './probe.js'; // Version 173: Morgenkarte (Version 81: Morgenprobe)
 import { messzielKarte, messzielKurz } from './messziele.js';
 import { zielstandKarte, zielZeileHtml } from './zielquest.js'; // Ziel-Quests (31.10.2026)
 import { rueckblickKarte } from './rueckblick.js'; // Rundenrückblick (02.11.2026)
@@ -195,12 +195,28 @@ function wegStreifenHtml(a, v, g, w, text, neuVerborgen) {
   const anteil = !neuVerborgen && a.rundeTag >= 0 && a.anzahl > 0 ? Math.min(1, Math.max(0, a.treffer / a.anzahl)) : 0;
   const akt = iA >= 0 ? w.stationen[iA].gegner : v.gegner;
   const ga = TABELLE.gegner[akt] || g;
-  const bossBild = img('boss-' + akt, neuVerborgen ? '?' : ga.name, 'boss', neuVerborgen ? 'cover schatten' : 'cover', '', 'rund');
-  const zeile = `<button class="weg-streifen" data-a="weg-klapp" aria-expanded="${offen}" aria-controls="weg-reihe" aria-label="${esc(offen ? T('weg.streifenZu') : T('weg.streifenAuf', { text }))}">
+  const aria = esc(offen ? T('weg.streifenZu') : T('weg.streifenAuf', { text })); // der volle Stand bleibt für Vorlese-Programme
+  // Version 174 (Entscheidung 10.11.2026): Die Arena darunter zeigt Gegner, Kraft und „Kapitel n“ schon. Die Leiste zeigt darum
+  // nur noch die Kette („wo stehe ich im Weg“) ohne Gegnerbild, Balken und „noch n bis …“. An besonderen Tagen (neuer Gegner
+  // wartet, Kampf beginnt morgen) steht stattdessen der ausführliche Text, weil ihn die Arena nicht trägt. Ohne Kette
+  // (ein Gegner) oder mit KOPFLEISTE.streifen = 'status' gilt die bisherige Zeile.
+  const punkte = streifenForm(KOPFLEISTE) === 'kette' ? kettenPunkte(a.gegnerNr, a.gegnerAnzahl) : [];
+  let zeile;
+  if (punkte.length) {
+    const kurz = !neuVerborgen && a.rundeTag >= 0 ? T('weg.kapitelVon', { kapitel: wort('kapitel'), nr: a.gegnerNr, anzahl: a.gegnerAnzahl }) : text;
+    zeile = `<button class="weg-streifen kette" data-a="weg-klapp" aria-expanded="${offen}" aria-controls="weg-reihe" aria-label="${aria}">
+      <span class="ws-kette" aria-hidden="true">${punkte.map(s => `<i class="${s}"></i>`).join('')}</span>
+      <span class="mini ws-text">${esc(kurz)}</span>
+      ${icon('runter', 'ic ws-pfeil')}
+    </button>`;
+  } else {
+    const bossBild = img('boss-' + akt, neuVerborgen ? '?' : ga.name, 'boss', neuVerborgen ? 'cover schatten' : 'cover', '', 'rund');
+    zeile = `<button class="weg-streifen" data-a="weg-klapp" aria-expanded="${offen}" aria-controls="weg-reihe" aria-label="${aria}">
       <span class="ws-boss" aria-hidden="true">${bossBild}</span>
       <span class="ws-mitte"><span class="mini gut-text ws-zeile">${esc(text)}</span><span class="ws-balken" aria-hidden="true"><i style="width:${Math.round(anteil * 100)}%"></i></span></span>
       ${icon('runter', 'ic ws-pfeil')}
     </button>`;
+  }
   if (!offen) return zeile;
   const haken = `<i class="station-haken">${icon('check')}</i>`;
   const kacheln = w.stationen.map((st, i) => {
@@ -355,30 +371,43 @@ export function heldenStapelKnopf() {
 // offene Aufgaben“, weil die Leiste eine Tagesübersicht ist, kein Benachrichtigungspunkt; nie Rot).
 function tagesleisteDaten(d = heldenKopfDaten()) {
   const { spiel } = kx;
-  return tagesleiste(heldenHeute(d), spiel.fokus, TAGESLEISTE); // seit Teil C: Ruhetag zählt als fertig
+  // Version 177: Helden ohne Tagesfrage (Rhythmus, Wache) stehen als eigene, ruhige Gruppe daneben; pausierte bleiben im Stapel
+  const abruf = d.ansichten.filter(h => h.ohneFrage && !h.pausiert).map(h => ({ id: h.id }));
+  return tagesleiste(heldenHeute(d), spiel.fokus, TAGESLEISTE, abruf); // seit Teil C: Ruhetag zählt als fertig
 }
 export function tagesleisteHtml() {
   const { T, img, nameVon } = kx;
-  const tl = tagesleisteDaten();
+  const d = heldenKopfDaten();
+  const tl = tagesleisteDaten(d);
   if (!tl.zeigen) return '';
   const knopf = e => {
     const name = nameVon(e.id);
     const aria = T(e.aktiv ? 'tl.heldAktiv' : e.erledigt ? 'tl.heldErledigt' : 'tl.held', { held: name });
     return `<button class="tl-held${e.aktiv ? ' an' : ''}${e.erledigt ? ' fertig' : ''}" data-a="fokus" data-id="${esc(e.id)}" aria-label="${esc(aria)}"${e.aktiv ? ' aria-current="true"' : ''}>${img(e.id, name, 'held', 'tl-bild', '')}${e.erledigt ? `<span class="tl-haken" aria-hidden="true">${icon('check')}</span>` : '<span class="tl-offen" aria-hidden="true"></span>'}</button>`;
   };
+  // Ohne Tagesfrage: kein Punkt, kein Haken, ruhiger Ring und der Name der Zählweise darunter (Wache, Rhythmus)
+  const abrufKnopf = e => {
+    const name = nameVon(e.id);
+    const h = d.ansichten.find(x => x.id === e.id);
+    const zw = T(((h && K.zaehlweiseHeute(h.a, K.tagKey(kx.jetzt())).texte) || {}).status || 'kopf.statusOffen');
+    const aria = T(e.aktiv ? 'tl.heldAktiv' : 'tl.heldAbruf', { held: name, zaehlweise: zw });
+    return `<span class="tl-abruf-wrap"><button class="tl-held abruf${e.aktiv ? ' an' : ''}" data-a="fokus" data-id="${esc(e.id)}" aria-label="${esc(aria)}"${e.aktiv ? ' aria-current="true"' : ''}>${img(e.id, name, 'held', 'tl-bild', '')}</button><span class="tl-kappe" aria-hidden="true">${esc(zw)}</span></span>`;
+  };
+  const abruf = tl.abruf.length ? `<span class="tl-trenner" aria-hidden="true"></span>${tl.abruf.map(abrufKnopf).join('')}` : '';
   return `<div class="karte tagesleiste" role="group" aria-label="${esc(T('tl.aria', { n: tl.erledigt, gesamt: tl.gesamt }))}">
     <span class="tl-text" aria-hidden="true"><span class="eyebrow">${esc(T('tl.heute'))}</span><b>${esc(T('tl.zahl', { n: tl.erledigt, gesamt: tl.gesamt }))}</b></span>
-    <span class="tl-helden">${tl.eintraege.map(knopf).join('')}${pausierteKnopf()}</span>
+    <span class="tl-helden">${tl.eintraege.map(knopf).join('')}${abruf}${pausierteKnopf(d, tl.abruf.map(e => e.id))}</span>
   </div>`;
 }
 // Heldenmodi (04.11.2026): pausierte Helden (Erhalt, Ruhe) stehen nicht in der Tagesleiste; ein kleiner Stapel daneben
-// öffnet die Heldenwahl, damit sie erreichbar bleiben. Ohne pausierte Helden: ''.
-function pausierteKnopf() {
+// öffnet die Heldenwahl, damit sie erreichbar bleiben. Seit Version 177 gehören auch Helden ohne Tagesfrage dazu, die in
+// der Leiste keinen Platz mehr haben (TAGESLEISTE.abrufMax). Ohne solche Helden: ''.
+function pausierteKnopf(d = heldenKopfDaten(), imPlatz = []) {
   const { T, img, nameVon } = kx;
   let ids = [];
   let ruhen = 0;
   try {
-    const l = heldenKopfDaten().ansichten.filter(h => h.pausiert || h.ohneFrage); // Zählweisen: auch Rhythmus und Wache
+    const l = d.ansichten.filter(h => h.pausiert || (h.ohneFrage && !imPlatz.includes(h.id)));
     ids = l.map(h => h.id);
     ruhen = l.filter(h => h.pausiert).length;
   } catch (e) { console.warn('Tagesleiste (Pausen):', e.message); }
@@ -672,6 +701,7 @@ export const START_TEILE = {
   tagesleiste: () => tagesleisteHtml(), // Etappe 3, Teil B
   kopfleiste: ctx => kopfleisteHtml(ctx),
   neuigkeiten: () => neuigkeitenHtml(),
+  morgenkarte: () => morgenkarteHtml(heldenKopfDaten().ansichten), // Version 173: Erinnerung beim ersten Öffnen am Tag
   // Kampfbühne (31.10.2026); pausiert der Held heute (Erhalt, Ruhe), steht dort seine Rastkarte (Heldenmodi, 04.11.2026)
   buehne: ctx => (pausiertHeute(kx.spiel.fokus) ? rastHtml(ctx) : buehneHtml(ctx)),
   botschaft: () => crewKarte(),
@@ -694,7 +724,7 @@ export const START_TEILE = {
         ${img(v.held, nameVon(v.held), 'held', 'tat-held', '')}</div>
       ${wd.wenn || wd.dann ? `<div class="tat-wd">${wd.wenn ? `<p class="tat-feld wenn"><b>${esc(T('tat.wenn'))}</b>${esc(wd.wenn)}</p>` : ''}${wd.wenn && wd.dann ? '<span class="tat-pfeil" aria-hidden="true">↓</span>' : ''}${wd.dann ? `<p class="tat-feld dann"><b>${esc(T('tat.dannLabel'))}</b>${esc(wd.dann)}</p>` : ''}</div>` : ''}
       ${nt ? nachtragHtml(nt, f) : antw ? `${erfolgHtml(antw)}<div class="erledigt${ui.einmal.has('check') ? ' neu' : ''}" role="status">${erfolgGroesse(antw, ui.erfolgFrisch, spiel.fokus, K.tagKey(jetzt()), SM.erfolg.an) === 'klein' ? img(v.held, nameVon(v.held), 'held', 'erfolg-mini', '') : erledigtIcon(antw)}<span>${esc(erledigtText(antw, f))}</span><button class="link" data-a="check" data-id="">${esc(T('tat.aendern'))}</button></div>${stuetzenHakenHtml()}${stuetzeBereitHtml(a)}${eintragLinks(antw, { nachtrag: true })}${comebackHtml()}${bossReaktionHtml(v, a)}${nachtragZusatz()}${weiterZuHtml()}`
-        : `${probeHtml(wd)}<p class="tat-frage">${esc(frage)}</p>
+        : `<p class="tat-frage">${esc(frage)}</p>
       <div class="tat-knoepfe"><button class="btn voll tat-ja" data-a="check" data-id="ja">${icon('check')} ${esc(T('tat.ja'))}</button><button class="btn tat-nein" data-a="check" data-id="nein">${esc(T('tat.nein'))}</button><button class="btn tat-schwer" data-a="check" data-id="schwer">${esc(T('siegel.schwer'))}</button></div>
       ${eintragLinks(null)}${nachtragZeile()}`}
     </div>`;

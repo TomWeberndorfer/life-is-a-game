@@ -76,6 +76,18 @@ export function nachtragZeile() {
   }
   return `<button class="link nachtrag-link" data-a="nachtrag-wahl">${ic}${esc(T('nachtrag.andererTag'))}</button>`;
 }
+// Version 174: Auf der offenen Heldentat steht nur noch der leise Hinweis „Gestern noch offen?“ über dem Block (er hilft im
+// richtigen Moment und verschwindet, wenn er weggetippt oder gestern beantwortet ist). „Anderen Tag eintragen“ ist die Kachel
+// „Nachtragen“ im Menü „Rat für heute“ (nachtragKachel); die Tageswahl steht dort darunter (nachtragWahlHtml). Wirft nie.
+export function nachtragHinweis() {
+  const { ui } = kx;
+  const tage = nachtragListe();
+  return tage.length && !ui.nachtragWahl && gesternHinweis(tage) ? nachtragZeile() : '';
+}
+export function nachtragWahlHtml() {
+  const { ui } = kx;
+  return ui.nachtragWahl && nachtragListe().length ? nachtragZeile() : '';
+}
 // Version 93: „Nachtragen“ als Kachel der Schnellleiste (öffnet die Tageswahl); Tageswahl bzw. Hinweis „Gestern noch offen?“
 // stehen dann unter der Leiste (nachtragZusatz). Vor der Antwort bleibt die leise Zeile über der Frage (nachtragZeile).
 export function nachtragKachel() {
@@ -95,6 +107,7 @@ export const NACHTRAG_KLICKS = {
     if (!nachtragListe().some(t => t.tag === id)) { console.warn('Nachtragen: Tag nicht wählbar', id); ui.nachtragWahl = false; render(); return; }
     ui.nachtrag = { heroId: spiel.fokus, tag: id };
     ui.nachtragWahl = false;
+    ui.ratOffen = null; // Version 174: das Menü „Rat für heute“ ist beim Zurück zu heute wieder zu
     merke('nachtrag_hinweis', K.tagKey(jetzt())); // Hinweis „Gestern noch offen?“ heute nicht mehr
     trackEvent('backfill_opened', {});
     render();

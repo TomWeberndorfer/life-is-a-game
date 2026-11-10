@@ -1,6 +1,7 @@
-// Mehrere Helden auf einmal (05.11.2026): nur für den Besitzer und im Testprofil (wie das Startpaket). Wer die App kennt,
-// holt so mehrere Helden in einem Schritt, statt das Abenteuer je Held einzeln zu durchlaufen. Tester behalten den Weg
-// mit einem Helden nach dem anderen: ein Held am Anfang schützt vor Überforderung (klarer Fokus, Selbstwirksamkeit).
+// Mehrere Helden auf einmal (05.11.2026): seit 10.11.2026 für alle (vorher nur Besitzer und Testprofil; das Startpaket bleibt
+// dort). Wer weiß, was er will, holt so mehrere Helden in einem Schritt, statt das Abenteuer je Held einzeln zu durchlaufen.
+// Der Weg Held für Held bleibt der Hauptweg, dies ist ein leiser Zweitweg ohne Vorauswahl. Der Fokus bleibt bei einem Helden
+// (klarer Fokus, Selbstwirksamkeit); die Höchstzahl der Helden und „alles oder nichts“ begrenzen die Last.
 // Auswahl = Herausforderungen (Problem einer Onboarding-Gruppe); jede bestimmt Held und Gegnerkette. Je Held höchstens eine.
 // Das Ziel der Quest ist das erste Ziel der Herausforderung; ändern geht danach wie immer (Quest bearbeiten).
 // Nutzt nur den bestehenden Anlege-Weg (H.heldHinzufuegen), kein neues Feld im Spielstand.

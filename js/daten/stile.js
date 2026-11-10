@@ -302,13 +302,17 @@ export const EIGENE_BILDER = {
       'bilder/speicher/ffde2fa4fe2f45b435117fb4034a94c4.jpg',
       '50% 30%'
     ],
+    'boss-drycha': [
+      'bilder/speicher/18a2539cfdc21c2125f9f2b6397f5c8a.jpg',
+      '50% 30%'
+    ],
     'boss-geldfresser': [
       'bilder/speicher/5d0d682ac84ce96a05e9cf8aca04062a.jpg',
       '50% 30%'
     ],
     'boss-heisshunger': [
-      'bilder/speicher/55da557be9025c280ac3788fdd771084.jpg',
-      '79% 21%'
+      'bilder/speicher/24da4f82754b0ee91329dae134857558.png',
+      '39% 30%'
     ],
     'boss-langeweile': [
       'bilder/speicher/c72d6aaf1ce37221e389ba47ad719ca4.jpg',
@@ -361,6 +365,14 @@ export const EIGENE_BILDER = {
     'banner-jelninolan': [
       'bilder/speicher/9b9413c06d9e6f4062317bf35e0db519.jpg',
       '20% 0%'
+    ],
+    'boss-heisshunger': [
+      'bilder/speicher/c7e15ee3e40357ee2e3b7c5caa14513c.png',
+      '50% 30%'
+    ],
+    'boss-zuckerkobold': [
+      'bilder/speicher/81de20569aa2b13e074f1a927694cb66.png',
+      '50% 30%'
     ],
     'jelninolan': [
       'bilder/speicher/c005502b17651a6497d49fec2593832f.jpg',

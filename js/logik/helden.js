@@ -22,7 +22,9 @@ import { bereinigeGestalten, bereinigeEigeneFaehigkeiten } from './gestalten.js'
 import { bereinigeBedingungen } from './bedingungen.js';
 import { bereinigeAbschluss } from './abschluss.js'; // Kettenende: Abschluss und Weitergehen (Version 169)
 import * as KAP from './kapitel.js'; // Kapitel-Archiv (Version 171)
+import { bereinigeKarteTag } from './morgenkarte.js'; // Morgenkarte (Version 173): „heute gesehen“
 import * as AB from './abschluss.js'; // abschlussStand für neuesKapitel
+import { bereinigeIntroGesehen } from './intro.js'; // Welten-Intro (Version 175): „schon gesehen“
 
 export const SPIEL_VERSION = 4; // 4: Siege mit Tag, Bosskette je Quest (Version 14)
 // Heldenmodi (04.11.2026): keine eigene Grenze mehr. Höchstens so viele Helden, wie das Register kennt (jeder Held gehört zu
@@ -66,7 +68,7 @@ export function zuordner(tabelle, rueckfall) {
 
 export function neuesSpiel(profilId) {
   const s = K.neuerStand(profilId);
-  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [], freigaben: {}, freigabeWartet: null, eintraege: [], ideen: {}, messziele: {}, einstellungen: bereinigeEinstellungen(null), vorgestellt: [], modi: {}, mindest: {}, wochen: {}, gestalten: {}, eigeneFaehigkeiten: {}, abschluss: {}, kapitel: {} };
+  return { v: SPIEL_VERSION, profilId: s.profilId, onboarding: s.onboarding, stil: s.stil, helden: [], fokus: null, angebot: { abgelehntBei: 0 }, gelesen: {}, neuGesehen: [], freigaben: {}, freigabeWartet: null, eintraege: [], ideen: {}, messziele: {}, einstellungen: bereinigeEinstellungen(null), vorgestellt: [], modi: {}, mindest: {}, wochen: {}, gestalten: {}, eigeneFaehigkeiten: {}, abschluss: {}, kapitel: {}, karteGesehen: null, introGesehen: false };
 }
 
 function heldAusAnsicht(heroId, domainId, a) {
@@ -275,7 +277,7 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
   if (![2, 3, SPIEL_VERSION].includes(roh.v)) {
     // Version 1: ein Stand mit einer Quest
     const alt = ketteAuffrischen(K.migriere(roh, profilId, stilIds), z);
-    let s = { ...leer, profilId: alt.profilId, onboarding: alt.onboarding, stil: alt.stil };
+    let s = { ...leer, profilId: alt.profilId, onboarding: alt.onboarding, stil: alt.stil, introGesehen: true }; // Altbestand: kein Intro (Version 175)
     if (alt.quest) {
       const ausV = z.ausVorlage(alt.quest.vorlageId);
       const hid = ausV && gueltigeId(ausV.heroId) ? ausV.heroId : 'held-1';
@@ -338,6 +340,10 @@ export function migriereSpiel(roh, profilId, stilIds, z, warn = () => {}) {
   // Helden mit geschaffter Kette bekommen die Seite beim nächsten Start einmal angeboten (der Auslöser ist abgeleitet), nichts geht verloren.
   s.kapitel = KAP.bereinigeKapitel(roh.kapitel, { heroIds: new Set(s.helden.map(h => h.heroId)) }); // Version 171; Altbestand ohne Feld = {}
   s.abschluss = bereinigeAbschluss(roh.abschluss, { heroIds: new Set(s.helden.map(h => h.heroId)) });
+  // Morgenkarte (Version 173): Tag, an dem die Karte zuletzt gesehen oder beantwortet wurde. Fehlt das Feld oder ist es ungültig
+  // (Altbestand) → null: die Karte erscheint beim nächsten Öffnen einmal, danach gilt der Tag. Nichts geht verloren.
+  s.karteGesehen = bereinigeKarteTag(roh.karteGesehen);
+  s.introGesehen = bereinigeIntroGesehen(roh.introGesehen); // Altbestand ohne Feld → gesehen (Version 175)
   return s;
 }
 
@@ -351,5 +357,6 @@ const auswahl = (wert, regel, rueckfall) => {
 };
 export function bereinigeEinstellungen(roh) {
   const r = roh && typeof roh === 'object' && !Array.isArray(roh) ? roh : {};
-  return { probe: auswahl(r.probe, PROBE, 'kurz'), blasen: auswahl(r.blasen, SPRECHBLASEN, 'auto') };
+  // probe: Alt (Version 81), wird weiter gelesen und gespeichert, aber nicht mehr ausgewertet. karte (Version 173): Morgenkarte an/aus.
+  return { probe: auswahl(r.probe, PROBE, 'kurz'), blasen: auswahl(r.blasen, SPRECHBLASEN, 'auto'), karte: auswahl(r.karte, PROBE.karte, 'an') };
 }

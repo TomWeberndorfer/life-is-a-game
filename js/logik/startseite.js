@@ -97,18 +97,29 @@ export function tagesfrage(vorlage, faehigkeit, allgemein) {
 // Tagesleiste (Etappe 3, Teil B, 02.11.2026): „Heute x von n“ und je Held ein Eintrag in fester Reihenfolge.
 // helden: [{ id, erledigt }]; zeigen erst ab cfg.abHelden (sonst ist die Leiste nur Lärm), höchstens cfg.max Einträge.
 // Ein sichtbarer, endlicher Tagesumfang nutzt den Ziel-Gradienten und gibt ein klares Ende statt einer Liste.
-export function tagesleiste(helden, fokus, cfg = {}) {
+// Version 177 (Entscheidung 10.11.2026, Abschnitt 60): `abruf` = Helden ohne Tagesfrage (Rhythmus, Wache), die nicht pausieren.
+// Sie stehen als eigene Gruppe in der Leiste, zählen aber NICHT in „x von n“ und haben kein „offen“. Höchstens cfg.abrufMax
+// (Standard 2) stehen in der Leiste, der Rest bleibt im Stapel (`weitere`). Ohne mindestens einen Held mit Tagesfrage gibt es
+// keine Leiste („Heute 0 von 0“ wäre Lärm); die Zahl der sichtbaren Helden insgesamt muss cfg.abHelden erreichen.
+export function tagesleiste(helden, fokus, cfg = {}, abruf = []) {
   const liste = (Array.isArray(helden) ? helden : []).filter(h => h && typeof h.id === 'string' && h.id);
   const eindeutig = liste.filter((h, i) => liste.findIndex(x => x.id === h.id) === i);
   const ab = Number.isInteger(cfg && cfg.abHelden) && cfg.abHelden >= 1 ? cfg.abHelden : 2;
   const max = Number.isInteger(cfg && cfg.max) && cfg.max >= 1 ? cfg.max : 3;
+  const abMax = Number.isInteger(cfg && cfg.abrufMax) && cfg.abrufMax >= 0 ? cfg.abrufMax : 2;
   const sicht = eindeutig.slice(0, max);
-  const aktiv = sicht.some(h => h.id === fokus) ? fokus : (sicht[0] || {}).id || null;
+  const tagesIds = new Set(eindeutig.map(h => h.id));
+  const alleAbruf = (Array.isArray(abruf) ? abruf : []).filter((h, i, l) => h && typeof h.id === 'string' && h.id && !tagesIds.has(h.id) && l.findIndex(x => x && x.id === h.id) === i);
+  const abSicht = alleAbruf.slice(0, abMax);
+  const abAktiv = abSicht.some(h => h.id === fokus);
+  const aktiv = abAktiv ? null : sicht.some(h => h.id === fokus) ? fokus : (sicht[0] || {}).id || null;
   return {
-    zeigen: !!(cfg && cfg.an !== false) && sicht.length >= ab,
+    zeigen: !!(cfg && cfg.an !== false) && sicht.length >= 1 && sicht.length + abSicht.length >= ab,
     erledigt: sicht.filter(h => h.erledigt).length,
     gesamt: sicht.length,
-    eintraege: sicht.map(h => ({ id: h.id, aktiv: h.id === aktiv, erledigt: !!h.erledigt }))
+    eintraege: sicht.map(h => ({ id: h.id, aktiv: h.id === aktiv, erledigt: !!h.erledigt })),
+    abruf: abSicht.map(h => ({ id: h.id, aktiv: h.id === fokus })),
+    weitere: alleAbruf.slice(abMax).map(h => h.id)
   };
 }
 export function naechsterOffener(helden, aktiv) {
@@ -458,6 +469,39 @@ export const WEG_FORMEN = ['pfad', 'kette', 'streifen']; // 'streifen' seit Vers
 export function wegForm(cfg) {
   const f = cfg && typeof cfg === 'object' ? cfg.weg : undefined;
   return WEG_FORMEN.includes(f) ? f : 'pfad';
+}
+
+// Eingeklappte Zeile des Streifens (Version 174): 'kette' (Punkte + „Kapitel n von m“) oder 'status' (voller Stand wie bisher
+// mit Gegnerbild, Balken und „noch n bis …“). Alles andere → 'status' (die alte Zeile ist der sichere Rückfall). Wirft nie.
+export const STREIFEN_FORMEN = ['kette', 'status'];
+export function streifenForm(cfg) {
+  const f = cfg && typeof cfg === 'object' ? cfg.streifen : undefined;
+  return STREIFEN_FORMEN.includes(f) ? f : 'status';
+}
+
+// Punkte der Kette (Version 174): je Gegner einer, davor „besiegt“, der aktuelle „aktuell“, danach „kommend“. Ein einzelner Gegner hat
+// keine Kette (leere Liste, die Ansicht nimmt dann die Zeile „status“). Mehr als `max` Gegner: ein Fenster um den aktuellen.
+// nr zählt ab 1 und wird in die Kette geklemmt; ungültige Werte → leere Liste (nr) bzw. 1 (anzahl ist Pflicht). Wirft nie.
+export function kettenPunkte(nr, anzahl, max = 8) {
+  const n = Number.isInteger(anzahl) ? anzahl : 0;
+  if (n < 2) return [];
+  const pos = Number.isInteger(nr) ? Math.min(Math.max(nr, 1), n) : 1;
+  const m = Number.isInteger(max) && max >= 2 ? max : 8;
+  const von = Math.min(Math.max(0, pos - Math.ceil(m / 2)), Math.max(0, n - m));
+  const bis = Math.min(n, von + m);
+  const aus = [];
+  for (let i = von + 1; i <= bis; i++) aus.push(i < pos ? 'besiegt' : i === pos ? 'aktuell' : 'kommend');
+  return aus;
+}
+
+// Frage in der Heldentat (Version 174): Wenn-dann-Plan und Frage stehen in EINEM Block. Nennt der Plan die Situation („Wenn …“),
+// darf die Frage kurz sein („Hat dein Plan heute gehalten?“): die Situation steht ja direkt darüber. Das gilt nur für die
+// allgemeine Frage (`standardArt`: kein eigener Text der Zählweise oder Zielart wie „Hast du diese Woche …“). Ohne Situation,
+// ohne Kurztext oder bei eigener Art bleibt die bisherige Frage (`lang`: Tagesfrage der Vorlage oder Standardtext). Wirft nie.
+export function planFrage(wd, standardArt, kurz, lang) {
+  const plan = !!(wd && typeof wd.wenn === 'string' && wd.wenn.trim());
+  const k = typeof kurz === 'string' ? kurz.trim() : '';
+  return plan && standardArt === true && k ? k : lang;
 }
 
 // Fortschritt ordnen (Version 140): Register (daten/startseite.js FORTSCHRITT) → { id: Set(orte) }.

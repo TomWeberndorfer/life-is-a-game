@@ -37,7 +37,7 @@ export const FEATURES = [
   { id: 'ruhetag', name: 'Ruhetag', screens: [], events: ['rest_day_opened', 'rest_day_set'], bewertung: null },
   { id: 'nachtrag', name: 'Nachtragen', screens: [], events: ['backfill_opened', 'quest_backfill_yes', 'quest_backfill_no', 'quest_backfill_hard'], bewertung: null },
   { id: 'rueckblick', name: 'Rundenrückblick', screens: [], events: ['round_review_shown', 'round_review_adjusted'], bewertung: null },
-  { id: 'probe', name: 'Probe', screens: [], events: ['probe_opened', 'probe_marked'], bewertung: null },
+  { id: 'probe', name: 'Probe', screens: [], events: ['probe_opened', 'probe_marked', 'karte_shown', 'karte_closed', 'karte_modus'], bewertung: null },
   { id: 'rat', name: 'Rat der Crew', screens: [], events: ['advice_opened'], bewertung: null },
   { id: 'willkommen', name: 'Willkommen zurück', screens: [], events: ['welcome_back_shown', 'welcome_continue', 'welcome_fresh'], bewertung: null }
 ];
