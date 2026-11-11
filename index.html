@@ -232,13 +232,13 @@ h1.name { font-size: calc(30px * var(--text-skala, 1)); font-weight: 800; }
 .einst-btn { background: var(--panel); border: 1.5px solid var(--edge); box-shadow: 0 2px 0 var(--line); color: var(--ink); }
 .einst-btn .ic { width: 26px; height: 26px; stroke-width: 1.9; }
 .einst-btn:active { transform: translateY(1px); box-shadow: none; }
-.prog { flex: 1; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.prog { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; } /* Version 178: so viele Spalten wie Schritte des Weges (vorher fest 8) */
 .prog i { height: 6px; border-radius: 3px; background: var(--line); }
 .prog i.on { background: var(--ac); }
 .ob-kopf.hell .prog i { background: rgba(var(--auf-bild-rgb),.45); }
 .ob-kopf.hell .prog i.on { background: var(--auf-bild); }
 .screen.dunkel .prog i.on { background: var(--gegner); }
-.schritt { font: 700 calc(12px * var(--text-skala, 1)) var(--fh); }
+.schritt { font: 700 calc(12px * var(--text-skala, 1)) var(--fh); white-space: nowrap; }
 .ob-abbrechen { flex: none; min-height: 44px; padding: 0 4px; font-size: calc(15px * var(--text-skala, 1)); }
 
 .ob-bild { position: relative; flex: none; overflow: hidden; }
@@ -278,6 +278,11 @@ h1.name { font-size: calc(30px * var(--text-skala, 1)); font-weight: 800; }
 .einw-mehr summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
 .einw-mehr p { margin-top: 4px; }
 .einw-ok { display: flex; align-items: center; gap: 6px; color: var(--gut-text); }
+/* Onboarding: Einzelfragen (Version 178): leiser Zweitweg unter der Bereichswahl, „Genauer festlegen“ beim Ziel mit Zahl */
+.ob-nebenweg { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ob-nebenweg .link { min-height: 40px; justify-content: flex-start; }
+.ob-nebenweg .eyebrow { margin-top: 6px; }
+.zq-genauer > .spalte { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
 .btn:active { transform: translateY(2px); box-shadow: none; }
 
 /* Analyse */
@@ -1972,22 +1977,39 @@ button.sl-tag:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px;
 .bald-zeile b { color: var(--ink); }
 /* Etappe 3, Teil B: Tagesleiste „Heute x von n“ */
 .tagesleiste { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
-.tl-text { display: flex; flex-direction: column; line-height: 1.15; }
+.tl-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; min-height: 44px; justify-content: center; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.tl-text.tl-nur { cursor: default; } /* Version 183: ein Held (nur mit „+“) – nichts zum Wechseln, darum kein Knopf */
+.tl-text:focus-visible { outline: 3px solid var(--ac); outline-offset: 2px; border-radius: 4px; }
+.tl-text .tl-pfeil { width: 12px; height: 12px; vertical-align: -1px; } /* Version 179: Tipp öffnet „Helden wechseln“ */
+.tl-text b.tl-ohne { font-size: calc(15px * var(--text-skala, 1)); } /* „Kein Muss für heute“ statt „x von n“ */
 .tl-text b { font: 700 calc(17px * var(--text-skala, 1)) var(--fh); color: var(--ink); font-variant-numeric: tabular-nums; }
 .tl-helden { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; }
 .tl-held { position: relative; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
 .tl-held .tl-bild { width: 40px; height: 40px; margin: 2px; border-radius: 50%; object-fit: cover; display: block; }
 .tl-held.an .tl-bild { outline: 3px solid var(--ac); outline-offset: 1px; }
 .tl-held:focus-visible { outline: 3px solid var(--ac); outline-offset: 2px; }
+/* Version 183: „+“ zum Dazuholen eines Helden, ruhig in der Randfarbe (kein Akzent, kein leerer Platzhalter-Kreis) */
+.tl-plus { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--edge); cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: .8; }
+.tl-plus .ic { width: 20px; height: 20px; }
+.tl-plus:hover { opacity: 1; }
+.tl-plus:focus-visible { outline: 3px solid var(--ac); outline-offset: 2px; }
 .tl-haken { position: absolute; right: -3px; bottom: -2px; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--gut); color: #fff; border: 2px solid var(--panel); }
 .tl-haken .ic { width: 11px; height: 11px; stroke-width: 3.5; }
 .tl-offen { position: absolute; right: 0; top: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--ac); border: 2px solid var(--panel); } /* Punkt 1b: offen, Akzentfarbe des Stils */
 /* Version 177: Helden ohne Tagesfrage (Rhythmus, Wache): Trennstrich, ruhiger Ring statt Punkt, Zählweise als Beschriftung */
 .tl-trenner { align-self: stretch; width: 1px; background: var(--line); margin: 2px 0; }
-.tl-abruf-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.tl-held.abruf .tl-bild { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--mute); }
-.tl-held.abruf.an .tl-bild { box-shadow: none; }
-.tl-kappe { font-size: calc(10px * var(--text-skala, 1)); line-height: 1.1; color: var(--mute); }
+.tl-abruf-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 54px; } /* Version 179: feste Breite, Beschriftung bis rund 10 Zeichen */
+.tagesleiste.ohne-tf .tl-helden { gap: 6px; } /* nur Helden ohne Tagesfrage: drei passen bei 360 px in eine Zeile */
+/* Version 179 (Punkt 12): nie Rot für „kein Muss“. Ring in der Randfarbe des Stils, gewählt = kräftiger Ring statt Akzent-Rot */
+.tl-held.abruf .tl-bild { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--edge); }
+.tl-held.abruf.an .tl-bild { outline: 0; box-shadow: 0 0 0 2px var(--panel), 0 0 0 5px var(--edge); }
+.tl-zw { position: absolute; right: -4px; top: -3px; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--panel); color: var(--soft); border: 1.5px solid var(--edge); }
+.tl-zw .ic { width: 11px; height: 11px; stroke-width: 2.4; }
+.tl-kappe { font-size: calc(10px * var(--text-skala, 1)); line-height: 1.1; color: var(--mute); white-space: nowrap; max-width: 54px; overflow: hidden; text-overflow: ellipsis; }
+/* Version 179 (Punkt 9): Gruppen im Blatt „Helden wechseln“ */
+.wahl-gruppe { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.wahl-gruppe > .eyebrow, .wahl-gruppe > summary { padding: 4px 0; }
+.wahl-gruppe > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
 .weiter-daumen { flex-direction: row; align-items: center; gap: 10px; }
 .weiter-daumen .weiter-zu { flex: 1; min-width: 0; margin: 0; }
 .weiter-spaeter { flex: none; min-height: 44px; padding: 0 6px; color: var(--tat-leise, var(--soft)); }

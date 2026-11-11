@@ -111,7 +111,16 @@ export const HELDENKOPF = { stapelMax: 3 };
 // daneben die Porträts mit Haken bei erledigt; ein Tipp wechselt den Helden. Die Karte behält den Stapel.
 // an: false = wieder Stapel; abHelden: ab so vielen Helden sichtbar; max: höchstens so viele Taten am Tag.
 // abrufMax (Version 177): so viele Helden ohne Tagesfrage (Rhythmus, Wache) stehen daneben, der Rest im Stapel.
-export const TAGESLEISTE = { an: true, abHelden: 2, max: 3, abrufMax: 2 };
+// abrufMaxAllein (Version 179): so viele, wenn KEIN Held eine Tagesfrage hat (dann ist der Platz der Tagesgruppe frei).
+// kappeZeichen (Version 179): Beschriftung unter dem Ring höchstens so lang, sonst die kurze Form („3 Momente“ → „3×“).
+//   Gemessen am Handy bei 360 px (Ring 44 px, Schrift 10 px): bis rund 10 Zeichen bleibt es unter dem Ring.
+// plus (Version 183): „+“ zum Dazuholen eines Helden am Ende der Leiste (Regel: logik/helden.js heldDazu); false = aus.
+export const TAGESLEISTE = { an: true, abHelden: 2, max: 3, abrufMax: 2, abrufMaxAllein: 3, kappeZeichen: 10, plus: true };
+
+// Blatt „Helden wechseln“ in Gruppen (Version 179, Punkt 9 vom 10.11.2026: eine ruhige Übersicht statt einer zweiten Startseite).
+// reihe: Reihenfolge der Gruppen; eingeklappt: Gruppen, die zu Beginn zu sind; abGruppen: Überschriften erst ab so vielen
+// nicht leeren Gruppen (eine einzige Gruppe mit Überschrift wäre Lärm). Keine Gesamtzahl, keine Sortierung nach „hängt hinterher“.
+export const HELDENWAHL_GRUPPEN = Object.freeze({ reihe: Object.freeze(['heute', 'keinMuss', 'ruht']), eingeklappt: Object.freeze(['ruht']), abGruppen: 2 });
 
 // Morgenprobe (Version 81) und Morgenkarte (Version 173, Entscheidung 10.11.2026, claude/entscheidung-morgenkarte.md).
 // Seit Version 173 gibt es keine Zeile mehr auf der Heldentat und keine kurze Box: die Morgenkarte (Abschnitt `morgenkarte`)

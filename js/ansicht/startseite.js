@@ -9,7 +9,7 @@ import { BOSS_REAKTION_EINSTELLUNG, BOSS_REAKTIONEN } from '../daten/boss-reakti
 import { BOTSCHAFTEN, STORIES } from '../daten/inhalte.js';
 import { LEBENSBEREICHE } from '../daten/lebensbereiche.js';
 import { NEUIGKEITEN } from '../daten/neuigkeiten.js';
-import { BONUS, HELDENKOPF, KOPFLEISTE, NEU_PLATZ, START_ABSCHNITTE, TAGESLEISTE, WEG_FENSTER } from '../daten/startseite.js';
+import { BONUS, HELDENKOPF, HELDENWAHL_GRUPPEN, KOPFLEISTE, NEU_PLATZ, START_ABSCHNITTE, TAGESLEISTE, WEG_FENSTER } from '../daten/startseite.js';
 import { ruhetagLink } from './ruhetag.js'; // Version 90
 import { LAGERFEUER } from '../daten/lagerfeuer.js'; // Etappe 3, Teil C
 import { heuteErledigt } from '../logik/lagerfeuer.js';
@@ -22,7 +22,7 @@ import * as EW from '../logik/einwilligung.js';
 import * as H from '../logik/helden.js';
 import * as I from '../logik/inhalte.js';
 import * as K from '../logik/kern.js';
-import { abschnittZiel, bonusAnsicht, erfolgGroesse, heldenKopf, klappStandardKlein, klappUmschalten, klappZustand, kettenPunkte, nachWann, naechsterOffener, neuAufStart, neuPlatz, streifenForm, tagesfrage, vorziehen, wechselBanner, wegForm, wegText, wennDann, tagesleiste } from '../logik/startseite.js';
+import { abschnittZiel, bonusAnsicht, erfolgGroesse, heldenKopf, klappStandardKlein, klappUmschalten, klappZustand, kettenPunkte, nachWann, naechsterOffener, neuAufStart, neuPlatz, streifenForm, tagesfrage, vorziehen, wechselBanner, wegForm, wegText, wennDann, tagesleiste, kappeText, heldenGruppen } from '../logik/startseite.js';
 import * as W from '../logik/weg.js';
 import { entw } from './blatt.js';
 import { einwKarte } from './einstellungen.js';
@@ -373,10 +373,10 @@ function tagesleisteDaten(d = heldenKopfDaten()) {
   const { spiel } = kx;
   // Version 177: Helden ohne Tagesfrage (Rhythmus, Wache) stehen als eigene, ruhige Gruppe daneben; pausierte bleiben im Stapel
   const abruf = d.ansichten.filter(h => h.ohneFrage && !h.pausiert).map(h => ({ id: h.id }));
-  return tagesleiste(heldenHeute(d), spiel.fokus, TAGESLEISTE, abruf); // seit Teil C: Ruhetag zählt als fertig
+  return tagesleiste(heldenHeute(d), spiel.fokus, TAGESLEISTE, abruf, { plus: H.heldDazu(spiel) }); // seit Teil C: Ruhetag zählt als fertig
 }
 export function tagesleisteHtml() {
-  const { T, img, nameVon } = kx;
+  const { T, img, nameVon, symbol } = kx;
   const d = heldenKopfDaten();
   const tl = tagesleisteDaten(d);
   if (!tl.zeigen) return '';
@@ -385,19 +385,37 @@ export function tagesleisteHtml() {
     const aria = T(e.aktiv ? 'tl.heldAktiv' : e.erledigt ? 'tl.heldErledigt' : 'tl.held', { held: name });
     return `<button class="tl-held${e.aktiv ? ' an' : ''}${e.erledigt ? ' fertig' : ''}" data-a="fokus" data-id="${esc(e.id)}" aria-label="${esc(aria)}"${e.aktiv ? ' aria-current="true"' : ''}>${img(e.id, name, 'held', 'tl-bild', '')}${e.erledigt ? `<span class="tl-haken" aria-hidden="true">${icon('check')}</span>` : '<span class="tl-offen" aria-hidden="true"></span>'}</button>`;
   };
-  // Ohne Tagesfrage: kein Punkt, kein Haken, ruhiger Ring und der Name der Zählweise darunter (Wache, Rhythmus)
+  // Ohne Tagesfrage: kein Punkt, kein Haken, ruhiger Ring in der Randfarbe des Stils (nie Rot) mit dem Zeichen der Zählweise
+  // (Auge, Kreispfeil) und darunter Erreichtes bzw. der Takt („3 Momente“, „2× / Woche“; Version 179, Punkte 11a, 12, 15a)
   const abrufKnopf = e => {
     const name = nameVon(e.id);
     const h = d.ansichten.find(x => x.id === e.id);
-    const zw = T(((h && K.zaehlweiseHeute(h.a, K.tagKey(kx.jetzt())).texte) || {}).status || 'kopf.statusOffen');
-    const aria = T(e.aktiv ? 'tl.heldAktiv' : 'tl.heldAbruf', { held: name, zaehlweise: zw });
-    return `<span class="tl-abruf-wrap"><button class="tl-held abruf${e.aktiv ? ' an' : ''}" data-a="fokus" data-id="${esc(e.id)}" aria-label="${esc(aria)}"${e.aktiv ? ' aria-current="true"' : ''}>${img(e.id, name, 'held', 'tl-bild', '')}</button><span class="tl-kappe" aria-hidden="true">${esc(zw)}</span></span>`;
+    let zw = { texte: {} };
+    try { zw = K.zaehlweiseHeute(h.a, K.tagKey(kx.jetzt())); } catch (err) { console.warn('Tagesleiste (Zählweise):', err.message); }
+    const t = zw.texte || {};
+    const status = T(t.status || 'kopf.statusOffen');
+    const zahl = h && h.x && zw.kappeZahl ? h.x[zw.kappeZahl] : 0;
+    const kappe = kappeText(t, Number.isInteger(zahl) ? zahl : 0, T, TAGESLEISTE.kappeZeichen, status);
+    const zeichen = zw.symbol ? `<span class="tl-zw" aria-hidden="true">${icon(symbol(`zaehlweise.${zw.id}`, zw.symbol))}</span>` : '';
+    const aria = T(e.aktiv ? 'tl.heldAktiv' : 'tl.heldAbruf', { held: name, zaehlweise: `${status}, ${kappe}` });
+    return `<span class="tl-abruf-wrap"><button class="tl-held abruf${e.aktiv ? ' an' : ''}" data-a="fokus" data-id="${esc(e.id)}" aria-label="${esc(aria)}"${e.aktiv ? ' aria-current="true"' : ''}>${img(e.id, name, 'held', 'tl-bild', '')}${zeichen}</button><span class="tl-kappe" aria-hidden="true">${esc(kappe)}</span></span>`;
   };
-  const abruf = tl.abruf.length ? `<span class="tl-trenner" aria-hidden="true"></span>${tl.abruf.map(abrufKnopf).join('')}` : '';
-  return `<div class="karte tagesleiste" role="group" aria-label="${esc(T('tl.aria', { n: tl.erledigt, gesamt: tl.gesamt }))}">
-    <span class="tl-text" aria-hidden="true"><span class="eyebrow">${esc(T('tl.heute'))}</span><b>${esc(T('tl.zahl', { n: tl.erledigt, gesamt: tl.gesamt }))}</b></span>
-    <span class="tl-helden">${tl.eintraege.map(knopf).join('')}${abruf}${pausierteKnopf(d, tl.abruf.map(e => e.id))}</span>
+  const abruf = tl.abruf.length ? `${tl.eintraege.length ? '<span class="tl-trenner" aria-hidden="true"></span>' : ''}${tl.abruf.map(abrufKnopf).join('')}` : '';
+  // Version 179: ohne Held mit Tagesfrage steht „Kein Muss für heute“ statt „0 von 0“. Der Text links öffnet das Blatt
+  // „Helden wechseln“ (Übersicht in Gruppen, Punkt 9), daher ein Knopf mit kleinem Pfeil.
+  const zahlText = tl.ohneTagesfrage ? `<b class="tl-ohne">${esc(T('tl.keinMuss'))}</b>` : `<b>${esc(T('tl.zahl', { n: tl.erledigt, gesamt: tl.gesamt }))}</b>`;
+  const aria = tl.ohneTagesfrage ? T('tl.ariaOhne', { n: tl.abruf.length }) : T('tl.aria', { n: tl.erledigt, gesamt: tl.gesamt });
+  return `<div class="karte tagesleiste${tl.ohneTagesfrage ? ' ohne-tf' : ''}" role="group" aria-label="${esc(aria)}">
+    ${d.k.mitWechsel ? `<button class="tl-text" data-a="helden-wahl" aria-haspopup="dialog" aria-label="${esc(T('tl.alle'))}"><span class="eyebrow">${esc(T('tl.heute'))} ${icon('runter', 'ic tl-pfeil')}</span>${zahlText}</button>` : `<span class="tl-text tl-nur"><span class="eyebrow">${esc(T('tl.heute'))}</span>${zahlText}</span>`}
+    <span class="tl-helden">${tl.eintraege.map(knopf).join('')}${abruf}${pausierteKnopf(d, tl.abruf.map(e => e.id))}${tl.plus ? plusKnopf() : ''}</span>
   </div>`;
+}
+// „+“ am Ende der Tagesleiste (Version 183, Punkt 8): ruhiger Knopf in der Randfarbe, kein leerer Platzhalter (der lädt zum
+// Vervollständigen ein). Gleiche Aktion wie „Neuen Helden dazuholen“; data-id = Herkunft für die Auswertung.
+function plusKnopf() {
+  const { T, symbol } = kx;
+  const t = esc(T('kopf.neuerHeld'));
+  return `<button class="tl-plus" data-a="neues-abenteuer" data-id="tagesleiste" aria-label="${t}" title="${t}">${icon(symbol('tl.plus', 'plus'))}</button>`;
 }
 // Heldenmodi (04.11.2026): pausierte Helden (Erhalt, Ruhe) stehen nicht in der Tagesleiste; ein kleiner Stapel daneben
 // öffnet die Heldenwahl, damit sie erreichbar bleiben. Seit Version 177 gehören auch Helden ohne Tagesfrage dazu, die in
@@ -523,7 +541,7 @@ export function heldenWahlHtml() {
   if (!ui.heldenWahl || !HELDENWAHL_SCREENS.includes(ui.screen)) return '';
   const { k, ansichten } = heldenKopfDaten();
   if (!k.mitWechsel) { ui.heldenWahl = false; return ''; }
-  const zeilen = ansichten.map(({ id, domainId, v, x, a, wartet, modus, pausiert, ohneFrage }) => {
+  const zeileVon = ({ id, domainId, v, x, a, wartet, modus, pausiert, ohneFrage }) => {
     const aktiv = id === k.aktiv;
     const name = nameVon(id);
     // Heldenmodi: pausierte Helden zeigen ihren Modus statt „Check offen“, ohne Schnell-Haken
@@ -537,10 +555,29 @@ export function heldenWahlHtml() {
       <button class="wahl-info" data-a="fokus" data-id="${esc(id)}" ${aktiv ? 'aria-current="true"' : ''}>${img(id, name, 'held', 'wahl-bild')}
         <span class="spalte"><span class="nm">${esc(name)}</span><span class="klein">${esc([bereichName(domainId), `${wort('stufe')} ${x.level}`].filter(Boolean).join(' · '))}</span></span>
         <span class="wahl-status ${aktiv ? 'akzent-text' : pausiert || ohneFrage && !x.heuteAntwort ? 'ruhig-text' : x.heuteAntwort || wartet ? 'gut-text' : 'offen-text'}">${esc(status)}</span></button>${schnell}</div>`;
-  }).join('');
+  };
+  // Version 179 (Punkt 9): Gruppen „Heute dran“ · „Kein Muss für heute“ · „Ruht“ (eingeklappt) statt einer langen Liste.
+  // Überschriften erst ab zwei Gruppen; innerhalb der Gruppe die feste Crew-Reihenfolge. Fehler → Liste wie bisher.
+  let zeilen;
+  try {
+    const gr = heldenGruppen(ansichten.map(h => ({ id: h.id, pausiert: h.pausiert, ohneFrage: h.ohneFrage, wartet: h.wartet })), HELDENWAHL_GRUPPEN);
+    const nach = id => ansichten.find(h => h.id === id);
+    zeilen = gr.gruppen.map(g => {
+      const inhalt = g.ids.map(id => zeileVon(nach(id))).join('');
+      if (!gr.mitKopf) return inhalt;
+      const kopf = esc(T(`wahl.gruppe.${g.gruppe}`));
+      // Eingeklappt nur, wenn der aktive Held nicht darin steht (sonst wäre der gewählte Held versteckt)
+      return g.zu && !g.ids.includes(k.aktiv)
+        ? `<details class="wahl-gruppe"><summary class="eyebrow">${kopf} · ${g.ids.length}</summary>${inhalt}</details>`
+        : `<div class="wahl-gruppe" role="group" aria-label="${kopf}"><span class="eyebrow">${kopf}</span>${inhalt}</div>`;
+    }).join('');
+  } catch (e) {
+    console.warn('Heldenwahl (Gruppen):', e.message);
+    zeilen = ansichten.map(zeileVon).join('');
+  }
   return `<div class="feier unten" role="dialog" aria-modal="true" aria-labelledby="wahl-t">
     <button class="hintergrund" data-a="helden-wahl-zu" aria-label="${esc(T('nav.schliessen'))}" tabindex="-1"></button>
-    <div class="blatt erscheint"><div class="blatt-inhalt"><h2 id="wahl-t">${esc(T('kopf.wahlTitel', { crew: wort('crew') }))}</h2>${zeilen}${crewKnopfHtml()}${H.heldFrei(kx.spiel) ? `<button class="btn wahl-neu" data-a="neues-abenteuer">${esc(T('kopf.neuerHeld'))}</button>` : ''}<button class="cta" data-a="helden-wahl-zu">${esc(T('nav.schliessen'))}</button></div></div>
+    <div class="blatt erscheint"><div class="blatt-inhalt"><h2 id="wahl-t">${esc(T('kopf.wahlTitel', { crew: wort('crew') }))}</h2>${zeilen}${crewKnopfHtml()}${H.heldDazu(kx.spiel) ? `<button class="btn wahl-neu" data-a="neues-abenteuer" data-id="heldenwahl">${esc(T('kopf.neuerHeld'))}</button>` : ''}<button class="cta" data-a="helden-wahl-zu">${esc(T('nav.schliessen'))}</button></div></div>
   </div>`;
 }
 export function angebotKarte() {

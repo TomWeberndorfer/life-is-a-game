@@ -99,28 +99,73 @@ export function tagesfrage(vorlage, faehigkeit, allgemein) {
 // Ein sichtbarer, endlicher Tagesumfang nutzt den Ziel-Gradienten und gibt ein klares Ende statt einer Liste.
 // Version 177 (Entscheidung 10.11.2026, Abschnitt 60): `abruf` = Helden ohne Tagesfrage (Rhythmus, Wache), die nicht pausieren.
 // Sie stehen als eigene Gruppe in der Leiste, zählen aber NICHT in „x von n“ und haben kein „offen“. Höchstens cfg.abrufMax
-// (Standard 2) stehen in der Leiste, der Rest bleibt im Stapel (`weitere`). Ohne mindestens einen Held mit Tagesfrage gibt es
-// keine Leiste („Heute 0 von 0“ wäre Lärm); die Zahl der sichtbaren Helden insgesamt muss cfg.abHelden erreichen.
-export function tagesleiste(helden, fokus, cfg = {}, abruf = []) {
+// (Standard 2) stehen in der Leiste, der Rest bleibt im Stapel (`weitere`). Die Zahl der sichtbaren Helden insgesamt muss
+// cfg.abHelden erreichen.
+// Version 179 (Entscheidung 10.11.2026, Nachtrag Abschnitt 60): die Leiste erscheint auch, wenn ALLE Helden ohne Tagesfrage
+// sind (vorher keine Leiste, die Startseite wirkte leer). Dann gibt es kein „x von n“ (`ohneTagesfrage`, die Ansicht zeigt
+// „Kein Muss für heute“), und es gilt cfg.abrufMaxAllein (Standard: cfg.max) statt cfg.abrufMax, weil der Platz frei ist.
+// Version 183 (Entscheidung 11.11.2026, Punkt 8): opt.plus = man darf einen Helden dazuholen (helden.js heldDazu). Dann steht
+// am Ende ein „+“ (`plus`), und die Leiste erscheint schon ab einem Helden (sonst ab cfg.abHelden). cfg.plus === false schaltet
+// das „+“ ab. Vor dem ersten Sieg bleibt alles wie vorher.
+export function tagesleiste(helden, fokus, cfg = {}, abruf = [], opt = {}) {
   const liste = (Array.isArray(helden) ? helden : []).filter(h => h && typeof h.id === 'string' && h.id);
   const eindeutig = liste.filter((h, i) => liste.findIndex(x => x.id === h.id) === i);
   const ab = Number.isInteger(cfg && cfg.abHelden) && cfg.abHelden >= 1 ? cfg.abHelden : 2;
   const max = Number.isInteger(cfg && cfg.max) && cfg.max >= 1 ? cfg.max : 3;
-  const abMax = Number.isInteger(cfg && cfg.abrufMax) && cfg.abrufMax >= 0 ? cfg.abrufMax : 2;
   const sicht = eindeutig.slice(0, max);
+  const abMax = !sicht.length
+    ? (Number.isInteger(cfg && cfg.abrufMaxAllein) && cfg.abrufMaxAllein >= 0 ? cfg.abrufMaxAllein : max)
+    : Number.isInteger(cfg && cfg.abrufMax) && cfg.abrufMax >= 0 ? cfg.abrufMax : 2;
   const tagesIds = new Set(eindeutig.map(h => h.id));
   const alleAbruf = (Array.isArray(abruf) ? abruf : []).filter((h, i, l) => h && typeof h.id === 'string' && h.id && !tagesIds.has(h.id) && l.findIndex(x => x && x.id === h.id) === i);
   const abSicht = alleAbruf.slice(0, abMax);
   const abAktiv = abSicht.some(h => h.id === fokus);
   const aktiv = abAktiv ? null : sicht.some(h => h.id === fokus) ? fokus : (sicht[0] || {}).id || null;
+  const plus = !!(opt && opt.plus === true) && !(cfg && cfg.plus === false);
+  const zahl = sicht.length + abSicht.length;
   return {
-    zeigen: !!(cfg && cfg.an !== false) && sicht.length >= 1 && sicht.length + abSicht.length >= ab,
+    zeigen: !!(cfg && cfg.an !== false) && (zahl >= ab || (plus && zahl >= 1)),
+    plus: !!(cfg && cfg.an !== false) && plus && zahl >= 1,
+    ohneTagesfrage: !sicht.length,
     erledigt: sicht.filter(h => h.erledigt).length,
     gesamt: sicht.length,
     eintraege: sicht.map(h => ({ id: h.id, aktiv: h.id === aktiv, erledigt: !!h.erledigt })),
     abruf: abSicht.map(h => ({ id: h.id, aktiv: h.id === fokus })),
     weitere: alleAbruf.slice(abMax).map(h => h.id)
   };
+}
+// Beschriftung unter dem Ring eines Helden ohne Tagesfrage (Version 179, Punkte 11a/15a vom 10.11.2026): zeigt Erreichtes bzw.
+// den Takt statt des Namens der Zählweise. texte = Textschlüssel der Zählweise (kappe, kappeEins, kappeNull, kappeKurz),
+// n = Zahl dazu, T = Textfunktion, maxZeichen = Grenze für die lange Form. Ist die lange Form länger, gilt die kurze.
+// Bei n = 0 gilt kappeNull (nie eine „0“ unter dem Ring, das sähe wie ein Mangel aus). Fehlt alles → fallback. Wirft nie.
+export function kappeText(texte, n, T, maxZeichen = 10, fallback = '') {
+  try {
+    const t = texte && typeof texte === 'object' ? texte : {};
+    const zahl = Number.isInteger(n) && n >= 0 ? n : 0;
+    const grenze = Number.isInteger(maxZeichen) && maxZeichen > 0 ? maxZeichen : 10;
+    if (typeof T !== 'function') return fallback;
+    if (zahl === 0 && t.kappeNull) return T(t.kappeNull);
+    const lang = zahl === 1 && t.kappeEins ? T(t.kappeEins, { n: zahl }) : t.kappe ? T(t.kappe, { n: zahl }) : '';
+    if (lang && lang.length <= grenze) return lang;
+    if (t.kappeKurz) return T(t.kappeKurz, { n: zahl });
+    return lang || (t.status ? T(t.status) : fallback);
+  } catch (e) { return fallback; }
+}
+
+// Gruppen im Blatt „Helden wechseln“ (Version 179, Punkt 9): helden = [{ id, pausiert, ohneFrage, wartet }] in Crew-Reihenfolge.
+// heute = mit Tagesfrage; keinMuss = ohne Tagesfrage oder Quest beginnt erst später; ruht = pausiert (Erhalt, Ruhe).
+// Liefert [{ gruppe, ids, zu }] nur für nicht leere Gruppen, in cfg.reihe; mitKopf = Überschriften zeigen (ab cfg.abGruppen).
+// Unbekannte Gruppen in cfg.reihe werden übersprungen, fehlt eine bekannte, hängt sie hinten an (kein Held geht verloren).
+export const HELDEN_GRUPPEN = Object.freeze(['heute', 'keinMuss', 'ruht']);
+export function heldenGruppen(helden, cfg = {}) {
+  const liste = (Array.isArray(helden) ? helden : []).filter((h, i, l) => h && typeof h.id === 'string' && h.id && l.findIndex(x => x && x.id === h.id) === i);
+  const gruppeVon = h => (h.pausiert ? 'ruht' : h.ohneFrage || h.wartet ? 'keinMuss' : 'heute');
+  const reihe = (Array.isArray(cfg && cfg.reihe) ? cfg.reihe : []).filter((g, i, l) => HELDEN_GRUPPEN.includes(g) && l.indexOf(g) === i);
+  const alle = [...reihe, ...HELDEN_GRUPPEN.filter(g => !reihe.includes(g))];
+  const zu = new Set(Array.isArray(cfg && cfg.eingeklappt) ? cfg.eingeklappt : []);
+  const gruppen = alle.map(g => ({ gruppe: g, ids: liste.filter(h => gruppeVon(h) === g).map(h => h.id), zu: zu.has(g) })).filter(g => g.ids.length);
+  const ab = Number.isInteger(cfg && cfg.abGruppen) && cfg.abGruppen >= 1 ? cfg.abGruppen : 2;
+  return { gruppen, mitKopf: gruppen.length >= ab };
 }
 export function naechsterOffener(helden, aktiv) {
   const liste = (Array.isArray(helden) ? helden : []).filter(h => h && typeof h.id === 'string' && h.id);

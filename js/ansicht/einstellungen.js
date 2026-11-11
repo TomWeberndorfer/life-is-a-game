@@ -191,13 +191,14 @@ export const EINSTELLUNGEN_KLICKS = {
   pflege() { const { geheZu, pflegeZustand } = kx; pflegeZustand(); geheZu('pflege'); },
   // Zweistufig: erster Tipp fragt nach, zweiter löscht den Spielstand und startet das Onboarding neu.
   reset() {
-    const { geheZu, render, setzeSpiel, speicher, speichere, testerId, ui } = kx;
+    const { geheZu, render, setzeSpiel, speicher, speichere, testerHinweisZuruecksetzen, testerId, ui } = kx;
     if (!ui.resetFrage) { ui.resetFrage = true; render(); return; }
     speicher.loeschen();
+    testerHinweisZuruecksetzen(); // Version 180: nur im Testprofil wirksam (siehe app.js)
     setzeSpiel(H.neuesSpiel(testerId));
-    Object.assign(ui, { bereich: null, problem: null, ziel: null, freitext: '', warum: '', feier: null, resetFrage: false });
+    Object.assign(ui, { bereich: null, problem: null, ziel: null, freitext: '', warum: '', feier: null, resetFrage: false, neu: false, kapitelFuer: null, zielart: 'aendern', zq: null, obDaten: EW.istOffen(kx.einw) });
     speichere();
     trackEvent('onboarding_started', { neu: true });
-    geheZu('ob1');
+    geheZu(kx.obAnfang());
   }
 };

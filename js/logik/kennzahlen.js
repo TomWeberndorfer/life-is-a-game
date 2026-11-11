@@ -46,8 +46,13 @@ export const FEATURES = [
 // oder die eigenen Ereignisse der Bereiche ohne Tab. Neuer Bereich ohne Tab = eine Zeile hier.
 export const FREISCHALT_GENUTZT = { welten: ['style_selected'], angebot: ['new_adventure_started'] };
 
+// Onboarding-Trichter: [Bildschirme | Ereignis, Beschriftung]. Eine Liste zählt, wer einen der Bildschirme gesehen hat.
+// Seit Version 178 (Einzelfragen) ist der frühere erste Schritt ob1 auf obwelt, obdaten, obbereich und obtuer verteilt; die
+// Zeilen zählen alte und neue Namen, damit Tester vor und nach dem Umbau vergleichbar bleiben. Ohne Nummern, weil die Zahl der
+// Schritte je Weg verschieden ist.
 export const TRICHTER = [
-  ['ob1', '1 Bereich'], ['ob3', '3 Ziel'], ['ob5', '5 Verbündeter'], ['ob7', '7 Fähigkeit'], ['onboarding_finished', '8 Abenteuer beginnen']
+  [['ob1', 'obwelt', 'obdaten', 'obbereich'], 'Onboarding geöffnet'], [['ob1', 'obbereich'], 'Bereich'], [['ob3'], 'Ziel'],
+  [['ob5'], 'Verbündeter'], [['ob7'], 'Fähigkeit'], ['onboarding_finished', 'Abenteuer beginnen']
 ];
 
 const sessionsVon = t => Object.values(t.tage || {}).flatMap(d => Object.values(d.sessions || {}));
@@ -112,7 +117,7 @@ export function grundzahlen(tester, heuteKey) {
 export function trichter(tester) {
   const schritte = TRICHTER.map(([k, label]) => ({
     label,
-    anzahl: tester.filter(t => (k.startsWith('ob') ? screenWerte(t, [k]).n > 0 : hatEvent(t, k))).length
+    anzahl: tester.filter(t => (Array.isArray(k) ? screenWerte(t, k).n > 0 : hatEvent(t, k))).length
   }));
   const dauer = tester.map(t => (t.merkmale || {}).onboarding_ms).filter(x => Number.isFinite(x) && x > 0);
   return { schritte, dauerMs: mittel(dauer) };
@@ -263,7 +268,7 @@ const pct = x => (x === null ? '–' : `${Math.round(100 * x)} %`);
 const minSek = ms => (ms === null || ms === undefined ? '–' : `${Math.floor(ms / 60000)}:${String(Math.round((ms % 60000) / 1000)).padStart(2, '0')}`);
 export const format = { pct, minSek };
 
-const ANZEIGE = { ob1: 'Onboarding 1', ob2: 'Onboarding 2', ob3: 'Onboarding 3', ob4: 'Analyse', ob5: 'Verbündeter (Onboarding)', ob6: 'Gegner (Onboarding)', ob7: 'Fähigkeit (Onboarding)', ob8: 'Quest der Woche (Onboarding)', start: 'Startseite', crew: 'Verbündeter', boss: 'Gegner', faehigkeit: 'Fähigkeit', quest: 'Quest', story: 'Geschichte', sieg: 'Siegesanzeige', stilwahl: 'Stilwahl', stadt: 'Stadt', logbuch: 'Logbuch', karte: 'Karte', quest_bearbeiten: 'Quest bearbeiten', admin: 'Auswertung', pflege: 'Inhalte pflegen', welten: 'Welten', angebot: 'Neues Abenteuer', neuer_gegner: 'Neuer Gegner', einstellungen: 'Einstellungen', feedback: 'Feedback', premium: 'Premium' };
+const ANZEIGE = { ob1: 'Onboarding 1 (bis Version 177)', obwelt: 'Welt (Onboarding)', obdaten: 'Datenfrage (Onboarding)', obbereich: 'Bereich (Onboarding)', obtuer: 'Ändern oder erreichen (Onboarding)', obmehr: 'Mehrere auf einmal', ob2: 'Onboarding 2', ob3: 'Onboarding 3', ob4: 'Analyse', ob5: 'Verbündeter (Onboarding)', ob6: 'Gegner (Onboarding)', ob7: 'Fähigkeit (Onboarding)', ob8: 'Quest der Woche (Onboarding)', start: 'Startseite', crew: 'Verbündeter', boss: 'Gegner', faehigkeit: 'Fähigkeit', quest: 'Quest', story: 'Geschichte', sieg: 'Siegesanzeige', stilwahl: 'Stilwahl', stadt: 'Stadt', logbuch: 'Logbuch', karte: 'Karte', quest_bearbeiten: 'Quest bearbeiten', admin: 'Auswertung', pflege: 'Inhalte pflegen', welten: 'Welten', angebot: 'Neues Abenteuer', neuer_gegner: 'Neuer Gegner', einstellungen: 'Einstellungen', feedback: 'Feedback', premium: 'Premium' };
 export const screenName = k => ANZEIGE[k] || k;
 
 export function erkenntnisse(tester, heuteKey) {

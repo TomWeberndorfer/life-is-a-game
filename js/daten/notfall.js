@@ -27,15 +27,18 @@
 //               höchstens EINER, nur wenn es einen gibt (sonst fällt der Abschnitt still weg). Er steht nur in den Pfaden
 //               „Standard“ und „Ohnmacht“, nie im Wut-Pfad (wer wütend ist, braucht Abstand, keinen Brief). Im Ohnmacht-Pfad
 //               ersetzt er „frueher“, solange er etwas zeigt (BEWEISBUCH.notfall.ersetzt).
+//   langeweile  (Version 182, 10.11.2026) Leere statt Drang: es fehlt ein nächster Schritt (z. B. „wir wissen nicht, was wir tun
+//               sollen“). Darum direkt zur Idee, ohne Plan und Warum dazwischen; die Hilfe ist hier die Idee selbst.
 //   mitgefuehl  Botschaften-Anlass in claude/inhalte.md („# Botschaften“) für den Satz Selbstmitgefühl; fehlt er,
 //               gilt 'notfall.mitgefuehl.ersatz'
 export const NOTFALL = Object.freeze({
-  zustaende: Object.freeze(['wut', 'ohnmacht', 'druck', 'drang', 'weissnicht']),
-  merken: Object.freeze(['wut', 'ohnmacht', 'druck', 'drang']),
+  zustaende: Object.freeze(['wut', 'ohnmacht', 'druck', 'drang', 'langeweile', 'weissnicht']),
+  merken: Object.freeze(['wut', 'ohnmacht', 'druck', 'drang', 'langeweile']),
   pfade: Object.freeze({
     _standard: Object.freeze(['innehalten', 'zustand', 'wenndann', 'warum', 'beleg', 'idee']),
     wut: Object.freeze(['innehalten', 'zustand', 'aufschub', 'wichtig', 'warum']),
-    ohnmacht: Object.freeze(['innehalten', 'zustand', 'einfluss', 'kleinster', 'beleg', 'frueher', 'mitgefuehl'])
+    ohnmacht: Object.freeze(['innehalten', 'zustand', 'einfluss', 'kleinster', 'beleg', 'frueher', 'mitgefuehl']),
+    langeweile: Object.freeze(['innehalten', 'zustand', 'idee'])
   }),
   gegnerIn: Object.freeze(['wut']),
   erinnerung: Object.freeze({ nachMin: 20, verfallStd: 12, einstellung: 'notfall-erinnerung' }),

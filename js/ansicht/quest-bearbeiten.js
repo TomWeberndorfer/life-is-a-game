@@ -25,6 +25,10 @@ export const QUEST_SCREENS = {
     // Schritt „Zähler“: ohne Treffer in der laufenden Runde gilt eine neue Anzahl sofort, sonst ab der nächsten Runde
     const sofort = a.wocheZaehler === 0;
     const wartet = a.naechsteZielAnzahl !== a.zielAnzahl ? a.naechsteZielAnzahl : null;
+    // Version 181 (Punkt 5 vom 10.11.2026): die gewählte Zählweise bestimmt, was die Zahl heißt (Tage, Male pro Woche,
+    // gemeisterte Momente). Texte aus dem Register (`texte.anzahl…`), sonst die allgemeinen `qe.*`. Folgt der Wahl sofort.
+    const zwTexte = (zaehlweiseVon(gewaehlteZaehlweise(stand, q)).texte) || {};
+    const zwText = (feld, standard) => zwTexte[feld] || standard;
     return `<section class="screen">
       <div class="start-kopf"><button class="link" data-a="qe-abbrechen">${icon('zurueck')} ${esc(T('qe.abbrechen'))}</button></div>
       <div class="inhalt">
@@ -34,15 +38,15 @@ export const QUEST_SCREENS = {
         ${q.fehler.ziel ? `<p class="fehler" id="qe-ziel-f" role="alert">${esc(q.fehler.ziel)}</p>` : ''}
         <label class="feld"><span>${esc(T('qe.warum'))}</span><textarea id="qe-warum" rows="2" maxlength="${K.WARUM_MAX}" placeholder="${esc(T('ob.warumBeispiel'))}" ${q.fehler.warum ? 'aria-invalid="true"' : ''}>${esc(q.warum || '')}</textarea></label>
         ${q.fehler.warum ? `<p class="fehler" role="alert">${esc(q.fehler.warum)}</p>` : `<p class="klein">${esc(T('qe.warumHilfe'))}</p>`}
-        <div class="feld"><span id="qe-anz-l">${esc(T(a.rampe ? 'qe.anzahlZiel' : 'qe.anzahl'))}</span>
+        ${zaehlweiseHtml(stand, a, q)}
+        <div class="feld"><span id="qe-anz-l">${esc(T(zwText(a.rampe ? 'anzahlZiel' : 'anzahl', a.rampe ? 'qe.anzahlZiel' : 'qe.anzahl')))}</span>
           <div class="wahl qe-anzahl" role="group" aria-labelledby="qe-anz-l">${Array.from({ length: hg.max - hg.min + 1 }, (_, i) => i + hg.min).map(n => `<button class="opt kurz ${anz === n ? 'sel' : ''}" aria-pressed="${anz === n}" data-a="qe-anzahl" data-id="${n}">${n}</button>`).join('')}</div>
         </div>
         ${q.fehler.anzahl ? `<p class="fehler" role="alert">${esc(q.fehler.anzahl)}</p>` : ''}
-        <p class="klein">${esc(T('qe.anzahlHilfe', { faehigkeit: f.name, anzahl: anz || '?' }))}</p>
+        <p class="klein">${esc(T(anz === 1 ? zwText('anzahlHilfeEins', zwText('anzahlHilfe', 'qe.anzahlHilfe')) : zwText('anzahlHilfe', 'qe.anzahlHilfe'), { faehigkeit: f.name, anzahl: anz || '?' }))}</p>
         ${a.rampe && Number.isInteger(anz) && neuJetzt < anz ? `<p class="klein">${esc(T('qe.rampeHilfe', { jetzt: neuJetzt, anzahl: anz }))}</p>` : ''}
-        <p class="klein">${esc(sofort ? T('qe.abSofort') : T('qe.abNaechster', { geschafft: a.wocheZaehler, anzahl: a.zielAnzahl }))}</p>
         ${wartet ? `<p class="klein" role="status">${esc(T('qe.wartet', { anzahl: wartet }))}</p>` : ''}
-        ${zaehlweiseHtml(stand, a, q, sofort)}
+        ${abWannHtml(stand, a, q, sofort)}
         <p class="klein">${esc(T('qe.festHinweis', { faehigkeit: wort('faehigkeit') }))}</p>
         ${stuetzenBearbeitenHtml()}
       </div>
@@ -53,20 +57,40 @@ export const QUEST_SCREENS = {
 
 // Zählweise (04.11.2026, Entscheidungen Abschnitt 36): täglich · Rhythmus · Wache, nur wenn mehr als eine zur Zielart
 // passt (Beständigkeit braucht die Tagesfrage). Gilt wie die Anzahl ab der nächsten Runde, sofort ohne Treffer.
-function zaehlweiseHtml(stand, a, q, sofort) {
+// Version 179 (Punkt 10a): jede Wahl mit Namen und Beispielsatz darunter, damit man ohne Vorwissen sieht, was gemeint ist.
+// Name und Satz kommen aus den Texten (`texte.name`, `texte.wahl`), sonst aus dem Register.
+function zwKnopf(id, an) {
+  const { T } = kx;
+  const zw = zaehlweiseVon(id);
+  const t = zw.texte || {};
+  const name = t.name ? T(t.name) : zw.name;
+  return `<button class="opt ${an ? 'sel' : ''}" aria-pressed="${an}" data-a="qe-zaehlweise" data-id="${esc(id)}"><span>${esc(name)}${t.wahl ? `<small>${esc(T(t.wahl))}</small>` : ''}</span></button>`;
+}
+// Gewählte Zählweise im Formular: die Wahl, wenn sie zur Quest passt, sonst die laufende.
+function gewaehlteZaehlweise(stand, q) {
+  const jetzt = hauptZaehlweise(stand.quest);
+  try { const ids = zaehlweisenFuerQuest(stand.quest); return ids.includes(q.zaehlweise) ? q.zaehlweise : jetzt; }
+  catch (e) { return jetzt; }
+}
+// Version 181: steht vor der Zahl, weil sie deren Bedeutung bestimmt.
+function zaehlweiseHtml(stand, a, q) {
   const { T } = kx;
   const ids = zaehlweisenFuerQuest(stand.quest);
   if (ids.length < 2) return '';
-  const jetzt = hauptZaehlweise(stand.quest);
-  const gewaehlt = ids.includes(q.zaehlweise) ? q.zaehlweise : jetzt;
-  const e = zaehlweiseVon(gewaehlt);
-  const hinweis = gewaehlt === jetzt ? '' : sofort ? T('qe.zwSofort') : a.rundeOffen ? T('qe.zwAbSieg') : T('qe.zwAbNaechster');
+  const gewaehlt = gewaehlteZaehlweise(stand, q);
   return `<div class="feld"><span id="qe-zw-l">${esc(T('qe.zaehlweise'))}</span>
-          <div class="wahl qe-zaehlweise" role="group" aria-labelledby="qe-zw-l">${ids.map(id => `<button class="opt kurz ${id === gewaehlt ? 'sel' : ''}" aria-pressed="${id === gewaehlt}" data-a="qe-zaehlweise" data-id="${esc(id)}">${esc(zaehlweiseVon(id).name)}</button>`).join('')}</div>
+          <div class="wahl qe-zaehlweise" role="group" aria-labelledby="qe-zw-l">${ids.map(id => zwKnopf(id, id === gewaehlt)).join('')}</div>
         </div>
-        ${q.fehler.zaehlweise ? `<p class="fehler" role="alert">${esc(q.fehler.zaehlweise)}</p>` : ''}
-        ${e.texte && e.texte.wahl ? `<p class="klein">${esc(T(e.texte.wahl))}</p>` : ''}
-        ${hinweis ? `<p class="klein" role="status">${esc(hinweis)}</p>` : ''}`;
+        ${q.fehler.zaehlweise ? `<p class="fehler" role="alert">${esc(q.fehler.zaehlweise)}</p>` : ''}`;
+}
+// Version 181: ein gemeinsamer Hinweis, ab wann Änderungen gelten (vorher zweimal „In dieser Runde zählt noch kein Treffer“).
+function abWannHtml(stand, a, q, sofort) {
+  const { T } = kx;
+  const zwNeu = gewaehlteZaehlweise(stand, q) !== hauptZaehlweise(stand.quest);
+  if (sofort) return `<p class="klein" role="status">${esc(T(zwNeu ? 'qe.abSofortBeides' : 'qe.abSofort'))}</p>`;
+  const zeilen = [T('qe.abNaechster', { geschafft: a.wocheZaehler, anzahl: a.zielAnzahl })];
+  if (zwNeu) zeilen.push(a.rundeOffen ? T('qe.zwAbSieg') : T('qe.zwAbNaechster'));
+  return zeilen.map((z, i) => `<p class="klein"${i ? ' role="status"' : ''}>${esc(z)}</p>`).join('');
 }
 
 // ---------- Klicks (Klick-Logik aufteilen, 30.10.2026) ----------

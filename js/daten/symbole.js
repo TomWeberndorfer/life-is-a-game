@@ -66,7 +66,12 @@ export const SYMBOLE = {
   notizbuch: '<path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 3v18M11.5 8h4M11.5 12h4"/>',
   rettungsring: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M6.3 6.3l3.2 3.2M14.5 14.5l3.2 3.2M17.7 6.3l-3.2 3.2M9.5 14.5l-3.2 3.2"/>',
   // Version 174: drei Punkte für „Mehr“ (Rat für heute hinter einem Knopf neben dem Titel der Heldentat)
-  mehr: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'
+  mehr: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  // Version 179: Zählweisen am Ring der Tagesleiste. Auge = „Wenn die Situation kommt“ (aufmerksam sein, nicht täglich gefragt),
+  // Takt (Kreispfeil) = „Ein paar Mal pro Woche“ (wiederkehrend). Beide ruhig, kein Warnzeichen.
+  auge: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  takt: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4.5h-4.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>' // Version 183: „+“ der Tagesleiste
 };
 
 // Nebenaktionen unter der Heldentat (Version 89, Entscheidung 31.10.2026: ein gemeinsames Symbol für alle Stile).

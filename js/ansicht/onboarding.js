@@ -1,5 +1,6 @@
-// Onboarding (aus app.js ausgelagert, 30.10.2026): acht Schritte vom Lebensbereich bis zur ersten Quest,
-// auch für weitere Helden („Ein neues Abenteuer“, ui.neu). Reihenfolge der Schritte: REIHE in app.js.
+// Onboarding (aus app.js ausgelagert, 30.10.2026): vom ersten Öffnen bis zur ersten Quest, auch für weitere Helden („Ein neues
+// Abenteuer“, ui.neu) und ein neues Ziel (ui.kapitelFuer). Seit Version 178 eine Frage je Seite; welche Schritte ein Weg hat,
+// steht in daten/onboarding.js (Regeln: logik/onboarding.js).
 import { trackEvent } from '../analytics.js';
 import { RAMPE } from '../daten/rampe.js';
 import { hauptArtId } from '../logik/teilziele.js'; // Beständigkeit (04.11.2026)
@@ -9,7 +10,9 @@ import * as H from '../logik/helden.js';
 import * as K from '../logik/kern.js';
 import * as MF from '../logik/mehrfach.js'; // Mehrere Helden auf einmal (05.11.2026)
 import * as SP from '../logik/startpaket.js'; // Startpaket mit Auswahl (06.11.2026)
-import { einwKarte, startpaketKnopf } from './einstellungen.js';
+import { einwDetails, startpaketKnopf } from './einstellungen.js';
+import * as OB from '../logik/onboarding.js'; // Einzelfragen (Version 178)
+import { ONBOARDING_MEHRFACH_ZURUECK } from '../daten/onboarding.js';
 import { STARTPAKETE } from '../daten/startpakete.js'; // Startpaket (02.11.2026)
 import { STIL_REIHENFOLGE, STIL_WAEHLBAR, STILE } from '../daten/stile.js'; // Stilfrage am Start (Version 163)
 import { weltKachel } from './stilwahl.js';
@@ -47,13 +50,12 @@ function paketAuswahlHtml() {
     </section>`;
 }
 
-// Stilfrage am Start (Version 163): Welten, die gewählt werden dürfen (`waehlbar` in daten/stile.js), als Kacheln im ersten
-// Onboarding-Schritt; Fantasy ist vorgewählt. Nicht bei weiteren Helden (ui.neu, der Stil steht dann) und nicht, wenn es
-// nichts zu wählen gibt (weniger als zwei wählbare Welten). Der Stil wirkt sofort auf Bild und Farben dieses Schritts.
-// Die Weltenwahl nach dem ersten Sieg bleibt: kern.stilStartWaehlen lässt `angeboten` und `frei` unberührt.
+// Stilfrage am Start (Version 163): Welten, die gewählt werden dürfen (`waehlbar` in daten/stile.js), als Kacheln. Seit Version 178
+// eine eigene Seite (obwelt), nur im ersten Start und nur, wenn es etwas zu wählen gibt (daten/onboarding.js). Fantasy ist
+// vorgewählt. Der Stil wirkt sofort auf Bild und Farben. Die Weltenwahl nach dem ersten Sieg bleibt: kern.stilStartWaehlen lässt
+// `angeboten` und `frei` unberührt.
 function stilStartHtml() {
-  const { T, stand, ui } = kx;
-  if (ui.neu || STIL_WAEHLBAR.length < 2) return '';
+  const { T, stand } = kx;
   return `<p class="frage" id="f-stil">${esc(T('ob.stilFrage'))}</p>
         <div class="welten start" role="group" aria-labelledby="f-stil">
           ${STIL_WAEHLBAR.map(id => weltKachel(id, { sel: stand.stil.aktiv === id, zeile: STILE[id].name, aktion: 'ob-stil' })).join('')}
@@ -61,59 +63,140 @@ function stilStartHtml() {
         <p class="klein">${esc(T('ob.stilHinweis'))}</p>`;
 }
 
-// „Mehrere auf einmal“ (seit 10.11.2026 für alle): leiser Zweitweg unter „Held für Held“, im ersten Onboarding-Schritt und im
-// Schritt „Neues Abenteuer“, nicht beim neuen Ziel für einen vorhandenen Helden. Im ersten Start erst nach der Datenfrage
-// (der Knopf ist bis dahin aus, die Karte der Datenfrage steht direkt darüber); es muss Platz für mindestens zwei Helden sein.
-function mehrfachKarte() {
+// „Mehrere auf einmal“ (seit 10.11.2026 für alle): leiser Zweitweg unter der Bereichswahl, im ersten Start und bei „Neues
+// Abenteuer“, nicht beim neuen Ziel für einen vorhandenen Helden. Im ersten Start steht die Datenfrage seit Version 178 vorher auf
+// eigener Seite; die Sperre bleibt als Sicherung (Klick vor der Antwort wird abgewiesen). Es muss Platz für zwei Helden sein.
+// Das Startpaket (nur Besitzer und #test) steht in derselben leisen Zeile.
+function nebenwegHtml() {
   const { T, einw, mehrfachErlaubt, spiel, ui } = kx;
-  if (kapitelHeld() || !mehrfachErlaubt() || MF.platzFrei(spiel) < 2) return '';
+  const mehr = !kapitelHeld() && mehrfachErlaubt() && MF.platzFrei(spiel) >= 2;
+  const paket = !ui.neu && kx.startpaketErlaubt();
+  if (!mehr && !paket) return '';
   const gesperrt = EW.istOffen(einw) && !ui.neu;
-  return `<div class="karte spalte"><p class="klein">${esc(T('mehr.einstiegText'))}</p><button class="btn" data-a="mehrfach-oeffnen" ${gesperrt ? 'disabled' : ''}>${icon('menschen')} ${esc(T('mehr.einstieg'))}</button></div>`;
+  return `<div class="ob-nebenweg">
+          ${mehr ? `<p class="klein">${esc(T('mehr.einstiegText'))}</p><button class="link" data-a="mehrfach-oeffnen" ${gesperrt ? 'disabled' : ''}>${icon('menschen')} ${esc(T('mehr.einstieg'))}</button>` : ''}
+          ${paket ? `<span class="eyebrow">${esc(T('einst.startpaket'))}</span>${Object.keys(STARTPAKETE).map(id => startpaketKnopf(id, 'link')).join('')}` : ''}
+        </div>`;
 }
 
-export const OB_SCHRITTE = 8;
+// Kontext und Stand der Schrittliste (logik/onboarding.js); app.js baut den Kontext (obKontext).
+const obPos = () => { const { obKontext, ui } = kx; return OB.position(ui.screen, obKontext()); };
+const obWeg = () => kx.obKontext().weg;
+
 export const ANALYSE_ZEILEN = ['ob.analyse1', 'ob.analyse2', 'ob.analyse3', 'ob.analyse4'];
 
-export function fortschritt(nr) {
+// „Schritt x von n“: n hängt am Weg (erster Start, neues Abenteuer, neues Ziel) und an der Wahl (die Tür entfällt in Bereichen
+// ohne Ziele mit Zahl).
+export function fortschritt() {
   const { T } = kx;
-  const n = OB_SCHRITTE;
+  const { nr, n } = obPos();
   return `<div class="prog" role="progressbar" aria-valuemin="1" aria-valuemax="${n}" aria-valuenow="${nr}" aria-label="${esc(T('ob.schrittAria', { nr, gesamt: n }))}">${Array.from({ length: n }, (_, i) => `<i class="${i < nr ? 'on' : ''}"></i>`).join('')}</div><span class="schritt">${esc(T('ob.schritt', { nr, gesamt: n }))}</span>`;
 }
-// Weiterer Held (ui.neu): auf jedem Schritt ab 2 ein „Abbrechen“ rechts im Kopf (30.10.2026). Vorher ging es nur über
-// „Zurück“ bis Schritt 1; ab der Analyse (Schritt 4) gab es gar keinen Weg zurück. Schritt 1 hat schon „Abbrechen“ links.
+// Weiterer Held (ui.neu): ab dem zweiten Schritt ein „Abbrechen“ rechts im Kopf (30.10.2026). Auf dem ersten Schritt ist der
+// Zurück-Knopf links selbst das Abbrechen.
 export function abbrechenKnopf() {
   const { T, ui } = kx;
   return ui.neu ? `<button class="link ob-abbrechen" data-a="abenteuer-abbrechen" aria-label="${esc(T('ob.abbrechenAria'))}">${esc(T('ob.abbrechen'))}</button>` : '';
 }
-export function kopf(nr, zurueck = true, hell = false) {
-  const { T } = kx;
-  return `<div class="ob-kopf ${hell ? 'hell' : ''}">${zurueck ? `<button class="icbtn" data-a="zurueck" aria-label="${esc(T('nav.zurueck'))}">${icon('zurueck')}</button>` : '<span class="icplatz"></span>'}${fortschritt(nr)}${abbrechenKnopf()}</div>`;
+// Kopfzeile eines Schritts. Erster Schritt im ersten Start: kein Zurück. ueber = über einem Bild (hell-btn wie früher in ob1).
+export function kopf({ zurueck = true, hell = false, ueber = false } = {}) {
+  const { T, ui } = kx;
+  const erster = obPos().nr === 1;
+  const links = !zurueck || (erster && !ui.neu)
+    ? '<span class="icplatz"></span>'
+    : `<button class="icbtn ${ueber && !hell ? 'hell-btn' : ''}" data-a="zurueck" aria-label="${esc(T(erster ? 'ob.abbrechen' : 'nav.zurueck'))}">${icon('zurueck')}</button>`;
+  return `<div class="ob-kopf ${ueber ? 'ueber' : ''} ${hell ? 'hell' : ''}">${links}${fortschritt()}${erster ? '' : abbrechenKnopf()}</div>`;
 }
+// Einleitung auf dem ersten Schritt eines Weges: Willkommen (erster Start), „Ein neues Abenteuer“ oder „Ein neues Ziel“.
+// Auf späteren Schritten nichts. klein = als Zeile über einer Seite, die selbst eine Überschrift hat.
+function einleitungHtml(klein = false) {
+  const { T, nameVon } = kx;
+  if (obPos().nr !== 1) return '';
+  const weg = obWeg();
+  const titel = weg === 'erst' ? 'ob.willkommen' : weg === 'kapitel' ? 'ob.kapitelTitel' : 'ob.neuTitel';
+  const text = weg === 'erst' ? 'ob.willkommenText' : weg === 'kapitel' ? 'ob.kapitelText' : 'ob.neuText';
+  const werte = { held: kapitelHeld() ? nameVon(kapitelHeld()) : '' };
+  if (klein) return `<span class="eyebrow">${esc(T(titel))}</span><p class="klein">${esc(T(text, werte))}</p>`;
+  return `<h1>${esc(T(titel))}</h1><p class="lead">${esc(T(text, werte))}</p>`;
+}
+// Bild oben auf dem ersten Schritt (wie früher in ob1).
+function bildOben() {
+  const { T, img } = kx;
+  return obPos().nr === 1 ? `<div class="ob-bild klein">${img('szene', T('ob.appName'), 'szene', 'cover')}<div class="verlauf"></div></div>` : '';
+}
+const kopfOben = () => kopf({ ueber: obPos().nr === 1 });
+const bereichChip = () => { const { ui } = kx; const b = TABELLE.gruppen.find(x => x.id === ui.bereich); return b ? `<span class="chip">${esc(b.name)}</span>` : ''; };
+const weiterKnopfHtml = (aktiv, text) => { const { T } = kx; return `<div class="fuss"><button class="cta" data-a="weiter" ${aktiv ? '' : 'disabled'}>${esc(text || T('ob.weiter'))}</button></div>`; };
+
 export const ONBOARDING_SCREENS = {
-  ob1() {
-    const { T, einw, img, nameVon, ui } = kx;
+  // Welt wählen, mit Willkommen (erster Start). Danach läuft einmal das Welten-Intro (app.js weiter).
+  obwelt() {
+    return `<section class="screen">
+      ${bildOben()}
+      ${kopfOben()}
+      <div class="inhalt">
+        ${einleitungHtml()}
+        ${stilStartHtml()}
+      </div>
+      ${weiterKnopfHtml(true)}
+    </section>`;
+  },
+
+  // Datenfrage auf eigener Seite (erster Start, nur solange sie offen war). Weiter erst nach einer Antwort; die Antwort ist bis
+  // dahin änderbar und danach in den Einstellungen.
+  obdaten() {
+    const { T, einw } = kx;
+    const offen = EW.istOffen(einw);
+    const wahl = id => { const sel = !offen && einw.stand === id; return `<button class="opt ${sel ? 'sel' : ''}" aria-pressed="${sel}" data-a="daten" data-id="${id}">${sel ? icon('check') : ''}<span>${esc(T(`daten.${id}`))}</span></button>`; };
+    return `<section class="screen">
+      ${bildOben()}
+      ${kopfOben()}
+      <div class="inhalt">
+        ${einleitungHtml(true)}
+        <span class="eyebrow">${esc(T('daten.eyebrow'))}</span>
+        ${einw.veraltet ? `<p class="klein">${esc(T('daten.neu'))}</p>` : ''}
+        <h1 class="mittel">${esc(T('daten.frage'))}</h1>
+        <p class="lead">${esc(T('daten.kurz'))}</p>
+        ${einwDetails()}
+        <div class="optionen" role="group" aria-label="${esc(T('daten.eyebrow'))}">${wahl('ja')}${wahl('nein')}</div>
+        ${offen ? '' : `<p class="klein" role="status">${esc(T(einw.stand === 'ja' ? 'daten.gewaehltJa' : 'daten.gewaehltNein'))}</p>`}
+      </div>
+      ${weiterKnopfHtml(!offen)}
+    </section>`;
+  },
+
+  // Lebensbereich. Darunter leise „Mehrere auf einmal“ und (Besitzer, #test) das Startpaket.
+  obbereich() {
+    const { T, ui } = kx;
     const bereiche = TABELLE.gruppen.filter(b => b.onboarding);
     return `<section class="screen">
-      <div class="ob-bild klein">${img('szene', T('ob.appName'), 'szene', 'cover')}<div class="verlauf"></div></div>
-      <div class="ob-kopf ueber">${ui.neu ? `<button class="icbtn hell-btn" data-a="zurueck" aria-label="${esc(T('ob.abbrechen'))}">${icon('zurueck')}</button>` : '<span class="icplatz"></span>'}${fortschritt(1)}</div>
+      ${bildOben()}
+      ${kopfOben()}
       <div class="inhalt">
-        ${ui.neu ? `<h1>${esc(T(kapitelHeld() ? 'ob.kapitelTitel' : 'ob.neuTitel'))}</h1>
-        <p class="lead">${esc(T(kapitelHeld() ? 'ob.kapitelText' : 'ob.neuText', { held: kapitelHeld() ? nameVon(kapitelHeld()) : '' }))}</p>`
-        : `<h1>${esc(T('ob.willkommen'))}</h1>
-        <p class="lead">${esc(T('ob.willkommenText'))}</p>`}
-        ${stilStartHtml()}
-        ${tuerHtml()}
-        <p class="frage" id="f1">${esc(T(erreichenGewaehlt() ? 'zq.bereichFrage' : 'ob.bereichFrage'))}</p>
+        ${einleitungHtml()}
+        <p class="frage" id="f1">${esc(T('ob.bereichFrage'))}</p>
         <div class="optionen" role="group" aria-labelledby="f1">
           ${bereiche.map(b => bereichBelegt(b.id)
             ? `<button class="opt belegt" disabled>${icon(b.icon)}<span>${esc(b.name)}<small>${esc(T(kapitelHeld() ? 'ob.kapitelAnderer' : 'ob.heldSchonDabei'))}</small></span></button>`
             : `<button class="opt ${ui.bereich === b.id ? 'sel' : ''}" aria-pressed="${ui.bereich === b.id}" data-a="bereich" data-id="${b.id}">${icon(b.icon)}<span>${esc(b.name)}</span></button>`).join('')}
         </div>
-        ${ui.neu ? '' : einwKarte(true)}
-        ${mehrfachKarte()}
-        ${!ui.neu && kx.startpaketErlaubt() ? `<div class="karte spalte"><span class="eyebrow">${esc(T('einst.startpaket'))}</span>${Object.keys(STARTPAKETE).map(id => startpaketKnopf(id, 'btn')).join('')}</div>` : ''}
+        ${nebenwegHtml()}
       </div>
-      <div class="fuss"><button class="cta" data-a="weiter" ${ui.bereich && (ui.neu || !EW.istOffen(einw)) ? '' : 'disabled'}>${esc(T('ob.weiter'))}</button></div>
+      ${weiterKnopfHtml(!!ui.bereich)}
+    </section>`;
+  },
+
+  // Tür „Etwas ändern“ oder „Etwas erreichen“ (nach dem Bereich; entfällt, wenn der Bereich keine Ziele mit Zahl hat).
+  obtuer() {
+    return `<section class="screen">
+      ${bildOben()}
+      ${kopfOben()}
+      <div class="inhalt">
+        ${einleitungHtml(true)}
+        ${bereichChip()}
+        ${tuerHtml()}
+      </div>
+      ${weiterKnopfHtml(true)}
     </section>`;
   },
 
@@ -123,7 +206,7 @@ export const ONBOARDING_SCREENS = {
   obmehr() {
     const { SCREENS, T, nameVon, spiel, ui } = kx;
     if (ui.mehrfach && ui.mehrfach.paket && kx.startpaketErlaubt()) return paketAuswahlHtml(); // Startpaket (06.11.2026)
-    if (!kx.mehrfachErlaubt() || !ui.mehrfach || ui.mehrfach.paket) { ui.screen = 'ob1'; return SCREENS.ob1(); }
+    if (!kx.mehrfachErlaubt() || !ui.mehrfach || ui.mehrfach.paket) { ui.screen = ONBOARDING_MEHRFACH_ZURUECK; return SCREENS[ONBOARDING_MEHRFACH_ZURUECK](); }
     const ang = MF.angebot(TABELLE, spiel);
     const frei = MF.platzFrei(spiel);
     const gew = ui.mehrfach.auswahl;
@@ -153,13 +236,14 @@ export const ONBOARDING_SCREENS = {
     const anders = ui.problem === '*';
     // Ziel-Quests (31.10.2026): Tür „Etwas erreichen“ wählt hier Ziel und Messwert statt einer Herausforderung
     if (erreichenGewaehlt()) return `<section class="screen">
-      ${kopf(2)}
-      <div class="inhalt">${zielWahlHtml()}</div>
+      ${kopf()}
+      <div class="inhalt">${einleitungHtml(true)}${zielWahlHtml()}</div>
       <div class="fuss"><button class="cta" data-a="weiter" ${zielWahlBereit() ? '' : 'disabled'}>${esc(T('ob.weiter'))}</button></div>
     </section>`;
     return `<section class="screen">
-      ${kopf(2)}
+      ${kopf()}
       <div class="inhalt">
+        ${einleitungHtml(true)}
         <span class="chip">${esc(b ? b.name : '')}</span>
         <h1>${esc(T('ob.problemTitel'))}</h1>
         <p class="lead">${esc(T('ob.problemText'))}</p>
@@ -182,12 +266,12 @@ export const ONBOARDING_SCREENS = {
     const eigen = ui.problem === '*';
     // Ziel-Quests (31.10.2026): Tür „Etwas erreichen“ wählt hier den Weg (die Gewohnheit, die jede Runde zählt)
     if (erreichenGewaehlt()) return `<section class="screen">
-      ${kopf(3)}
+      ${kopf()}
       <div class="inhalt">${wegWahlHtml(problemBelegt)}${ui.problem ? warumFeld() : ''}</div>
       <div class="fuss"><button class="cta" data-a="weiter" ${ui.problem ? '' : 'disabled'}>${esc(T('zq.wegKnopf'))}</button></div>
     </section>`;
     return `<section class="screen">
-      ${kopf(3)}
+      ${kopf()}
       <div class="inhalt">
         <h1 class="mittel">${esc(T('ob.zielTitel'))}</h1>
         ${eigen ? `<label class="feld"><span>${esc(T('ob.zielEigen'))}</span><input id="zieltext" maxlength="${K.ZIEL_MAX}" value="${esc(ui.ziel || '')}" placeholder="${esc(T('ob.zielBeispiel'))}" autocomplete="off"></label>`
@@ -204,7 +288,7 @@ export const ONBOARDING_SCREENS = {
     const zeilen = ANALYSE_ZEILEN.map(k => esc(T(k)));
     const fertig = ui.analyseSchritt >= zeilen.length;
     return `<section class="screen analyse">
-      <div class="ob-kopf"><span class="icplatz"></span>${fortschritt(4)}${abbrechenKnopf()}</div>
+      ${kopf({ zurueck: false })}
       <div class="inhalt mitte">
         <div class="ring ${fertig ? 'still' : ''}" aria-hidden="true"><svg viewBox="0 0 190 190"><circle cx="95" cy="95" r="88" class="r1"/><circle cx="95" cy="95" r="74" class="r2"/></svg><span>${icon('kompass', 'ic gross')}</span></div>
         <h1>${esc(T('ob.analyseTitel'))}</h1>
@@ -222,7 +306,7 @@ export const ONBOARDING_SCREENS = {
     const vb = TABELLE.helden[v.held];
     return `<section class="screen">
       <div class="ob-bild gross">${img(v.held, vb.name, 'held', 'cover', `${nameVon(v.held)}, ${vb.rolle}`)}<div class="verlauf dunkel-oben"></div></div>
-      ${kopf(5, true, true).replace('ob-kopf', 'ob-kopf ueber')}
+      ${kopf({ hell: true, ueber: true })}
       <div class="inhalt hoch">
         <span class="chip gut">${esc(T('ob.deinVerbuendeter', { VERBUENDETER: wort('verbuendeter').toUpperCase() }))}</span>
         <div><h1 class="name">${esc(nameVon(v.held))}</h1><p class="rolle">${esc(vb.rolle)}</p></div>
@@ -241,7 +325,7 @@ export const ONBOARDING_SCREENS = {
     // Aura (05.11.2026): einmal, wenn der erste Gegner hier vorgestellt wird; Zurück und wieder Weiter spielt sie nicht erneut
     if (!ui.obAura || ui.obAura.gegner !== v.gegner) ui.obAura = { gegner: v.gegner };
     return `<section class="screen dunkel">
-      ${kopf(6, true, true)}
+      ${kopf({ hell: true })}
       <div class="inhalt">
         <span class="chip schlecht">${esc(T('ob.hindernis'))}</span>
         <div class="boss-bild auftritt">${img('boss-' + v.gegner, g.name, 'boss', 'cover', g.name, 'auftritt')}${auraHtml(v.gegner, ui.obAura)}</div>
@@ -263,7 +347,7 @@ export const ONBOARDING_SCREENS = {
     const f = TABELLE.faehigkeiten[v.faehigkeit];
     const g = TABELLE.gegner[v.gegner];
     return `<section class="screen">
-      ${kopf(7)}
+      ${kopf()}
       <div class="inhalt">
         <p class="eyebrow mitte-text">${esc(T('ob.faehigkeitFrei', { FAEHIGKEIT: wort('faehigkeit').toUpperCase() }))}</p>
         <div class="karte faehigkeit erscheint">
@@ -293,7 +377,7 @@ export const ONBOARDING_SCREENS = {
     const bst = hauptArtId(probe) === 'bestaendigkeit';
     return `<section class="screen">
       <div class="ob-bild mittel">${img('banner-' + v.held, T('ob.questBild'), 'szene', 'cover')}<div class="verlauf dunkel-oben"></div></div>
-      ${kopf(8, true, true).replace('ob-kopf', 'ob-kopf ueber')}
+      ${kopf({ hell: true, ueber: true })}
       <div class="inhalt hoch">
         <div class="karte quest">
           <span class="eyebrow">${esc(wort('woche').toUpperCase())}</span>
@@ -355,11 +439,12 @@ export const ONBOARDING_KLICKS = {
   weiter() { const { weiter } = kx; weiter(); },
   zurueck() { const { zurueck } = kx; zurueck(); },
   beginnen() { const { beginnen } = kx; beginnen(); },
-  'neues-abenteuer'() {
+  'neues-abenteuer'({ id } = {}) {
     const { geheZu, spiel, ui } = kx;
     Object.assign(ui, { heldenWahl: false, blatt: null, neu: true, kapitelFuer: null, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null, obStart: Date.now() });
-    trackEvent('new_adventure_started', { helden: spiel.helden.length });
-    geheZu('ob1');
+    // Version 183: Herkunft als feste ID (tagesleiste, heldenwahl), damit die Auswertung sieht, ob das „+“ genutzt wird
+    trackEvent('new_adventure_started', { helden: spiel.helden.length, ...(/^[a-z]{1,30}$/.test(id || '') ? { abschnitt: id } : {}) });
+    geheZu(kx.obAnfang());
   },
   // Mehrere Helden auf einmal (05.11.2026, seit 10.11.2026 für alle)
   'mehrfach-oeffnen'() {
@@ -379,7 +464,7 @@ export const ONBOARDING_KLICKS = {
     ui.mehrfach.fehler = null;
     render();
   },
-  'mehrfach-zurueck'() { const { geheZu, ui } = kx; const ziel = (ui.mehrfach && ui.mehrfach.zurueck) || 'ob1'; ui.mehrfach = null; geheZu(ziel === 'obmehr' ? 'ob1' : ziel); },
+  'mehrfach-zurueck'() { const { geheZu, ui } = kx; const ziel = (ui.mehrfach && ui.mehrfach.zurueck) || ONBOARDING_MEHRFACH_ZURUECK; ui.mehrfach = null; geheZu(ziel === 'obmehr' ? ONBOARDING_MEHRFACH_ZURUECK : ziel); },
   'mehrfach-anlegen'() { const { mehrfachAnlegen } = kx; mehrfachAnlegen(); },
   // Weiteres Abenteuer jederzeit abbrechen: nichts ist gespeichert (merkeAuswahl speichert bei ui.neu nicht),
   // Auswahl zurück auf den Stand des Spielstands, Analyse-Zeitgeber stoppen.
@@ -388,7 +473,7 @@ export const ONBOARDING_KLICKS = {
     if (!ui.neu) return;
     stoppeAnalyse();
     trackEvent('new_adventure_cancelled', { schritt: ui.screen });
-    Object.assign(ui, { mehrfach: null, neu: false, bereich: stand.onboarding.bereich, problem: stand.onboarding.problem, ziel: stand.onboarding.ziel, freitext: stand.onboarding.freitext || '', warum: '', zielart: 'aendern', zq: null });
+    Object.assign(ui, { mehrfach: null, neu: false, kapitelFuer: null, bereich: stand.onboarding.bereich, problem: stand.onboarding.problem, ziel: stand.onboarding.ziel, freitext: stand.onboarding.freitext || '', warum: '', zielart: 'aendern', zq: null });
     geheZu('start');
   }
 };

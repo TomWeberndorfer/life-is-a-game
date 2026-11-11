@@ -192,7 +192,7 @@ export const STILE = {
       'notfall.innehalten': 'Atme dreimal langsam aus. „Nicht die Dinge selbst beunruhigen uns, sondern unser Urteil über sie.“ (Epiktet)',
       'notfall.ideeZiehen': '„Was im Weg steht, wird zum Weg.“ (Marc Aurel) Zieh eine Idee aus deiner Amphore.',
       'notfall.ideeLeer': 'Deine Amphore ist leer. Leg eine Idee hinein, die dir in so einem Moment helfen kann.',
-      'notfall.verwalten': 'Amphore',
+      'notfall.verwalten': 'Amphore füllen',
       'ideen.titel': 'AMPHORE',
       'ideen.text': 'Kleine Dinge, die du statt des alten Musters tun kannst. Die Notfallkarte zieht daraus.',
       'ideen.hinzufuegen': 'In die Amphore legen',

@@ -235,11 +235,19 @@ export function heldenJeDomain(spiel, domainIds) {
 // Heldenmodi (04.11.2026, Entscheidung 8a): nur, solange im Fokus Platz ist. Die App drängt nicht zu mehr Helden, als man
 // gleichzeitig verfolgen kann; weitere holt man selbst über die Heldenwahl.
 export function zielAngebot(spiel) {
-  const siege = gesamtSiege(spiel);
-  return spiel.helden.length > 0 && spiel.helden.length < MAX_HELDEN && HM.fokusFrei(spiel) && siege >= 1 && siege > (spiel.angebot.abgelehntBei || 0);
+  return heldDazu(spiel) && gesamtSiege(spiel) > (spiel.angebot.abgelehntBei || 0);
 }
-// Ist im Register noch ein Held frei (für „Neuen Helden dazuholen“ in der Heldenwahl)?
+// Ist im Register noch ein Held frei (Heldenbogen und Stadt: „Neuen Helden dazuholen“)?
 export const heldFrei = spiel => spiel.helden.length < MAX_HELDEN;
+// Darf man jetzt einen Helden dazuholen? (Version 183, Entscheidung 11.11.2026, Punkte 8/9a) Eine Regel für das „+“ der
+// Tagesleiste, den Knopf im Blatt „Helden wechseln“ und (mit „seit dem Ablehnen ein neuer Sieg“) die Angebotskarte:
+// schon ein Held da, mindestens ein Sieg (erst Wirksamkeit erleben, dann erweitern), Platz im Register und im Fokus
+// (nicht mehr Helden, als man gleichzeitig verfolgen kann). Kaputter Spielstand → false, wirft nie.
+export function heldDazu(spiel) {
+  try {
+    return Array.isArray(spiel.helden) && spiel.helden.length > 0 && heldFrei(spiel) && gesamtSiege(spiel) >= 1 && HM.fokusFrei(spiel);
+  } catch (e) { return false; }
+}
 
 export function angebotAblehnen(spiel) {
   return { ...kopie(spiel), angebot: { abgelehntBei: gesamtSiege(spiel) } };

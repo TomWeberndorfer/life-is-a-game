@@ -204,7 +204,7 @@ export const ABSCHLUSS_KLICKS = {
     z.zu = true;
     Object.assign(ui, { heldenWahl: false, blatt: null, neu: true, kapitelFuer: id, mehrfach: null, bereich: null, problem: null, ziel: null, freitext: '', warum: '', zielart: 'aendern', zq: null, obStart: Date.now() });
     trackEvent('chapter_new_started', {});
-    geheZu('ob1');
+    geheZu(kx.obAnfang());
   },
   // Die Mindestaufgabe legt das vorhandene Formular fest (Heldenblatt, Abschnitt „Das Kleinste, das noch zählt“): die Seite schließt
   // sich, der Held wird der aktive, und das Blatt mit dem Formular öffnet sich.

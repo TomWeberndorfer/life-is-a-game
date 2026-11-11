@@ -17,31 +17,43 @@
 //               wie eine verlorene Runde aussehen); false = höchstens 7 Tage wie bisher (kern.RUNDE_TAGE)
 //   arten       Zielarten, mit denen die Zählweise geht (Beständigkeit braucht die Tagesfrage, darum nur täglich)
 //   texte       Textschlüssel (daten/texte.js), gehen vor den Texten der Zielart: frage, siegel, erledigtJa, hinweis,
-//               status (Heldenwahl), runde (Gegnerblatt), wahl (Quest bearbeiten)
+//               status (Heldenwahl), runde (Gegnerblatt), wahl (Quest bearbeiten), name (Anzeigename, Version 179),
+//               kappe/kappeEins/kappeNull/kappeKurz (Beschriftung unter dem Ring in der Tagesleiste, Version 179),
+//               anzahl/anzahlZiel/anzahlHilfe/anzahlHilfeEins (was die Zahl in „Quest bearbeiten“ heißt, Version 181)
+//   kappeZahl   (Version 179) welche Zahl der Auswertung unter dem Ring steht: 'wocheZaehler' = Erreichtes der laufenden Runde
+//               (Wache: gemeisterte Momente), 'anzahl' = Takt (Rhythmus: so oft je Runde). Fehlt = keine Zahl.
+//   symbol      (Version 179) kleines Zeichen am Ring statt des Punkts „offen“ (daten/symbole.js); ein Stil kann es über
+//               `symbole` mit dem Schlüssel „zaehlweise.<id>“ ändern. Fehlt = kein Zeichen.
+// Version 179 (Entscheidung 10.11.2026, Punkte 10a und 13): die Namen sagen, was man tut („Ein paar Mal pro Woche“,
+// „Wenn die Situation kommt“), statt einer Kategorie („Rhythmus“, „Wache“). Die IDs bleiben (kein Umbau des Spielstands).
 export const ZAEHLWEISEN = Object.freeze({
   taeglich: Object.freeze({
-    name: 'Täglich',
+    name: 'Jeden Tag',
     tagesfrage: true,
     rundeOffen: false,
     arten: Object.freeze(['zaehler', 'bestaendigkeit']),
-    texte: Object.freeze({ wahl: 'zw.taeglich.wahl' })
+    texte: Object.freeze({ wahl: 'zw.taeglich.wahl', name: 'zw.taeglich.name', anzahl: 'zw.taeglich.anzahl', anzahlZiel: 'zw.taeglich.anzahlZiel', anzahlHilfe: 'zw.taeglich.anzahlHilfe' })
   }),
   // Rhythmus: 1–3× je Runde, ohne Tagesfrage (z. B. Training). Die Woche ist die Einheit, ein Tag ohne ist kein Fehlschlag.
   rhythmus: Object.freeze({
-    name: 'Rhythmus',
+    name: 'Ein paar Mal pro Woche',
+    kappeZahl: 'anzahl',
+    symbol: 'takt',
     tagesfrage: false,
     rundeOffen: false,
     arten: Object.freeze(['zaehler']),
-    texte: Object.freeze({ frage: 'zw.rhythmus.frage', siegel: 'zw.rhythmus.siegel', erledigtJa: 'zw.rhythmus.erledigtJa', hinweis: 'zw.rhythmus.hinweis', status: 'zw.rhythmus.status', wahl: 'zw.rhythmus.wahl' })
+    texte: Object.freeze({ frage: 'zw.rhythmus.frage', siegel: 'zw.rhythmus.siegel', erledigtJa: 'zw.rhythmus.erledigtJa', hinweis: 'zw.rhythmus.hinweis', status: 'zw.rhythmus.status', wahl: 'zw.rhythmus.wahl', name: 'zw.rhythmus.name', anzahl: 'zw.rhythmus.anzahl', anzahlZiel: 'zw.rhythmus.anzahlZiel', anzahlHilfe: 'zw.rhythmus.anzahlHilfe', kappe: 'zw.rhythmus.kappe', kappeKurz: 'zw.rhythmus.kappeKurz' })
   }),
   // Wache: zählt gemeisterte Begegnungen (höchstens eine je Tag), keine Tage. Ein schwerer Moment wird festgehalten und
   // kostet nichts (Eintrag „schwer“). Die Runde läuft, bis der Gegner besiegt ist.
   wache: Object.freeze({
-    name: 'Wache',
+    name: 'Wenn die Situation kommt',
+    kappeZahl: 'wocheZaehler',
+    symbol: 'auge',
     tagesfrage: false,
     rundeOffen: true,
     arten: Object.freeze(['zaehler']),
-    texte: Object.freeze({ frage: 'zw.wache.frage', erledigtJa: 'zw.wache.erledigtJa', hinweis: 'zw.wache.hinweis', status: 'zw.wache.status', runde: 'zw.wache.runde', wahl: 'zw.wache.wahl' })
+    texte: Object.freeze({ frage: 'zw.wache.frage', erledigtJa: 'zw.wache.erledigtJa', hinweis: 'zw.wache.hinweis', status: 'zw.wache.status', runde: 'zw.wache.runde', wahl: 'zw.wache.wahl', name: 'zw.wache.name', anzahl: 'zw.wache.anzahl', anzahlZiel: 'zw.wache.anzahlZiel', anzahlHilfe: 'zw.wache.anzahlHilfe', anzahlHilfeEins: 'zw.wache.anzahlHilfeEins', kappe: 'zw.wache.kappe', kappeEins: 'zw.wache.kappeEins', kappeNull: 'zw.wache.kappeNull', kappeKurz: 'zw.wache.kappeKurz' })
   })
 });
 

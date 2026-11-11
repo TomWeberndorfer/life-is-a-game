@@ -60,7 +60,9 @@ import { hauptAnzahl, hauptGrenzen, hauptZaehlweise, pruefeZaehlweisen, pruefeZi
 import { ordneAbschnitte, startMomente, tabPunkte, pruefeNeuigkeiten, klappZustand, klappUebernehmen } from './logik/startseite.js';
 import { RAHMEN_KLICKS, baldScreen, tabLeiste, testleiste } from './ansicht/rahmen.js';
 import { EINSTELLUNGEN_KLICKS, EINSTELLUNGEN_SCREENS } from './ansicht/einstellungen.js';
-import { ANALYSE_ZEILEN, ONBOARDING_FELDER, ONBOARDING_KLICKS, ONBOARDING_SCREENS } from './ansicht/onboarding.js';
+import { ANALYSE_ZEILEN, ONBOARDING_FELDER, ONBOARDING_KLICKS, ONBOARDING_SCREENS, bereichBelegt } from './ansicht/onboarding.js';
+import * as OB from './logik/onboarding.js'; // Onboarding: Einzelfragen (Version 178)
+import { ZIEL_TUEREN, ZIEL_VORLAGEN } from './daten/zielvorlagen.js';
 import { LOGBUCH_FELDER, LOGBUCH_KLICKS, LOGBUCH_SCREENS } from './ansicht/logbuch.js';
 import { NOTIZ_FELDER, NOTIZ_KLICKS, notizBlattHtml } from './ansicht/notiz.js'; // Tagesnotiz (04.11.2026)
 import { TAGESNOTIZ } from './daten/tagesnotiz.js';
@@ -119,7 +121,7 @@ import { START_KLICKS, START_KURZ, START_SCREENS, START_TEILE, buehneDauerMs, bu
 import { BUEHNE_KLICKS } from './ansicht/buehne.js'; // 02.11.2026: aus startseite.js ausgelagert
 import { NACHTRAG_KLICKS } from './ansicht/nachtrag.js';
 
-export const VERSION = { nr: 177, datum: '10.11.2026 · 12:30' };
+export const VERSION = { nr: 183, datum: '11.11.2026 · 08:26' };
 
 // Version 78: Hash aus Profil und Sprungziel (daten/sprungziele.js), z. B. #notfall oder #test+notfall.
 const HASH = leseHash(location.hash, { profile: PROFILE, ziele: SPRUNGZIELE });
@@ -154,6 +156,15 @@ function bestaetigeTesterHinweis() {
     testerHinweis = TH.lies(TH.bestaetige(K.tagKey(new Date()), TESTERHINWEIS.version), TESTERHINWEIS.version);
   } catch (e) { console.warn('Tester-Hinweis:', e.message); return; }
   if (!speicher.setzeEinstellung(TESTERHINWEIS.einstellung, { tag: testerHinweis.tag, version: testerHinweis.version })) console.warn('Tester-Hinweis: nur bis zum Schließen gespeichert');
+}
+// Version 180 (Entscheidung 10.11.2026, Punkt 3a): nur im Testprofil setzt „Alles löschen“ den Hinweis zurück, damit er sich
+// prüfen lässt. Im Hauptprofil bleibt er bestätigt (Entscheidung 09.11.: ein neuer Anfang zeigt ihn nicht noch einmal).
+// Die Einwilligung bleibt in beiden Profilen beim Browser (sie gehört zur Person, nicht zum Spielstand).
+function testerHinweisZuruecksetzen() {
+  if (!istTest) return false;
+  testerHinweis = TH.lies(null, TESTERHINWEIS.version);
+  if (!speicher.setzeEinstellung(TESTERHINWEIS.einstellung, null)) console.warn('Tester-Hinweis: Zurücksetzen nur bis zum Schließen');
+  return true;
 }
 TH.pruefeTesterhinweis(TESTERHINWEIS, TEXTE).forEach(m => console.warn(m));
 
@@ -287,6 +298,7 @@ const ui = {
   istBesitzer: false,
   premiumGesehen: false,
   obStart: Date.now(),
+  obDaten: !stand.onboarding.fertig && EW.istOffen(einw), // Version 178: Datenfrage gehört zu diesem Onboarding (daten/onboarding.js)
   neu: false,         // Onboarding für einen weiteren Helden
   kapitelFuer: null,  // Version 171: gilt nur mit neu = true: heroId, dessen neues Ziel (Kapitel) gewählt wird; sonst null
   mehrfach: null,     // Mehrere Helden auf einmal (05.11.2026): { auswahl, fehler }; Startpaket (06.11.): + paket, zurueck
@@ -339,7 +351,7 @@ function uebernimmFremdenStand(roh, info = {}) {
   if (!speicher.speichern(spiel) && !hinweis) hinweis = T('hinweis.speichernAus');
   const ob = stand.onboarding;
   if (ob.fertig && /^ob/.test(ui.screen)) ui.screen = 'start';
-  else if (!ob.fertig && !istAdmin && !/^ob/.test(ui.screen)) ui.screen = 'ob1';
+  else if (!ob.fertig && !istAdmin && !/^ob/.test(ui.screen)) ui.screen = 'ob1'; // wird beim Zeichnen zum ersten Schritt (Version 178)
   if (!ob.fertig) Object.assign(ui, { bereich: ob.bereich, problem: ob.problem, ziel: ob.ziel, freitext: ob.freitext || '' });
   if (info.sicherung || !abgleichGemeldet) hinweis = T(info.sicherung ? 'abgleich.uebernommenSicherung' : 'abgleich.uebernommen');
   abgleichGemeldet = true;
@@ -1041,6 +1053,7 @@ function renderJetzt() {
   const auftritt = BW.auftritt && !atmosphaereAus && (letzterScreen !== ui.screen || letzterFokus !== spiel.fokus);
   letzterFokus = spiel.fokus;
   // Tab-Bildschirme nur, solange der Tab frei ist (z. B. nach Zeitsprung im Testprofil); noch nicht gebaute Tabs → „bald“.
+  if (OB.istOnboarding(ui.screen)) ui.screen = obZiel(ui.screen); // Version 178: z. B. ob1 aus einem älteren Stand
   const tab = TABS.find(t => t.screen === ui.screen);
   if (tab && !tabAktiv(tab)) ui.screen = 'start';
   const fn = tab && tab.bald && tabAktiv(tab) ? () => baldScreen(tab) : (SCREENS[ui.screen] || SCREENS.start);
@@ -1149,6 +1162,7 @@ app.addEventListener('error', e => {
 }, true);
 
 function geheZu(screen) {
+  if (OB.istOnboarding(screen)) screen = obZiel(screen); // Version 178: alte Namen (ob1) und Schritte, die auf dem Weg fehlen
   if (screen !== 'start') ui.erfolgFrisch = null; // Version 49: beim nächsten Öffnen der Startseite klein
   if (neuBereiche().includes(screen)) { alsGesehen([screen]); trackEvent('unlock_opened', { bereich: screen }); } // Version 50
   if (ui.screen !== screen) {
@@ -1183,39 +1197,74 @@ function merkeAuswahl() {
   speichere();
 }
 
-const REIHE = ['ob1', 'ob2', 'ob3', 'ob4', 'ob5', 'ob6', 'ob7', 'ob8'];
+// ---------- Onboarding: Einzelfragen (Version 178) ----------
+// Welche Schritte ein Weg hat, steht in daten/onboarding.js (zeigen je Schritt), Weiter/Zurück/Fortschritt in logik/onboarding.js.
+// Hier: der Kontext aus Spiel- und Oberflächenzustand und die Prüfungen je Schritt, bevor es weitergeht.
+const obWeg = () => (!ui.neu ? 'erst' : ui.kapitelFuer ? 'kapitel' : 'neu');
+// Bereiche, die auf diesem Weg wählbar sind (beim neuen Ziel nur die des Helden). Wirft nie.
+function obFreieBereiche() {
+  try { return TABELLE.gruppen.filter(g => g.onboarding && !bereichBelegt(g.id)).map(g => g.id); }
+  catch (e) { console.warn('Onboarding:', e.message); return []; }
+}
+function obKontext() {
+  return {
+    weg: obWeg(),
+    welten: STIL_WAEHLBAR.length,
+    datenFrage: !!ui.obDaten,
+    bereich: ui.bereich || null,
+    zielVorlagen: !!ui.bereich && ZIEL_VORLAGEN.some(z => z.gruppe === ui.bereich),
+    freieBereiche: obWeg() === 'kapitel' ? obFreieBereiche().length : 0
+  };
+}
+// Bildschirm, der für ein Onboarding-Ziel gilt. Beim neuen Ziel mit nur einem freien Bereich wird er gesetzt (der Schritt
+// entfällt); hat der Bereich keine Ziele mit Zahl, gilt die Tür „Etwas ändern“. Wirft nie.
+function obZiel(screen) {
+  try {
+    if (obWeg() === 'kapitel' && !ui.bereich) { const f = obFreieBereiche(); if (f.length === 1) ui.bereich = f[0]; }
+    const k = obKontext();
+    if (!k.zielVorlagen && ui.zielart !== ZIEL_TUEREN[0]) Object.assign(ui, { zielart: ZIEL_TUEREN[0], zq: null, problem: null, ziel: null });
+    return OB.aufloesen(screen, k);
+  } catch (e) { console.warn('Onboarding:', e.message); return screen; }
+}
+const obAnfang = () => obZiel('ob1');
+OB.pruefeSchritte(undefined, Object.keys(SCREENS)).forEach(m => console.warn(m));
 
 function weiter() {
-  const i = REIHE.indexOf(ui.screen);
-  if (i < 0) return;
-  if (ui.screen === 'ob1' && (!ui.bereich || (!ui.neu && EW.istOffen(einw)))) return;
-  const erreichen = ui.zielart === 'erreichen'; // Ziel-Quests (31.10.2026): Schritt 2 = Ziel, Schritt 3 = Weg
-  if (ui.screen === 'ob2') {
+  const s = ui.screen;
+  if (!OB.istSchritt(s)) return;
+  const k = obKontext();
+  if (s === 'obdaten' && EW.istOffen(einw)) return; // erst antworten
+  if (s === 'obbereich' && !ui.bereich) return;
+  if (s === 'obtuer' && !ZIEL_TUEREN.includes(ui.zielart)) return;
+  const erreichen = ui.zielart === 'erreichen'; // Ziel-Quests (31.10.2026): ob2 = Ziel, ob3 = Weg
+  if (s === 'ob2') {
     if (erreichen) { if (!pruefeZielWahl()) { render(); return; } }
     else if (!ui.problem || (ui.problem === '*' && !ui.freitext.trim())) return;
   }
-  if (ui.screen === 'ob3') {
+  if (s === 'ob3') {
     if (!ui.ziel || !ui.ziel.trim() || (erreichen && (!ui.problem || !ui.zq || !ui.zq.werte))) return;
     trackEvent('goal_created', { bereich: ui.bereich, problem: ui.problem, domain: (aktuelleVorlage() || {}).domain, eigen: ui.problem === '*', art: erreichen ? 'ergebnis' : 'gewohnheit', zielVorlage: erreichen ? ui.zq.vorlage : null });
   }
-  if (ui.screen === 'ob4') clearInterval(analyseTimer);
-  const naechster = REIHE[i + 1];
+  const naechster = OB.naechster(s, k);
+  if (!naechster) return;
+  if (s === 'ob4') clearInterval(analyseTimer);
   if (naechster === 'ob5') trackEvent('crew_received', { verbuendeter: aktuelleVorlage().held, domain: aktuelleVorlage().domain });
   if (naechster === 'ob6') trackEvent('boss_revealed', { gegner: aktuelleVorlage().gegner });
+  const intro = OB.introNach(s, k) && !istAdmin;
   merkeAuswahl();
   geheZu(naechster);
-  // Welten-Intro (Version 175): einmal nach der Stilwahl (ob1) im ersten Onboarding; Fehler stoppen nie den Start.
-  if (REIHE[i] === 'ob1' && !ui.neu && !istAdmin) { try { if (IN.introFaellig(spiel)) starteIntro(); } catch (e) { console.warn('Intro:', e.message); } }
+  // Welten-Intro (Version 175): einmal nach dem ersten Schritt (der Weltwahl) im ersten Onboarding; Fehler stoppen nie den Start.
+  if (intro) { try { if (IN.introFaellig(spiel)) starteIntro(); } catch (e) { console.warn('Intro:', e.message); } }
 }
 
+// Zurück: voriger Schritt des Weges (die Analyse wird übersprungen). Auf dem ersten Schritt eines weiteren Helden ist Zurück
+// das Abbrechen; im ersten Start gibt es dort kein Zurück.
 function zurueck() {
-  const i = REIHE.indexOf(ui.screen);
-  if (i === 0 && ui.neu) { ui.neu = false; geheZu('start'); return; }
-  if (i <= 0) return;
-  let ziel = REIHE[i - 1];
-  if (ziel === 'ob4') ziel = 'ob3'; // Analyse beim Zurückgehen überspringen
+  if (!OB.istSchritt(ui.screen)) return;
+  const vor = OB.vorheriger(ui.screen, obKontext());
   if (ui.screen === 'ob4') clearInterval(analyseTimer);
-  geheZu(ziel);
+  if (vor) { geheZu(vor); return; }
+  if (ui.neu) ONBOARDING_KLICKS['abenteuer-abbrechen']();
 }
 
 // Startpaket (02.11.2026, daten/startpakete.js): mehrere Helden in einem Rutsch, nur für Besitzer und #test.
@@ -1274,7 +1323,7 @@ function mehrfachAnlegen() {
 
 function beginnen() {
   const v = aktuelleVorlage();
-  if (!v) { hinweis = T('hinweis.ohneVorlage'); geheZu('ob1'); return; }
+  if (!v) { hinweis = T('hinweis.ohneVorlage'); geheZu(obAnfang()); return; }
   try {
     if (ui.neu && ui.kapitelFuer) {
       // Neues Ziel für einen vorhandenen Helden (Version 171): das alte Ziel wandert ins Archiv, XP und Siege bleiben
@@ -1762,12 +1811,12 @@ binde(
   { anzeige: () => anzeige, bewegungAus: () => bewegungAus, einw: () => einw, hinweis: () => hinweis, spiel: () => spiel, stand: () => stand, tabelle: () => tabelle, testerHinweis: () => testerHinweis },
   { NEU_QUELLEN, SCREENS, SM, START_IDS, T, VERSION, abgleichStatus, aktuelleVorlage, angebotFrei, weltenFrei, andeutungGesehen, bezirkName, bild, bildFuer, funktionFrei, heldenAnsichten, img, istTest, jetzt, mikroListe, nameVon, naechsterTitel, titel, neuBereiche, neuPunkte, platzhalter, setzeStartGlanz, speicher, stil, stilVorauswahl, stilWerte, story, symbol, arenaFunken, tabAktiv, tabLabel, tabSichtbar, tabStatus, testerId, ui, wort, allesFrei, allesFreiMoeglich, setzeAllesFrei, stuetzenCfg,
     // Aktionen für die Klick-Register (Klick-Logik aufteilen)
-    alsGesehen, beginnen, bestaetigeTesterHinweis, check, entscheideDaten, erstelleExport, finde, geheZu, importiere, importiereCsv, kopiereExport,
+    alsGesehen, beginnen, bestaetigeTesterHinweis, testerHinweisZuruecksetzen, check, entscheideDaten, erstelleExport, finde, geheZu, importiere, importiereCsv, kopiereExport,
     ladeAdmin, mikro, oeffneBlatt, zeichneNachZeiger: renderNachZeiger,
     // Pflege (Pflege-Logik auslagern): Zustand, Umgebung mit Datenbank-Adapter, Bildplätze
     bildPlaetze, eingebautesBild, kartenLuecken, kartenPlatzBekannt, pflegeUmgebung, pflegeZustand, sprungLink, nachtrage,
     bestaetige, setzeAnzeige, systemRuhig, gegnerVerhuellt, vorstellungSpaeter, vorstellungZeigen, startpaket, startpaketErlaubt, mehrfachErlaubt, mehrfachErsterStart, mehrfachAnlegen, pruefeBesuchsMomente, questBearbeitenOeffnen, questBearbeitenSpeichern, render, schliesseBlatt, setzeHinweis, setzeSpiel, setzeStand, speichere, sperrTextVon, stoppeAnalyse,
-    storyGelesenBis, teileExport, weiter, zeigeNaechstes, zeitSprung, zurueck, siegNachholen }
+    storyGelesenBis, teileExport, weiter, zeigeNaechstes, zeitSprung, zurueck, siegNachholen, obKontext, obAnfang }
 );
 // </kontext>
 
@@ -1826,8 +1875,9 @@ if (!stand.onboarding.fertig && !stand.onboarding.bereich) trackEvent('onboardin
 if (ui.screen === 'ob4') starteAnalyse();
 // Unterbrochenes Onboarding mitten in der Analyse: dort fortsetzen, wo die Auswahl vollständig ist
 if (!istAdmin && !stand.onboarding.fertig && ui.bereich) {
-  ui.screen = ui.ziel ? 'ob3' : ui.problem ? 'ob2' : 'ob1';
+  ui.screen = ui.ziel ? 'ob3' : ui.problem ? 'ob2' : 'obbereich';
 }
+if (OB.istOnboarding(ui.screen)) ui.screen = obZiel(ui.screen); // Version 178: Startbildschirm des Weges (ob1 → erster Schritt)
 trackEvent('screen_enter', { screen: ui.screen });
 freigabenAltbestand(); // Version 69
 vorstellungAltbestand(); // Version 115

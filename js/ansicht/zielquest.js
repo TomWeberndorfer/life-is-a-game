@@ -8,7 +8,7 @@
 import { trackEvent } from '../analytics.js';
 import { EINHEIT_VORSCHLAEGE, MESSZIEL_OPT, MESSZIEL_RICHTUNGEN } from '../daten/messziele.js';
 import { TABELLE } from '../daten/vorlagen.js';
-import { ZIEL_TUEREN } from '../daten/zielvorlagen.js';
+import { ZIEL_EIGEN, ZIEL_TUEREN } from '../daten/zielvorlagen.js';
 import { entwicklung } from '../logik/entwicklung.js';
 import * as K from '../logik/kern.js';
 import * as MZ from '../logik/messziele.js';
@@ -30,11 +30,11 @@ function zielBeschreibung(w) {
 }
 
 // ---------- Onboarding ----------
-// Schritt 1: zwei Türen über der Bereichswahl. „Etwas ändern“ ist vorausgewählt (bisheriger Weg, ein Tipp).
+// Seit Version 178 eigene Seite nach dem Bereich (obtuer): zwei Türen. „Etwas ändern“ ist vorausgewählt (bisheriger Weg, ein Tipp).
 export function tuerHtml() {
   const { T, ui } = kx;
   const art = ZIEL_TUEREN.includes(ui.zielart) ? ui.zielart : ZIEL_TUEREN[0];
-  return `<p class="frage" id="f-tuer">${esc(T('zq.tuerFrage'))}</p>
+  return `<h1 id="f-tuer">${esc(T('zq.tuerFrage'))}</h1>
     <div class="optionen zwei-tueren" role="group" aria-labelledby="f-tuer">
       ${ZIEL_TUEREN.map(id => `<button class="opt ${art === id ? 'sel' : ''}" aria-pressed="${art === id}" data-a="zielart" data-id="${id}">${icon(id === 'erreichen' ? 'ziel' : 'pfeil')}<span>${esc(T(`zq.tuer.${id}`))}<small>${esc(T(`zq.tuer.${id}Text`))}</small></span></button>`).join('')}
     </div>`;
@@ -54,25 +54,37 @@ export function zielWahlHtml() {
     </div>
     ${zq.vorlage ? formHtml(zq) : ''}`;
 }
+// Formular (seit Version 178): sichtbar sind nur Zielwert und Einheit (beim eigenen Ziel auch Name und Einheiten-Vorschläge);
+// Name, Richtung, Startwert und Datum stehen unter „Genauer festlegen“. Das Feld zum Zielwert heißt nach der Richtung
+// („Mindestens“ / „Höchstens“), damit sie auch zugeklappt sichtbar ist. Fehler in einem verborgenen Feld klappen es auf.
 function formHtml(zq) {
   const { T } = kx;
   const f = zq.form;
   const fe = zq.fehler || {};
+  const eigen = zq.vorlage === ZIEL_EIGEN.id;
   const fehler = k => (fe[k] ? `<p class="fehler" role="alert">${esc(fe[k])}</p>` : '');
   const inv = k => (fe[k] ? 'aria-invalid="true"' : '');
   const an = x => `class="opt kurz ${x ? 'sel' : ''}" aria-pressed="${x}"`;
+  const name = `<label class="feld"><span>${esc(T('zq.feld.name'))}</span><input id="zq-name" maxlength="${MESSZIEL_OPT.nameMax}" value="${esc(f.name)}" placeholder="${esc(T('messziel.feld.nameBeispiel'))}" autocomplete="off" ${inv('name')}></label>${fehler('name')}`;
+  const richtung = MESSZIEL_RICHTUNGEN.includes(f.richtung) ? f.richtung : MESSZIEL_RICHTUNGEN[0];
+  const offen = !!zq.offen || ['richtung', 'start', 'bis'].some(k => fe[k]) || (!eigen && !!fe.name);
   return `<div class="karte spalte zq-form">
-    <label class="feld"><span>${esc(T('zq.feld.name'))}</span><input id="zq-name" maxlength="${MESSZIEL_OPT.nameMax}" value="${esc(f.name)}" placeholder="${esc(T('messziel.feld.nameBeispiel'))}" autocomplete="off" ${inv('name')}></label>${fehler('name')}
-    <div class="feld"><span id="zq-r-l">${esc(T('messziel.feld.richtung'))}</span>
-      <div class="wahl" role="group" aria-labelledby="zq-r-l">${MESSZIEL_RICHTUNGEN.map(r => `<button ${an(f.richtung === r)} data-a="zq-richtung" data-id="${r}">${esc(T('messziel.richtung.' + r))}</button>`).join('')}</div></div>${fehler('richtung')}
+    ${eigen ? name : ''}
     <div class="zwei messziel-zahlen">
-      <label class="feld"><span>${esc(T('messziel.feld.ziel'))}</span><input id="zq-ziel" inputmode="decimal" value="${esc(f.ziel)}" autocomplete="off" ${inv('ziel')}></label>
+      <label class="feld"><span>${esc(T('messziel.richtung.' + richtung))}</span><input id="zq-ziel" inputmode="decimal" value="${esc(f.ziel)}" placeholder="${esc(T('messziel.feld.ziel'))}" autocomplete="off" ${inv('ziel')}></label>
       <label class="feld"><span>${esc(T('messziel.feld.einheit'))}</span><input id="zq-einheit" maxlength="${MESSZIEL_OPT.einheitMax}" value="${esc(f.einheit)}" autocomplete="off" ${inv('einheit')}></label>
     </div>${fehler('ziel')}${fehler('einheit')}
-    <div class="wahl messziel-einheiten" role="group" aria-label="${esc(T('messziel.feld.einheitAria'))}">${EINHEIT_VORSCHLAEGE.map(e => `<button ${an(f.einheit === e)} data-a="zq-einheit" data-id="${esc(e)}">${esc(e)}</button>`).join('')}</div>
-    <label class="feld"><span>${esc(T('zq.feld.start'))}</span><input id="zq-start" inputmode="decimal" value="${esc(f.start)}" autocomplete="off" ${inv('start')}></label>${fehler('start')}
-    <label class="feld"><span>${esc(T('messziel.feld.bis'))}</span><input id="zq-bis" type="date" value="${esc(f.bis)}" ${inv('bis')}></label>${fehler('bis')}
-    <p class="klein">${esc(T('zq.formHinweis'))}</p>
+    ${eigen ? `<div class="wahl messziel-einheiten" role="group" aria-label="${esc(T('messziel.feld.einheitAria'))}">${EINHEIT_VORSCHLAEGE.map(e => `<button ${an(f.einheit === e)} data-a="zq-einheit" data-id="${esc(e)}">${esc(e)}</button>`).join('')}</div>` : ''}
+    <details class="einw-mehr zq-genauer" ${offen ? 'open' : ''}><summary data-a="zq-genauer">${esc(T('zq.genauer'))}</summary>
+      <div class="spalte">
+      ${eigen ? '' : name}
+      <div class="feld"><span id="zq-r-l">${esc(T('messziel.feld.richtung'))}</span>
+        <div class="wahl" role="group" aria-labelledby="zq-r-l">${MESSZIEL_RICHTUNGEN.map(r => `<button ${an(f.richtung === r)} data-a="zq-richtung" data-id="${r}">${esc(T('messziel.richtung.' + r))}</button>`).join('')}</div></div>${fehler('richtung')}
+      <label class="feld"><span>${esc(T('zq.feld.start'))}</span><input id="zq-start" inputmode="decimal" value="${esc(f.start)}" autocomplete="off" ${inv('start')}></label>${fehler('start')}
+      <label class="feld"><span>${esc(T('messziel.feld.bis'))}</span><input id="zq-bis" type="date" value="${esc(f.bis)}" ${inv('bis')}></label>${fehler('bis')}
+      <p class="klein">${esc(T('zq.formHinweis'))}</p>
+      </div>
+    </details>
   </div>`;
 }
 // Weiter auf Schritt 2 erlaubt? (Ziel gewählt und Zielwert eingetippt; die volle Prüfung macht pruefeZielWahl)
@@ -203,10 +215,12 @@ export const ZIELQUEST_KLICKS = {
     const zv = ZQ.zielVorlage(id, ui.bereich);
     if (!zv) { console.warn('Ziel-Quest: unbekannte Ziel-Vorlage', id); return; }
     if (ui.zq && ui.zq.vorlage === id) return;
-    ui.zq = { vorlage: id, form: ZQ.formAus(zv), fehler: {}, werte: null };
+    ui.zq = { vorlage: id, form: ZQ.formAus(zv), fehler: {}, werte: null, offen: false };
     render();
   },
-  'zq-richtung'({ id }) { const { render, ui } = kx; if (ui.zq && MESSZIEL_RICHTUNGEN.includes(id)) { ui.zq.form.richtung = id; ui.zq.fehler = { ...ui.zq.fehler, richtung: undefined }; render(); } },
+  'zq-richtung'({ id }) { const { render, ui } = kx; if (ui.zq && MESSZIEL_RICHTUNGEN.includes(id)) { ui.zq.form.richtung = id; ui.zq.offen = true; ui.zq.fehler = { ...ui.zq.fehler, richtung: undefined }; render(); } },
+  // „Genauer festlegen“ (Version 178): das <details> klappt selbst; hier nur merken, damit es nach dem nächsten Zeichnen so bleibt.
+  'zq-genauer'() { const { ui } = kx; if (ui.zq) ui.zq.offen = !ui.zq.offen; },
   'zq-einheit'({ id }) { const { render, ui } = kx; if (ui.zq && EINHEIT_VORSCHLAEGE.includes(id)) { ui.zq.form.einheit = ui.zq.form.einheit === id ? '' : id; render(); } },
   'zq-weg'({ id }) {
     const { render, ui } = kx;

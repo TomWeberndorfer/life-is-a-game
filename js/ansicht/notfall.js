@@ -7,6 +7,7 @@
 // Ablauf: innehalten → „Was ist gerade da?“ (Weiche, Version 127) → Pfad je Zustand (daten/notfall.js NOTFALL.pfade):
 // Standard (Druck, Drang, weiß nicht) eigenes Wenn-dann → eigenes Warum → eine Idee; Wut: Später antworten → Was ist
 // dir wichtig? → Warum; Ohnmacht: Was liegt bei dir? → kleinster Schritt → früherer geschafft-Eintrag → Selbstmitgefühl.
+// Langeweile (Version 182): direkt zur Idee. Im Ideen-Schritt ein Knopf „Idee ziehen“/„Andere Idee“, darunter leise „Glas füllen“.
 // Zustand zusätzlich: n.zustand (gewählt oder null), n.frueher (gezogene Eintrags-ID oder ''), n.satz (Index des Satzes),
 // n.erinnert (Erinnerung gesetzt). Der Zustand geht als Feld `zustand` in den Eintrag (nicht bei „weiß nicht“). Abschluss: „Hat geholfen“ (ist die Tagesfrage
 // noch offen, auf Wunsch gleich als angewendet eintragen) oder „War trotzdem schwer“ (Eintragsblatt).
@@ -119,7 +120,8 @@ function schrittHtml(art, n, f) {
     const liste = ideen(n.heroId);
     const idee = liste.find(x => x.id === n.idee) || null;
     inhalt = `${idee ? `<p class="notfall-idee">${esc(idee.text)}<small>${esc(T('ideen.kat.' + idee.kat))}</small></p>` : `<p class="lead">${esc(T(liste.length ? 'notfall.ideeZiehen' : 'notfall.ideeLeer'))}</p>`}
-      <div class="zwei">${liste.length ? `<button class="btn" data-a="notfall-ziehen">${esc(T(idee ? 'notfall.andere' : 'notfall.ziehen'))}</button>` : ''}<button class="btn" data-a="notfall-verwalten">${esc(T('notfall.verwalten'))}</button></div>`;
+      ${liste.length ? `<button class="btn voll" data-a="notfall-ziehen">${esc(T(idee ? 'notfall.andere' : 'notfall.ziehen'))}</button>
+      <button class="link" data-a="notfall-verwalten">${esc(T('notfall.verwalten'))}</button>` : `<button class="btn voll" data-a="notfall-verwalten">${esc(T('notfall.verwalten'))}</button>`}`;
   } else if (art === 'ende') {
     // Abschluss ohne Wertung; „Hat geholfen“ fragt bei offener Tagesfrage, ob es zählen soll (24a)
     inhalt = n.frage ? `<p class="lead" role="status">${esc(T('notfall.frageJa', { faehigkeit: f ? f.name : '' }))}</p>
